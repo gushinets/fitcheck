@@ -11,6 +11,7 @@
     "build:extension": "wxt build",
     "zip:extension": "wxt zip",
     "start": "next start",
+    "postinstall": "wxt prepare",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
