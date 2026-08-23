@@ -1,0 +1,10 @@
+@import "../../app/globals.css";
+
+html,
+body,
+#root {
+  width: 400px;
+  height: 600px;
+  margin: 0;
+  overflow: hidden;
+}

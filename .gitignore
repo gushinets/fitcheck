@@ -1,0 +1,41 @@
+# Dependencies
+/node_modules/
+
+# Next.js
+/.next/
+/out/
+
+# WXT extension output
+/.wxt/
+/.output/
+
+# Local environment and secrets
+.env*
+!.env.example
+
+# Test and TypeScript output
+/coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local tooling and hosting
+/.vercel/
+/.idea/
+/.vscode/
+*.swp
+*.swo
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+
+# Packaged extensions and local certificates
+*.zip
+*.pem
