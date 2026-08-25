@@ -14,6 +14,38 @@ function request(overrides: Partial<AnalysisRequest> = {}): AnalysisRequest {
 }
 
 describe("buildAnalysisPrompt", () => {
+  it("includes locale-formatted income and work format preferences", () => {
+    const en = buildAnalysisPrompt(
+      request({
+        profile: {
+          ...defaultProfile,
+          preferredRate: 2_500,
+          desiredMonthlyIncome: 12_000,
+          workFormats: ["remote", "hybrid"],
+        },
+      }),
+    )
+    const ru = buildAnalysisPrompt(
+      request({
+        locale: "ru",
+        profile: {
+          ...defaultProfile,
+          preferredRate: 2_500,
+          desiredMonthlyIncome: 300_000,
+        },
+      }),
+    )
+
+    expect(en.input).toContain("Preferred hourly rate: $2500")
+    expect(en.input).toContain("Desired monthly income: $12000")
+    expect(en.input).toContain("Acceptable work formats: remote, hybrid")
+    expect(ru.input).toContain("Preferred hourly rate: ₽2500")
+    expect(ru.input).toContain("Desired monthly income: ₽300000")
+    expect(en.instructions).toContain(
+      "Missing vacancy income or work-mode evidence must not be treated as a mismatch",
+    )
+  })
+
   it("marks absent job fields instead of inventing values", () => {
     const prompt = buildAnalysisPrompt(
       request({
