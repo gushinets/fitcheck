@@ -4,6 +4,7 @@ import type {
   FreelancerProfile,
   HistoryEntry,
 } from "@/lib/types"
+import { normalizeFreelancerProfile } from "@/lib/analysis/schema"
 
 const STORAGE_KEY = "fitcheckState"
 const STORAGE_VERSION = 1
@@ -28,7 +29,9 @@ function migrate(value: unknown): ExtensionState {
   const candidate = value as Partial<ExtensionState>
   return {
     version: STORAGE_VERSION,
-    profile: candidate.profile ?? null,
+    profile: candidate.profile
+      ? normalizeFreelancerProfile(candidate.profile)
+      : null,
     history: Array.isArray(candidate.history)
       ? candidate.history.slice(0, HISTORY_LIMIT)
       : [],

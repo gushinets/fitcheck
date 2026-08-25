@@ -3,8 +3,8 @@ import { defaultProfile, detectedJob, goAnalysis } from "@/lib/mock-data"
 import type { HistoryEntry } from "@/lib/types"
 import { createExtensionStore, type StorageArea } from "./storage"
 
-function memoryArea(): StorageArea {
-  let values: Record<string, unknown> = {}
+function memoryArea(initial: Record<string, unknown> = {}): StorageArea {
+  let values: Record<string, unknown> = initial
   return {
     async get(key) {
       return { [key]: values[key] }
@@ -29,6 +29,34 @@ function makeEntry(index: number): HistoryEntry {
 }
 
 describe("extension storage", () => {
+  it("normalizes legacy stored profiles with compatibility defaults", async () => {
+    const store = createExtensionStore(
+      memoryArea({
+        fitcheckState: {
+          version: 1,
+          profile: {
+            specialization: "Backend Developer",
+            skills: ["Go"],
+            experienceYears: 5,
+            preferredRate: 80,
+            englishLevel: "Advanced",
+          },
+          history: [],
+        },
+      }),
+    )
+
+    expect((await store.load()).profile).toEqual({
+      specialization: "Backend Developer",
+      skills: ["Go"],
+      experienceYears: 5,
+      preferredRate: 80,
+      desiredMonthlyIncome: 0,
+      workFormats: ["remote"],
+      englishLevel: "Advanced",
+    })
+  })
+
   it("keeps the newest fifty history entries", async () => {
     const store = createExtensionStore(memoryArea())
 
