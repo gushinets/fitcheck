@@ -1,15 +1,16 @@
 // @vitest-environment node
 
 import { afterEach, describe, expect, it, vi } from "vitest"
+import OpenAI from "openai"
 import { goAnalysis } from "@/lib/mock-data"
-import { createOpenRouterTransport } from "./openrouter"
+import { createDeepSeekTransport } from "./deepseek"
 
 afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe("OpenRouter analysis transport", () => {
-  it("sends a structured chat completion through the OpenRouter API", async () => {
+describe("DeepSeek analysis transport", () => {
+  it("sends a JSON chat completion through the direct DeepSeek API", async () => {
     let requestedUrl = ""
     let requestedBody: Record<string, unknown> = {}
 
@@ -58,33 +59,50 @@ describe("OpenRouter analysis transport", () => {
       }),
     )
 
-    const transport = createOpenRouterTransport({
-      apiKey: "test-openrouter-key",
-      model: "openrouter/free",
+    const transport = createDeepSeekTransport({
+      apiKey: "test-deepseek-key",
     })
     const result = await transport({} as never, {
       instructions: "System instructions",
       input: "User input",
-    }).catch(() => undefined)
+    })
 
     expect(requestedUrl).toBe(
-      "https://openrouter.ai/api/v1/chat/completions",
+      "https://api.deepseek.com/chat/completions",
     )
     expect(requestedBody).toMatchObject({
-      model: "openrouter/free",
+      model: "deepseek-v4-flash",
       max_tokens: 1200,
       messages: [
-        { role: "system", content: "System instructions" },
+        {
+          role: "system",
+          content: expect.stringMatching(
+            /System instructions[\s\S]*Return only valid JSON[\s\S]*"score"[\s\S]*"breakdown"/,
+          ),
+        },
         { role: "user", content: "User input" },
       ],
       response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "fit_analysis",
-          strict: true,
-        },
+        type: "json_object",
       },
     })
     expect(result).toEqual(goAnalysis)
+  })
+
+  it("maps an SDK connection timeout to the stable timeout error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new OpenAI.APIConnectionTimeoutError()),
+    )
+    const transport = createDeepSeekTransport({
+      apiKey: "test-deepseek-key",
+    })
+
+    await expect(
+      transport({} as never, {
+        instructions: "System instructions",
+        input: "User input",
+      }),
+    ).rejects.toMatchObject({ code: "timeout" })
   })
 })

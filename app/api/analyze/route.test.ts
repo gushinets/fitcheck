@@ -102,9 +102,10 @@ describe("POST /api/analyze", () => {
     await expect(response.json()).resolves.toEqual({ error: "analysis_rate_limit" })
   })
 
-  it("uses the server-only OpenRouter configuration", async () => {
-    vi.stubEnv("OPENROUTER_API_KEY", "test-openrouter-key")
-    vi.stubEnv("OPENROUTER_MODEL", "openrouter/free")
+  it("uses the server-only DeepSeek configuration", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "test-deepseek-key")
+    vi.stubEnv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+    vi.stubEnv("OPENROUTER_API_KEY", "")
     vi.stubEnv("OPENAI_API_KEY", "")
     vi.stubEnv("ALLOWED_ORIGINS", allowedOrigin)
     vi.stubGlobal(
@@ -146,8 +147,9 @@ describe("POST /api/analyze", () => {
     })
   })
 
-  it("reports missing OpenRouter configuration instead of returning a mock", async () => {
-    vi.stubEnv("OPENROUTER_API_KEY", "")
+  it("reports missing DeepSeek configuration instead of returning a mock", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "")
+    vi.stubEnv("OPENROUTER_API_KEY", "test-openrouter-key")
 
     const response = await POST(request(validBody))
 

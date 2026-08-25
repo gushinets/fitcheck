@@ -49,18 +49,21 @@ const fitAnalysisJsonSchema = {
 
 function mapProviderError(error: unknown): AnalysisServiceError {
   if (error instanceof AnalysisServiceError) return error
+  if (error instanceof OpenAI.APIConnectionTimeoutError) {
+    return new AnalysisServiceError("timeout", "DeepSeek request timed out")
+  }
   const candidate = error as { status?: number; code?: string; name?: string }
   if (candidate.status === 429) {
-    return new AnalysisServiceError("rate_limit", "OpenRouter rate limit reached")
+    return new AnalysisServiceError("rate_limit", "DeepSeek rate limit reached")
   }
   if (
     candidate.code === "ETIMEDOUT" ||
     candidate.name === "AbortError" ||
     candidate.status === 408
   ) {
-    return new AnalysisServiceError("timeout", "OpenRouter request timed out")
+    return new AnalysisServiceError("timeout", "DeepSeek request timed out")
   }
-  return new AnalysisServiceError("upstream", "OpenRouter request failed")
+  return new AnalysisServiceError("upstream", "DeepSeek request failed")
 }
 
 function logProviderError(error: unknown) {
@@ -71,7 +74,7 @@ function logProviderError(error: unknown) {
     message?: string
     error?: { type?: string }
   }
-  console.error("[fitcheck] OpenRouter request failed", {
+  console.error("[fitcheck] DeepSeek request failed", {
     name: candidate.name,
     status: candidate.status,
     code: candidate.code,
@@ -80,16 +83,16 @@ function logProviderError(error: unknown) {
   })
 }
 
-export function createOpenRouterTransport(options: {
+export function createDeepSeekTransport(options: {
   apiKey: string
   model?: string
 }): AnalysisTransport {
   const client = new OpenAI({
     apiKey: options.apiKey,
-    baseURL: "https://openrouter.ai/api/v1",
+    baseURL: "https://api.deepseek.com",
     timeout: 45_000,
   })
-  const model = options.model ?? "openrouter/free"
+  const model = options.model ?? "deepseek-v4-flash"
 
   return async (_request, prompt) => {
     try {
@@ -97,16 +100,14 @@ export function createOpenRouterTransport(options: {
         model,
         max_tokens: 1200,
         messages: [
-          { role: "system", content: prompt.instructions },
+          {
+            role: "system",
+            content: `${prompt.instructions}\nReturn only valid JSON matching this schema: ${JSON.stringify(fitAnalysisJsonSchema)}`,
+          },
           { role: "user", content: prompt.input },
         ],
         response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "fit_analysis",
-            strict: true,
-            schema: fitAnalysisJsonSchema,
-          },
+          type: "json_object",
         },
       })
       const output = response.choices[0]?.message.content

@@ -8,7 +8,7 @@ The website supports English and Russian with a manual RU / EN switch. Local acc
 
 - Node.js 22 or newer
 - pnpm 10
-- An OpenRouter API key
+- A DeepSeek API key with available balance
 
 ## Install and configure
 
@@ -20,12 +20,12 @@ cp .env.example .env.local
 Set the server-side key in `.env.local`:
 
 ```dotenv
-OPENROUTER_API_KEY=your_server_side_key
-OPENROUTER_MODEL=openrouter/free
+DEEPSEEK_API_KEY=your_server_side_key
+DEEPSEEK_MODEL=deepseek-v4-flash
 ALLOWED_ORIGINS=http://localhost:3000
 ```
 
-Never expose `OPENROUTER_API_KEY` in a public environment variable or client-side source. `openrouter/free` asks OpenRouter to select a currently available free model compatible with the request; set a specific model when predictable output is more important.
+Never expose `DEEPSEEK_API_KEY` in a public environment variable or client-side source. FitCheck defaults to `deepseek-v4-flash`; set `DEEPSEEK_MODEL` only when intentionally changing the server-side analysis model.
 
 ## Run the website
 
@@ -48,7 +48,7 @@ pnpm build:web
 
 ## Deployment
 
-Deploy the Next.js application to a runtime that supports route handlers. Configure `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, and `ALLOWED_ORIGINS` with the production website origin, for example `https://fitcheck.example.com`.
+Deploy the Next.js application to a runtime that supports route handlers. Configure `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL`, and `ALLOWED_ORIGINS` with the production website origin, for example `https://fitcheck.example.com`.
 
 The login is intentionally local-only for product testing: there is no email confirmation, remote session, cross-device synchronization, subscription, or server database. Clearing browser site data removes local FitCheck data. Use the profile page's **Delete local account** action to remove one account and all of its associated local data.
 

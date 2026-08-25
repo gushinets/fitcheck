@@ -1,4 +1,4 @@
-import { createOpenRouterTransport } from "@/lib/analysis/openrouter"
+import { createDeepSeekTransport } from "@/lib/analysis/deepseek"
 import { corsHeaders, createAnalyzeHandler, json } from "./handler"
 
 function allowedOrigins() {
@@ -9,13 +9,13 @@ function allowedOrigins() {
 }
 
 export async function POST(request: Request) {
-  const apiKey = process.env.OPENROUTER_API_KEY
+  const apiKey = process.env.DEEPSEEK_API_KEY
   if (!apiKey) return json({ error: "server_not_configured" }, 503)
   const handler = createAnalyzeHandler({
     allowedOrigins: allowedOrigins(),
-    transport: createOpenRouterTransport({
+    transport: createDeepSeekTransport({
       apiKey,
-      model: process.env.OPENROUTER_MODEL,
+      model: process.env.DEEPSEEK_MODEL,
     }),
   })
   return handler(request)
