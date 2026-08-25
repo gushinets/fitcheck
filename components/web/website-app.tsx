@@ -1,22 +1,24 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Button } from "@/components/ui/button"
-import type { FitAnalysis, FreelancerProfile, Locale } from "@/lib/types"
+import type { AnalysisFeedback, FreelancerProfile, Locale } from "@/lib/types"
 import { resolveLocale } from "@/lib/i18n/locale"
 import { getWebMessages } from "@/lib/i18n/web-messages"
 import type { WebsiteApi } from "@/lib/web/api"
 import { websiteApi } from "@/lib/web/api"
 import { createWebsiteRepository, LocalAuthError } from "@/lib/web/repository"
 import type { WebsiteRepository, WebsiteSnapshot } from "@/lib/web/types"
-import type { VacancyDraft } from "@/lib/web/types"
-import { createAnalysisRequest } from "@/lib/web/history"
+import type { VacancyDraft, WebHistoryEntry } from "@/lib/web/types"
+import { createAnalysisRequest, createHistoryEntry } from "@/lib/web/history"
+import { WebApiError } from "@/lib/web/api"
 import { AppShell, type WebView } from "./app-shell"
 import { AuthScreen } from "./auth-screen"
 import { LanguageSwitch } from "./language-switch"
 import { ProfileEditor } from "./profile-editor"
 import { VacancyReview } from "./vacancy-review"
 import { VacancySource } from "./vacancy-source"
+import { AnalysisResult } from "./analysis-result"
+import { HistoryView } from "./history-view"
 
 const emptySnapshot: WebsiteSnapshot = {
   user: null,
@@ -46,7 +48,6 @@ export function WebsiteApp({
     repositoryRef.current = repository ?? createWebsiteRepository()
   }
   const store = repositoryRef.current
-  void api
   const [locale, setLocale] = useState<Locale>(initialLocale)
   const [snapshot, setSnapshot] = useState<WebsiteSnapshot>(emptySnapshot)
   const [initialized, setInitialized] = useState(false)
@@ -55,7 +56,8 @@ export function WebsiteApp({
   const [view, setView] = useState<WebView>("analyze")
   const [analysisStep, setAnalysisStep] = useState<"source" | "review" | "analyzing" | "result">("source")
   const [draft, setDraft] = useState<VacancyDraft | null>(null)
-  const [analysis, setAnalysis] = useState<FitAnalysis | null>(null)
+  const [activeEntry, setActiveEntry] = useState<WebHistoryEntry | null>(null)
+  const [analysisError, setAnalysisError] = useState<string | null>(null)
   const copy = getWebMessages(locale)
 
   useEffect(() => {
@@ -155,20 +157,75 @@ export function WebsiteApp({
     await store.saveDraft(snapshot.user.id, nextDraft)
     setDraft(nextDraft)
     setAnalysisStep("analyzing")
-    const result = await api.analyzeVacancy(
-      createAnalysisRequest({
-        profile: snapshot.profile,
-        draft: nextDraft,
-        locale,
-        history: snapshot.history,
-      }),
-    )
-    setAnalysis(result)
-    setAnalysisStep("result")
+    setAnalysisError(null)
+    try {
+      const request = createAnalysisRequest({ profile: snapshot.profile, draft: nextDraft, locale, history: snapshot.history })
+      const result = await api.analyzeVacancy(request)
+      const entry = createHistoryEntry({ userId: snapshot.user.id, profile: snapshot.profile, job: request.job, analysis: result })
+      await store.addHistory(entry)
+      setSnapshot((current) => ({ ...current, history: [entry, ...current.history].slice(0, 50) }))
+      setActiveEntry(entry)
+      setAnalysisStep("result")
+    } catch (error) {
+      setAnalysisError(analysisErrorMessage(error))
+      setAnalysisStep("review")
+    }
   }
 
   function navigate(nextView: WebView) {
     setView(nextView === "analyze" && !snapshot.profile ? "profile" : nextView)
+    if (nextView === "analyze") setAnalysisStep("source")
+  }
+
+  function analysisErrorMessage(error: unknown) {
+    if (!(error instanceof WebApiError)) return copy.analysisFailed
+    switch (error.code) {
+      case "server_not_configured": return copy.serverNotConfigured
+      case "analysis_rate_limit": return copy.analysisRateLimit
+      case "analysis_timeout": return copy.analysisTimeout
+      case "analysis_invalid_output": return copy.analysisInvalidOutput
+      case "analysis_upstream": return copy.analysisUpstream
+      case "origin_not_allowed": return copy.originNotAllowed
+      case "network_error": return copy.networkError
+      case "invalid_response": return copy.invalidResponse
+      default: return copy.analysisFailed
+    }
+  }
+
+  async function saveFeedback(feedback: Omit<AnalysisFeedback, "createdAt">) {
+    if (!snapshot.user || !activeEntry) return
+    const saved = { ...feedback, createdAt: new Date().toISOString() }
+    await store.saveFeedback(snapshot.user.id, activeEntry.id, saved)
+    const update = (entry: WebHistoryEntry) => entry.id === activeEntry.id ? { ...entry, feedback: saved } : entry
+    setSnapshot((current) => ({ ...current, history: current.history.map(update) }))
+    setActiveEntry((current) => current ? update(current) : current)
+  }
+
+  function openHistory(entry: WebHistoryEntry) {
+    const restoredDraft: VacancyDraft = {
+      id: entry.job.id,
+      sourceMode: entry.job.url ? "url" : "text",
+      ...(entry.job.url ? { sourceUrl: entry.job.url } : {}),
+      title: entry.job.title,
+      description: entry.job.description,
+      skills: entry.job.skills,
+      ...(entry.job.hourlyRateMin === undefined ? {} : { hourlyRateMin: entry.job.hourlyRateMin }),
+      ...(entry.job.hourlyRateMax === undefined ? {} : { hourlyRateMax: entry.job.hourlyRateMax }),
+      ...(entry.job.fixedBudget === undefined ? {} : { fixedBudget: entry.job.fixedBudget }),
+      updatedAt: entry.createdAt,
+    }
+    setDraft(restoredDraft)
+    setActiveEntry(entry)
+    setAnalysisStep("result")
+    setView("analyze")
+  }
+
+  async function analyzeAnother() {
+    if (!snapshot.user) return
+    await store.saveDraft(snapshot.user.id, null)
+    setDraft(null)
+    setActiveEntry(null)
+    setAnalysisStep("source")
   }
 
   function content() {
@@ -176,16 +233,16 @@ export function WebsiteApp({
       return <ProfileEditor profile={snapshot.profile} copy={copy} onSave={saveProfile} />
     }
     if (view === "history") {
-      return <section className="rounded-3xl border border-border bg-card p-8"><h1 className="text-3xl font-semibold">{copy.historyTitle}</h1><p className="mt-3 text-muted-foreground">{copy.noHistory}</p></section>
+      return <HistoryView entries={snapshot.history} locale={locale} copy={copy} onOpen={openHistory} onClear={async () => { if (window.confirm(copy.clearHistoryConfirmation) && snapshot.user) { await store.clearHistory(snapshot.user.id); setSnapshot((current) => ({ ...current, history: [] })) } }} />
     }
     if (analysisStep === "review" && draft) {
-      return <VacancyReview draft={draft} copy={copy} onBack={backToSource} onAnalyze={startAnalysis} />
+      return <div className="space-y-4">{analysisError ? <div role="alert" className="mx-auto max-w-4xl rounded-xl bg-danger-muted p-4 text-sm text-danger">{analysisError}</div> : null}<VacancyReview draft={draft} copy={copy} onBack={backToSource} onAnalyze={startAnalysis} /></div>
     }
     if (analysisStep === "analyzing") {
       return <section className="grid min-h-96 place-items-center rounded-3xl border border-border bg-card"><p role="status" className="text-lg font-medium text-primary">{copy.analyzingVacancy}</p></section>
     }
-    if (analysisStep === "result" && analysis) {
-      return <section className="rounded-3xl border border-border bg-card p-10"><h1 className="text-3xl font-semibold">{draft?.title}</h1><p className="mt-6 text-5xl font-bold text-primary">{analysis.score} / 100</p><p className="mt-4 text-muted-foreground">{analysis.summary}</p><Button className="mt-6" onClick={() => setAnalysisStep("source")}>{copy.analyzeAnother}</Button></section>
+    if (analysisStep === "result" && activeEntry) {
+      return <AnalysisResult entry={activeEntry} copy={copy} onBack={() => setAnalysisStep("source")} onAnalyzeAnother={analyzeAnother} onSaveFeedback={saveFeedback} />
     }
     return <VacancySource copy={copy} initialDraft={draft} onLoadUrl={api.extractVacancy} onReview={reviewDraft} />
   }

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event"
 import type { WebsiteApi } from "@/lib/web/api"
 import { createMemoryWebsiteRepository } from "@/lib/web/memory-repository"
 import { defaultProfile, goAnalysis } from "@/lib/mock-data"
+import { WebApiError } from "@/lib/web/api"
 import { WebsiteApp } from "./website-app"
 
 const api: WebsiteApi = {
@@ -118,7 +119,7 @@ describe("FitCheck vacancy workflow", () => {
     await user.click(screen.getByRole("button", { name: "Review vacancy" }))
     await user.click(screen.getByRole("button", { name: "Analyze vacancy" }))
 
-    expect(await screen.findByText("82 / 100")).toBeVisible()
+    expect(await screen.findByLabelText("Fit score 82 out of 100")).toBeVisible()
     expect(analyzeVacancy).toHaveBeenCalledWith(
       expect.objectContaining({
         profile: defaultProfile,
@@ -126,5 +127,45 @@ describe("FitCheck vacancy workflow", () => {
         locale: "en",
       }),
     )
+    expect((await repository.loadSnapshot()).history).toHaveLength(1)
+  })
+
+  it("keeps the reviewed vacancy and skips history when analysis fails", async () => {
+    const user = userEvent.setup()
+    const repository = createMemoryWebsiteRepository()
+    const localUser = await repository.createUser({
+      name: "Nikita",
+      email: "me@example.com",
+      password: "password-123",
+    })
+    await repository.saveProfile(localUser.id, defaultProfile)
+    await repository.saveDraft(localUser.id, {
+      id: "draft-1",
+      sourceMode: "text",
+      title: "Backend role",
+      description: "Build production APIs for a fast-growing SaaS platform.",
+      skills: ["Python"],
+      updatedAt: "2026-08-25T12:00:00.000Z",
+    })
+    render(
+      <WebsiteApp
+        repository={repository}
+        api={{
+          extractVacancy: vi.fn(),
+          analyzeVacancy: async () => {
+            throw new WebApiError("analysis_upstream")
+          },
+        }}
+      />,
+    )
+
+    await user.click(await screen.findByRole("button", { name: "Review vacancy" }))
+    await user.click(screen.getByRole("button", { name: "Analyze vacancy" }))
+
+    expect(
+      await screen.findByText("The analysis service is temporarily unavailable"),
+    ).toBeVisible()
+    expect(screen.getByRole("heading", { name: "Review the vacancy" })).toBeVisible()
+    expect((await repository.loadSnapshot()).history).toHaveLength(0)
   })
 })
