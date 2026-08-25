@@ -49,14 +49,14 @@ export function AppShell({
               </button>
             ))}
           </nav>
-          <LanguageSwitch locale={locale} onChange={onLocaleChange} />
+          <LanguageSwitch locale={locale} label={copy.language} onChange={onLocaleChange} />
           <div className="hidden text-sm font-medium sm:block">{user.name}</div>
           <Button variant="ghost" size="icon" aria-label={copy.signOut} onClick={onSignOut}>
             <LogOut className="size-4" aria-hidden="true" />
           </Button>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10">{children}</main>
+      <main className="mx-auto w-full max-w-7xl px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:py-10">{children}</main>
       <nav aria-label={copy.primaryNavigation} className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-3 border-t border-border bg-background/95 p-2 backdrop-blur md:hidden">
         {navigation.map(({ id, label, icon: Icon }) => (
           <button key={id} type="button" onClick={() => onNavigate(id)} className={`flex flex-col items-center gap-1 rounded-lg px-2 py-2 text-[11px] font-medium ${activeView === id ? "text-primary" : "text-muted-foreground"}`}>

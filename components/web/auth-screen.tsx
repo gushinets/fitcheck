@@ -39,14 +39,14 @@ export function AuthScreen({
         <div className="text-xl font-bold">{copy.productName}</div>
         <div className="max-w-xl">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] opacity-70">
-            AI vacancy fit analysis
+            {copy.aiAnalysisLabel}
           </p>
           <h1 className="mt-5 text-balance text-5xl font-semibold leading-tight">
             {copy.tagline}
           </h1>
         </div>
         <p className="max-w-md text-sm leading-6 opacity-75">
-          Fit Score · strengths · risks · GO / NO-GO
+          {copy.resultFeatures}
         </p>
       </section>
 

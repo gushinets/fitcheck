@@ -1,74 +1,55 @@
 # FitCheck
 
-FitCheck is a Manifest V3 Chrome Extension that reads the active Upwork job, compares it with a locally stored freelancer profile, and returns an OpenRouter-powered Fit Score with strengths, risks, and a GO or NO-GO verdict.
+FitCheck is a bilingual website for testing whether a real vacancy fits a freelancer profile. A user can load any public vacancy URL or paste its text, review the extracted details, and send the vacancy to an LLM for a Fit Score, strengths, risks, and a GO / NO-GO recommendation.
 
-The extension supports Upwork only. The UI and generated analysis use Russian when Chrome's system UI locale starts with `ru`; every other locale uses English.
+The website supports English and Russian with a manual RU / EN switch. Local accounts, profiles, drafts, analysis history, and score corrections are stored in IndexedDB in the current browser. The server receives only the current extraction or analysis request and does not persist user data.
 
 ## Requirements
 
 - Node.js 22 or newer
 - pnpm 10
-- Google Chrome
 - An OpenRouter API key
 
-## Install
+## Install and configure
 
 ```bash
 pnpm install
+cp .env.example .env.local
 ```
 
-Copy `.env.example` to `.env.local` and set:
+Set the server-side key in `.env.local`:
 
 ```dotenv
 OPENROUTER_API_KEY=your_server_side_key
 OPENROUTER_MODEL=openrouter/free
-ALLOWED_ORIGINS=chrome-extension://YOUR_EXTENSION_ID,http://localhost:3000
-WXT_PUBLIC_API_BASE_URL=http://localhost:3000
+ALLOWED_ORIGINS=http://localhost:3000
 ```
 
-`OPENROUTER_API_KEY` is used only by the Next.js server. Never put it in a `WXT_PUBLIC_*` variable or extension source. The default `openrouter/free` router selects a currently available free model that supports the request.
+Never expose `OPENROUTER_API_KEY` in a public environment variable or client-side source. `openrouter/free` asks OpenRouter to select a currently available free model compatible with the request; set a specific model when predictable output is more important.
 
-## Run locally
-
-Start the Next.js backend and browser preview:
+## Run the website
 
 ```bash
 pnpm dev
 ```
 
-In another terminal, start the extension development build:
+Open [http://localhost:3000](http://localhost:3000), create a local account, complete the freelancer profile, and add a real vacancy.
 
-```bash
-pnpm dev:extension
-```
+URL import is best-effort. FitCheck accepts arbitrary public HTTP(S) pages, blocks private/internal network addresses, limits redirects and response size, and extracts readable vacancy content. Pages that require authentication, execute content only in the browser, or block automated requests may not load; paste the vacancy text manually in that case.
 
-WXT can launch a development browser automatically. To load a production-style unpacked build manually:
-
-1. Run `pnpm build:extension`.
-2. Open `chrome://extensions`.
-3. Enable Developer mode.
-4. Click **Load unpacked** and select `.output/chrome-mv3`.
-5. Copy the generated extension ID.
-6. Replace `YOUR_EXTENSION_ID` in `ALLOWED_ORIGINS` and restart the Next.js server.
-7. Open an Upwork job page and click FitCheck.
-
-The extension stores the freelancer profile, up to 50 analyses, and score corrections in `chrome.storage.local`. The backend receives only the current analysis request and does not persist it. The latest 10 local analyses may be included as calibration memory.
-
-## Verify and package
+## Verify
 
 ```bash
 pnpm test
 pnpm typecheck
 pnpm lint
 pnpm build:web
-pnpm build:extension
-pnpm zip:extension
 ```
 
-The unpacked extension is written to `.output/chrome-mv3`. WXT writes the zip archive under `.output`.
+## Deployment
 
-## Backend deployment
+Deploy the Next.js application to a runtime that supports route handlers. Configure `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, and `ALLOWED_ORIGINS` with the production website origin, for example `https://fitcheck.example.com`.
 
-Deploy the Next.js application to a server that supports route handlers, set `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, and the production `ALLOWED_ORIGINS`, then build the extension with `WXT_PUBLIC_API_BASE_URL` pointing at that HTTPS deployment.
+The login is intentionally local-only for product testing: there is no email confirmation, remote session, cross-device synchronization, subscription, or server database. Clearing browser site data removes local FitCheck data. Use the profile page's **Delete local account** action to remove one account and all of its associated local data.
 
-Origin checking limits accidental browser access but is not user authentication. The MVP does not include accounts, subscriptions, per-user quotas, or protection against determined abuse of a public endpoint.
+The legacy Chrome extension source remains in the repository but is not part of the current website product flow.

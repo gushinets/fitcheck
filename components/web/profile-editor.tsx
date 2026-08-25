@@ -8,12 +8,12 @@ import { freelancerProfileSchema } from "@/lib/analysis/schema"
 import type { WebMessages } from "@/lib/i18n/web-messages"
 import type { EnglishLevel, FreelancerProfile } from "@/lib/types"
 
-const englishLevels: EnglishLevel[] = [
-  "Basic",
-  "Intermediate",
-  "Upper Intermediate",
-  "Advanced",
-  "Fluent",
+const englishLevels: { value: EnglishLevel; label: keyof WebMessages }[] = [
+  { value: "Basic", label: "englishBasic" },
+  { value: "Intermediate", label: "englishIntermediate" },
+  { value: "Upper Intermediate", label: "englishUpperIntermediate" },
+  { value: "Advanced", label: "englishAdvanced" },
+  { value: "Fluent", label: "englishFluent" },
 ]
 
 export function ProfileEditor({
@@ -58,7 +58,7 @@ export function ProfileEditor({
         <div className="space-y-1.5 sm:col-span-2">
           <Label htmlFor="profile-skills">{copy.skills}</Label>
           <Input id="profile-skills" value={skills} placeholder={copy.skillsPlaceholder} onChange={(event) => setSkills(event.target.value)} />
-          <p className="text-xs text-muted-foreground">TypeScript, React, PostgreSQL</p>
+          <p className="text-xs text-muted-foreground">{copy.skillsExample}</p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="profile-experience">{copy.experience}</Label>
@@ -71,7 +71,7 @@ export function ProfileEditor({
         <div className="space-y-1.5 sm:col-span-2">
           <Label htmlFor="profile-english">{copy.englishLevel}</Label>
           <select id="profile-english" value={englishLevel} onChange={(event) => setEnglishLevel(event.target.value as EnglishLevel)} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
-            {englishLevels.map((level) => <option key={level}>{level}</option>)}
+            {englishLevels.map(({ value, label }) => <option key={value} value={value}>{copy[label]}</option>)}
           </select>
         </div>
         <div className="sm:col-span-2">

@@ -49,8 +49,12 @@ export class LocalAuthError extends Error {
 }
 
 function publicUser(user: StoredLocalUser): LocalUser {
-  const { password: _password, ...safeUser } = user
-  return safeUser
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    createdAt: user.createdAt,
+  }
 }
 
 function requestResult<T>(request: IDBRequest<T>): Promise<T> {

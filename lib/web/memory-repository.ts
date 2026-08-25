@@ -33,8 +33,12 @@ export function createMemoryWebsiteRepository(
   let activeUserId = seed.activeUserId ?? null
 
   function safeUser(user: StoredLocalUser): LocalUser {
-    const { password: _password, ...safe } = user
-    return clone(safe)
+    return clone({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      createdAt: user.createdAt,
+    })
   }
 
   function snapshot(): WebsiteSnapshot {

@@ -80,6 +80,30 @@ describe("FitCheck website authentication", () => {
 
     expect(await screen.findByText("Incorrect password")).toBeVisible()
   })
+
+  it("deletes the current local account and all of its browser data", async () => {
+    const user = userEvent.setup()
+    const repository = createMemoryWebsiteRepository()
+    const localUser = await repository.createUser({
+      name: "Nikita",
+      email: "me@example.com",
+      password: "password-123",
+    })
+    await repository.saveProfile(localUser.id, defaultProfile)
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true)
+    render(<WebsiteApp repository={repository} api={api} />)
+
+    await user.click((await screen.findAllByRole("button", { name: "Profile" }))[0])
+    await user.click(screen.getByRole("button", { name: "Delete local account" }))
+
+    expect(confirm).toHaveBeenCalledWith(
+      "Delete this local account, profile, drafts, and history from this browser?",
+    )
+    expect(
+      await screen.findByRole("heading", { name: "Create your local account" }),
+    ).toBeVisible()
+    expect((await repository.loadSnapshot()).user).toBeNull()
+  })
 })
 
 describe("FitCheck vacancy workflow", () => {

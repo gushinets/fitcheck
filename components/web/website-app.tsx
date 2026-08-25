@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
+import { Button } from "@/components/ui/button"
 import type { AnalysisFeedback, FreelancerProfile, Locale } from "@/lib/types"
 import { resolveLocale } from "@/lib/i18n/locale"
 import { getWebMessages } from "@/lib/i18n/web-messages"
@@ -43,12 +44,10 @@ export function WebsiteApp({
   repository?: WebsiteRepository
   api?: WebsiteApi
 }) {
-  const repositoryRef = useRef<WebsiteRepository | null>(null)
-  if (!repositoryRef.current) {
-    repositoryRef.current = repository ?? createWebsiteRepository()
-  }
-  const store = repositoryRef.current
-  const [locale, setLocale] = useState<Locale>(initialLocale)
+  const [store] = useState<WebsiteRepository>(() =>
+    repository ?? createWebsiteRepository(),
+  )
+  const [locale, setLocale] = useState<Locale>("en")
   const [snapshot, setSnapshot] = useState<WebsiteSnapshot>(emptySnapshot)
   const [initialized, setInitialized] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -68,7 +67,7 @@ export function WebsiteApp({
         if (!active) return
         setSnapshot(loaded)
         setDraft(loaded.draft)
-        if (loaded.preferences) setLocale(loaded.preferences.locale)
+        setLocale(loaded.preferences?.locale ?? initialLocale())
         if (!loaded.profile) setView("profile")
       })
       .finally(() => active && setInitialized(true))
@@ -76,6 +75,10 @@ export function WebsiteApp({
       active = false
     }
   }, [store])
+
+  useEffect(() => {
+    document.documentElement.lang = locale
+  }, [locale])
 
   async function refresh() {
     setSnapshot(await store.loadSnapshot())
@@ -228,9 +231,19 @@ export function WebsiteApp({
     setAnalysisStep("source")
   }
 
+  async function deleteAccount() {
+    if (!snapshot.user || !window.confirm(copy.deleteAccountConfirmation)) return
+    await store.deleteUser(snapshot.user.id)
+    setSnapshot(emptySnapshot)
+    setDraft(null)
+    setActiveEntry(null)
+    setView("analyze")
+    setAnalysisStep("source")
+  }
+
   function content() {
     if (view === "profile") {
-      return <ProfileEditor profile={snapshot.profile} copy={copy} onSave={saveProfile} />
+      return <div className="space-y-6"><ProfileEditor profile={snapshot.profile} copy={copy} onSave={saveProfile} /><section className="mx-auto max-w-3xl rounded-3xl border border-danger/20 bg-card p-6 sm:p-8"><h2 className="text-lg font-semibold">{copy.localDataTitle}</h2><p className="mt-2 text-sm text-muted-foreground">{copy.localDataDescription}</p><p className="mt-3 text-sm font-medium">{snapshot.user?.email}</p><Button type="button" variant="destructive" className="mt-5" onClick={deleteAccount}>{copy.deleteAccount}</Button></section></div>
     }
     if (view === "history") {
       return <HistoryView entries={snapshot.history} locale={locale} copy={copy} onOpen={openHistory} onClear={async () => { if (window.confirm(copy.clearHistoryConfirmation) && snapshot.user) { await store.clearHistory(snapshot.user.id); setSnapshot((current) => ({ ...current, history: [] })) } }} />
@@ -254,7 +267,7 @@ export function WebsiteApp({
   if (!snapshot.user) {
     return (
       <div className="relative">
-        <div className="absolute right-4 top-4 z-10"><LanguageSwitch locale={locale} onChange={changeLocale} /></div>
+        <div className="absolute right-4 top-4 z-10"><LanguageSwitch locale={locale} label={copy.language} onChange={changeLocale} /></div>
         <AuthScreen copy={copy} error={authError} busy={busy} onCreate={createAccount} onSignIn={signIn} />
       </div>
     )

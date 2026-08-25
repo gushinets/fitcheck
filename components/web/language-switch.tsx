@@ -2,13 +2,15 @@ import type { Locale } from "@/lib/types"
 
 export function LanguageSwitch({
   locale,
+  label,
   onChange,
 }: {
   locale: Locale
+  label: string
   onChange: (locale: Locale) => void
 }) {
   return (
-    <div className="inline-flex rounded-full border border-border bg-card p-1" aria-label="Language">
+    <div className="inline-flex rounded-full border border-border bg-card p-1" aria-label={label}>
       {(["ru", "en"] as const).map((option) => (
         <button
           key={option}
