@@ -63,6 +63,21 @@ function mapProviderError(error: unknown): AnalysisServiceError {
   return new AnalysisServiceError("upstream", "OpenRouter request failed")
 }
 
+function logProviderError(error: unknown) {
+  const candidate = error as {
+    name?: string
+    status?: number
+    code?: string
+    error?: { type?: string }
+  }
+  console.error("[fitcheck] OpenRouter request failed", {
+    name: candidate.name,
+    status: candidate.status,
+    code: candidate.code,
+    type: candidate.error?.type,
+  })
+}
+
 export function createOpenRouterTransport(options: {
   apiKey: string
   model?: string
@@ -102,6 +117,7 @@ export function createOpenRouterTransport(options: {
         throw new AnalysisServiceError("invalid_output", "Model returned invalid JSON")
       }
     } catch (error) {
+      logProviderError(error)
       throw mapProviderError(error)
     }
   }
