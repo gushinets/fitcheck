@@ -97,7 +97,13 @@ export function ProfileEditor({
         locale,
       })
       if (requestId === suggestionRequestId.current) {
-        setSuggestions(nextSuggestions)
+        setSuggestions(
+          nextSuggestions
+            .filter(
+              (skill) => !normalizedSkills.has(skill.toLocaleLowerCase()),
+            )
+            .slice(0, 10),
+        )
       }
     } catch (error) {
       if (requestId === suggestionRequestId.current) {
@@ -171,14 +177,14 @@ export function ProfileEditor({
         <div className="space-y-1.5">
           <Label htmlFor="profile-rate">{copy.preferredRate}</Label>
           <div className="relative">
-            <Input id="profile-rate" type="number" min={0} value={rate} onChange={(event) => setRate(event.target.value)} className="pr-16" />
+            <Input id="profile-rate" type="number" min={0} step="any" value={rate} onChange={(event) => setRate(event.target.value)} className="pr-16" />
             <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">{copy.hourlyCurrency}</span>
           </div>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="profile-monthly-income">{copy.desiredMonthlyIncome}</Label>
           <div className="relative">
-            <Input id="profile-monthly-income" type="number" min={0} required value={monthlyIncome} onChange={(event) => setMonthlyIncome(event.target.value)} className="pr-20" />
+            <Input id="profile-monthly-income" type="number" min={0} step="any" required value={monthlyIncome} onChange={(event) => setMonthlyIncome(event.target.value)} className="pr-20" />
             <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">{copy.monthlyCurrency}</span>
           </div>
         </div>

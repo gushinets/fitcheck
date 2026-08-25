@@ -63,6 +63,42 @@ describe("ProfileEditor", () => {
     ).not.toBeInTheDocument()
   })
 
+  it("filters existing skills before limiting suggestions to 10 chips", async () => {
+    const user = userEvent.setup()
+    renderEditor({
+      onSuggestSkills: vi.fn(async () => [
+        "typescript",
+        "Skill 1",
+        "Skill 2",
+        "Skill 3",
+        "Skill 4",
+        "Skill 5",
+        "Skill 6",
+        "Skill 7",
+        "Skill 8",
+        "Skill 9",
+        "Skill 10",
+        "Skill 11",
+      ]),
+    })
+
+    await user.type(
+      screen.getByLabelText("Specialization"),
+      "Backend Developer",
+    )
+    await user.type(screen.getByLabelText("Skills"), "TypeScript")
+    await user.click(screen.getByRole("button", { name: "Suggest skills" }))
+
+    expect(await screen.findAllByRole("button", { name: /^Skill \d+$/ })).toHaveLength(10)
+    expect(
+      screen.queryByRole("button", { name: "typescript" }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Skill 10" })).toBeVisible()
+    expect(
+      screen.queryByRole("button", { name: "Skill 11" }),
+    ).not.toBeInTheDocument()
+  })
+
   it("clears stale suggestions when the specialization changes", async () => {
     const user = userEvent.setup()
     renderEditor({
@@ -134,6 +170,36 @@ describe("ProfileEditor", () => {
       desiredMonthlyIncome: 7500,
       workFormats: ["remote", "hybrid"],
       englishLevel: "Advanced",
+    })
+  })
+
+  it("saves fractional hourly rate and monthly income values", async () => {
+    const user = userEvent.setup()
+    const onSave = vi.fn()
+    renderEditor({ onSave })
+
+    await user.type(
+      screen.getByLabelText("Specialization"),
+      "Backend Developer",
+    )
+    await user.type(screen.getByLabelText("Skills"), "TypeScript")
+    await user.clear(screen.getByLabelText("Preferred hourly rate"))
+    await user.type(screen.getByLabelText("Preferred hourly rate"), "45.5")
+    await user.clear(screen.getByLabelText("Desired monthly income"))
+    await user.type(screen.getByLabelText("Desired monthly income"), "7500.25")
+    await user.click(screen.getByRole("checkbox", { name: "Remote" }))
+
+    expect(screen.getByRole("button", { name: "Save profile" })).toBeEnabled()
+    await user.click(screen.getByRole("button", { name: "Save profile" }))
+
+    expect(onSave).toHaveBeenCalledWith({
+      specialization: "Backend Developer",
+      skills: ["TypeScript"],
+      experienceYears: 0,
+      preferredRate: 45.5,
+      desiredMonthlyIncome: 7500.25,
+      workFormats: ["remote"],
+      englishLevel: "Intermediate",
     })
   })
 
