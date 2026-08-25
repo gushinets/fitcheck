@@ -1,4 +1,7 @@
-import { freelancerProfileSchema } from "@/lib/analysis/schema"
+import {
+  freelancerProfileSchema,
+  normalizeFreelancerProfile,
+} from "@/lib/analysis/schema"
 import type {
   AnalysisFeedback,
   FreelancerProfile,
@@ -28,7 +31,7 @@ type AuthErrorCode =
 
 interface StoredProfile {
   userId: string
-  profile: FreelancerProfile
+  profile: unknown
 }
 
 interface StoredDraft {
@@ -218,7 +221,9 @@ export function createWebsiteRepository(
 
       return {
         user: publicUser(storedUser),
-        profile: storedProfile?.profile ?? null,
+        profile: storedProfile
+          ? normalizeFreelancerProfile(storedProfile.profile)
+          : null,
         preferences: preferences ?? null,
         draft: storedDraft?.draft ?? null,
         history: newestFirst(history).slice(0, HISTORY_LIMIT),

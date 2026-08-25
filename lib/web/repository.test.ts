@@ -49,6 +49,29 @@ describe("IndexedDB website repository", () => {
     expect((await repository.loadSnapshot()).profile).toBeNull()
   })
 
+  it("loads legacy profiles with preference defaults", async () => {
+    const user = await repository.createUser({
+      name: "Nikita",
+      email: "me@example.com",
+      password: "password-123",
+    })
+    const legacyProfile = {
+      specialization: "Backend Developer",
+      skills: ["Python", "Django"],
+      experienceYears: 5,
+      preferredRate: 35,
+      englishLevel: "Upper Intermediate",
+    }
+
+    await writeStoredProfile(databaseName, user.id, legacyProfile)
+
+    expect((await repository.loadSnapshot()).profile).toEqual({
+      ...legacyProfile,
+      desiredMonthlyIncome: 0,
+      workFormats: ["remote"],
+    })
+  })
+
   it("reports duplicate emails and incorrect passwords with typed codes", async () => {
     await repository.createUser({
       name: "First",
@@ -143,4 +166,32 @@ function historyEntry(userId: string, index: number): WebHistoryEntry {
     analysis: goAnalysis,
     createdAt: new Date(index * 1_000).toISOString(),
   }
+}
+
+function writeStoredProfile(
+  databaseName: string,
+  userId: string,
+  profile: unknown,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(databaseName)
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => {
+      const database = request.result
+      const transaction = database.transaction("profiles", "readwrite")
+      transaction.objectStore("profiles").put({ userId, profile })
+      transaction.oncomplete = () => {
+        database.close()
+        resolve()
+      }
+      transaction.onerror = () => {
+        database.close()
+        reject(transaction.error)
+      }
+      transaction.onabort = () => {
+        database.close()
+        reject(transaction.error)
+      }
+    }
+  })
 }

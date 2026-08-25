@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { analysisRequestSchema, fitAnalysisSchema } from "./schema"
+import {
+  analysisRequestSchema,
+  fitAnalysisSchema,
+  freelancerProfileSchema,
+} from "./schema"
 import { normalizeAnalysis } from "./normalize"
 
 const profile = {
@@ -7,6 +11,8 @@ const profile = {
   skills: ["Python", "Django"],
   experienceYears: 5,
   preferredRate: 35,
+  desiredMonthlyIncome: 5_000,
+  workFormats: ["remote"] as const,
   englishLevel: "Upper Intermediate" as const,
 }
 
@@ -44,6 +50,44 @@ const memory = {
 }
 
 describe("analysis contracts", () => {
+  it("accepts an hourly rate of 2500", () => {
+    expect(
+      freelancerProfileSchema.safeParse({ ...profile, preferredRate: 2500 })
+        .success,
+    ).toBe(true)
+  })
+
+  it("rejects negative and non-finite monetary values", () => {
+    expect(
+      freelancerProfileSchema.safeParse({ ...profile, preferredRate: -1 })
+        .success,
+    ).toBe(false)
+    expect(
+      freelancerProfileSchema.safeParse({
+        ...profile,
+        desiredMonthlyIncome: Number.POSITIVE_INFINITY,
+      }).success,
+    ).toBe(false)
+  })
+
+  it("requires at least one unique valid work format", () => {
+    expect(
+      freelancerProfileSchema.safeParse({ ...profile, workFormats: [] }).success,
+    ).toBe(false)
+    expect(
+      freelancerProfileSchema.safeParse({
+        ...profile,
+        workFormats: ["remote", "remote"],
+      }).success,
+    ).toBe(false)
+    expect(
+      freelancerProfileSchema.safeParse({
+        ...profile,
+        workFormats: ["elsewhere"],
+      }).success,
+    ).toBe(false)
+  })
+
   it("rejects more than ten calibration entries", () => {
     const result = analysisRequestSchema.safeParse({
       profile,

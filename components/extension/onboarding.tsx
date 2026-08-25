@@ -16,6 +16,8 @@ const emptyProfile: FreelancerProfile = {
   skills: [],
   experienceYears: 0,
   preferredRate: 0,
+  desiredMonthlyIncome: 0,
+  workFormats: ["remote"],
   englishLevel: "Upper Intermediate",
 }
 

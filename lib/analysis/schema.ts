@@ -1,7 +1,9 @@
 import { z } from "zod"
+import type { FreelancerProfile } from "@/lib/types"
 
 const trimmedString = (max: number) => z.string().trim().min(1).max(max)
 const scoreSchema = z.number().int().min(0).max(100)
+const moneySchema = z.number().finite().min(0).max(100_000_000)
 
 export const englishLevelSchema = z.enum([
   "Basic",
@@ -11,13 +13,32 @@ export const englishLevelSchema = z.enum([
   "Fluent",
 ])
 
+export const workFormatSchema = z.enum(["remote", "office", "hybrid"])
+
 export const freelancerProfileSchema = z.object({
   specialization: trimmedString(120),
   skills: z.array(trimmedString(80)).min(1).max(50),
   experienceYears: z.number().min(0).max(60),
-  preferredRate: z.number().min(0).max(1000),
+  preferredRate: moneySchema,
+  desiredMonthlyIncome: moneySchema,
+  workFormats: z
+    .array(workFormatSchema)
+    .min(1)
+    .refine(
+      (formats) => new Set(formats).size === formats.length,
+      "Work formats must be unique",
+    ),
   englishLevel: englishLevelSchema,
 })
+
+export function normalizeFreelancerProfile(value: unknown): FreelancerProfile {
+  const candidate = value as Partial<FreelancerProfile>
+  return freelancerProfileSchema.parse({
+    ...candidate,
+    desiredMonthlyIncome: candidate.desiredMonthlyIncome ?? 0,
+    workFormats: candidate.workFormats ?? ["remote"],
+  })
+}
 
 export const jobSchema = z.object({
   id: trimmedString(200),

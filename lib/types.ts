@@ -7,11 +7,15 @@ export type EnglishLevel =
   | "Advanced"
   | "Fluent"
 
+export type WorkFormat = "remote" | "office" | "hybrid"
+
 export interface FreelancerProfile {
   specialization: string
   skills: string[]
   experienceYears: number
   preferredRate: number
+  desiredMonthlyIncome: number
+  workFormats: WorkFormat[]
   englishLevel: EnglishLevel
 }
 

@@ -57,6 +57,8 @@ export function ProfileForm({
       skills,
       experienceYears: Number(experienceYears) || 0,
       preferredRate: Number(preferredRate) || 0,
+      desiredMonthlyIncome: initial.desiredMonthlyIncome,
+      workFormats: initial.workFormats,
       englishLevel,
     })
   }
