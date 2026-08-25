@@ -4,6 +4,10 @@ import {
   type ExtractedVacancy,
 } from "@/lib/extraction/schema"
 import type { AnalysisRequest, FitAnalysis } from "@/lib/types"
+import {
+  skillSuggestionResponseSchema,
+  type SkillSuggestionRequest,
+} from "@/lib/skill-suggestions/schema"
 import { vacancyDraftSchema } from "./schemas"
 import type { VacancyDraft } from "./types"
 
@@ -23,6 +27,10 @@ export type WebApiErrorCode =
   | "analysis_timeout"
   | "analysis_invalid_output"
   | "analysis_upstream"
+  | "suggestions_rate_limit"
+  | "suggestions_timeout"
+  | "suggestions_invalid_output"
+  | "suggestions_upstream"
   | "network_error"
   | "invalid_response"
 
@@ -36,6 +44,7 @@ export class WebApiError extends Error {
 export interface WebsiteApi {
   extractVacancy(url: string): Promise<VacancyDraft>
   analyzeVacancy(request: AnalysisRequest): Promise<FitAnalysis>
+  suggestSkills(request: SkillSuggestionRequest): Promise<string[]>
 }
 
 async function post(path: string, body: unknown) {
@@ -88,4 +97,19 @@ export async function analyzeVacancy(
   return parsed.data
 }
 
-export const websiteApi: WebsiteApi = { extractVacancy, analyzeVacancy }
+export async function suggestSkills(
+  request: SkillSuggestionRequest,
+): Promise<string[]> {
+  const response = await post("/api/skill-suggestions", request)
+  if (!response.ok) return errorFrom(response)
+  const payload = await response.json().catch(() => null)
+  const parsed = skillSuggestionResponseSchema.safeParse(payload)
+  if (!parsed.success) throw new WebApiError("invalid_response")
+  return parsed.data.skills
+}
+
+export const websiteApi: WebsiteApi = {
+  extractVacancy,
+  analyzeVacancy,
+  suggestSkills,
+}

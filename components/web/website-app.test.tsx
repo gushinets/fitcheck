@@ -10,6 +10,7 @@ import { WebsiteApp } from "./website-app"
 const api: WebsiteApi = {
   extractVacancy: vi.fn(),
   analyzeVacancy: vi.fn(),
+  suggestSkills: vi.fn(),
 }
 
 beforeEach(() => {
@@ -120,7 +121,7 @@ describe("FitCheck vacancy workflow", () => {
     render(
       <WebsiteApp
         repository={repository}
-        api={{ extractVacancy: vi.fn(), analyzeVacancy }}
+        api={{ extractVacancy: vi.fn(), analyzeVacancy, suggestSkills: vi.fn() }}
       />,
     )
 
@@ -179,6 +180,7 @@ describe("FitCheck vacancy workflow", () => {
           analyzeVacancy: async () => {
             throw new WebApiError("analysis_upstream")
           },
+          suggestSkills: vi.fn(),
         }}
       />,
     )

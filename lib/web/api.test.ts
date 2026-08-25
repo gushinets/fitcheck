@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { defaultProfile, detectedJob, goAnalysis } from "@/lib/mock-data"
-import { analyzeVacancy, extractVacancy } from "./api"
+import { analyzeVacancy, extractVacancy, suggestSkills } from "./api"
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -61,5 +61,46 @@ describe("website API client", () => {
         memory: [],
       }),
     ).resolves.toEqual(goAnalysis)
+  })
+
+  it("posts specialization and locale then returns validated skill suggestions", async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({ skills: ["TypeScript", "PostgreSQL"] }),
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(
+      suggestSkills({ specialization: "Backend engineering", locale: "en" }),
+    ).resolves.toEqual(["TypeScript", "PostgreSQL"])
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/skill-suggestions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ specialization: "Backend engineering", locale: "en" }),
+    })
+  })
+
+  it("maps skill suggestion timeout errors", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({ error: "suggestions_timeout" }, { status: 504 }),
+      ),
+    )
+
+    await expect(
+      suggestSkills({ specialization: "Backend engineering", locale: "en" }),
+    ).rejects.toMatchObject({ code: "suggestions_timeout" })
+  })
+
+  it.each([
+    [{ skills: Array.from({ length: 11 }, () => "TypeScript") }],
+    [{ skills: ["TypeScript", ""] }],
+  ])("rejects malformed skill suggestion success data: %o", async (payload) => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json(payload)))
+
+    await expect(
+      suggestSkills({ specialization: "Backend engineering", locale: "en" }),
+    ).rejects.toMatchObject({ code: "invalid_response" })
   })
 })
