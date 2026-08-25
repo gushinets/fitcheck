@@ -107,6 +107,77 @@ describe("FitCheck website authentication", () => {
   })
 })
 
+describe("FitCheck profile skill suggestions", () => {
+  it.each([
+    ["suggestions_rate_limit" as const, "Skill suggestions are busy. Try again shortly."],
+    ["suggestions_timeout" as const, "Skill suggestions took too long. Try again."],
+    ["suggestions_invalid_output" as const, "The suggestion service returned an invalid result."],
+    ["suggestions_upstream" as const, "The suggestion service is temporarily unavailable."],
+    ["server_not_configured" as const, "Skill suggestions are not configured on the server."],
+    ["network_error" as const, "Could not reach the suggestion service."],
+    ["invalid_response" as const, "The suggestion service returned an invalid response."],
+  ])("shows the localized profile message for %s", async (code, message) => {
+    const user = userEvent.setup()
+    const repository = createMemoryWebsiteRepository()
+    await repository.createUser({
+      name: "Nikita",
+      email: "me@example.com",
+      password: "password-123",
+    })
+    render(
+      <WebsiteApp
+        repository={repository}
+        api={{
+          extractVacancy: vi.fn(),
+          analyzeVacancy: vi.fn(),
+          suggestSkills: async () => {
+            throw new WebApiError(code)
+          },
+        }}
+      />,
+    )
+
+    await user.type(
+      await screen.findByLabelText("Specialization"),
+      "Backend Developer",
+    )
+    await user.click(screen.getByRole("button", { name: "Suggest skills" }))
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(message)
+  })
+
+  it("uses the active Russian locale for suggestions and errors", async () => {
+    const user = userEvent.setup()
+    const repository = createMemoryWebsiteRepository()
+    await repository.createUser({
+      name: "Nikita",
+      email: "me@example.com",
+      password: "password-123",
+    })
+    const suggestSkills = vi.fn(async () => {
+      throw new WebApiError("suggestions_timeout")
+    })
+    render(
+      <WebsiteApp
+        repository={repository}
+        api={{ extractVacancy: vi.fn(), analyzeVacancy: vi.fn(), suggestSkills }}
+      />,
+    )
+
+    await user.click(await screen.findByRole("button", { name: "RU" }))
+    await user.type(screen.getByLabelText("Специализация"), "Backend-разработчик")
+    await user.click(screen.getByRole("button", { name: "Подобрать навыки" }))
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Подбор навыков занял слишком много времени. Попробуйте снова.",
+    )
+    expect(suggestSkills).toHaveBeenCalledWith({
+      specialization: "Backend-разработчик",
+      locale: "ru",
+    })
+  })
+})
+
 describe("FitCheck vacancy workflow", () => {
   it("returns to source selection with the draft intact and sends a real analysis request", async () => {
     const user = userEvent.setup()

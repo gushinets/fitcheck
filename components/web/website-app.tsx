@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import type { AnalysisFeedback, FreelancerProfile, Locale } from "@/lib/types"
 import { resolveLocale } from "@/lib/i18n/locale"
 import { getWebMessages } from "@/lib/i18n/web-messages"
+import type { SkillSuggestionRequest } from "@/lib/skill-suggestions/schema"
 import type { WebsiteApi } from "@/lib/web/api"
 import { websiteApi } from "@/lib/web/api"
 import { createWebsiteRepository, LocalAuthError } from "@/lib/web/repository"
@@ -195,6 +196,28 @@ export function WebsiteApp({
     }
   }
 
+  function skillSuggestionErrorMessage(error: unknown) {
+    if (!(error instanceof WebApiError)) return copy.skillSuggestionsFailed
+    switch (error.code) {
+      case "suggestions_rate_limit": return copy.suggestionsRateLimit
+      case "suggestions_timeout": return copy.suggestionsTimeout
+      case "suggestions_invalid_output": return copy.suggestionsInvalidOutput
+      case "suggestions_upstream": return copy.suggestionsUpstream
+      case "server_not_configured": return copy.suggestionsServerNotConfigured
+      case "network_error": return copy.suggestionsNetworkError
+      case "invalid_response": return copy.suggestionsInvalidResponse
+      default: return copy.skillSuggestionsFailed
+    }
+  }
+
+  async function suggestProfileSkills(input: SkillSuggestionRequest) {
+    try {
+      return await api.suggestSkills(input)
+    } catch (error) {
+      throw new Error(skillSuggestionErrorMessage(error))
+    }
+  }
+
   async function saveFeedback(feedback: Omit<AnalysisFeedback, "createdAt">) {
     if (!snapshot.user || !activeEntry) return
     const saved = { ...feedback, createdAt: new Date().toISOString() }
@@ -243,7 +266,7 @@ export function WebsiteApp({
 
   function content() {
     if (view === "profile") {
-      return <div className="space-y-6"><ProfileEditor profile={snapshot.profile} copy={copy} onSave={saveProfile} /><section className="mx-auto max-w-3xl rounded-3xl border border-danger/20 bg-card p-6 sm:p-8"><h2 className="text-lg font-semibold">{copy.localDataTitle}</h2><p className="mt-2 text-sm text-muted-foreground">{copy.localDataDescription}</p><p className="mt-3 text-sm font-medium">{snapshot.user?.email}</p><Button type="button" variant="destructive" className="mt-5" onClick={deleteAccount}>{copy.deleteAccount}</Button></section></div>
+      return <div className="space-y-6"><ProfileEditor profile={snapshot.profile} locale={locale} copy={copy} onSave={saveProfile} onSuggestSkills={suggestProfileSkills} /><section className="mx-auto max-w-3xl rounded-3xl border border-danger/20 bg-card p-6 sm:p-8"><h2 className="text-lg font-semibold">{copy.localDataTitle}</h2><p className="mt-2 text-sm text-muted-foreground">{copy.localDataDescription}</p><p className="mt-3 text-sm font-medium">{snapshot.user?.email}</p><Button type="button" variant="destructive" className="mt-5" onClick={deleteAccount}>{copy.deleteAccount}</Button></section></div>
     }
     if (view === "history") {
       return <HistoryView entries={snapshot.history} locale={locale} copy={copy} onOpen={openHistory} onClear={async () => { if (window.confirm(copy.clearHistoryConfirmation) && snapshot.user) { await store.clearHistory(snapshot.user.id); setSnapshot((current) => ({ ...current, history: [] })) } }} />
