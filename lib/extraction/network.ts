@@ -54,6 +54,16 @@ export class ExtractionNetworkError extends Error {
   }
 }
 
+export function createPinnedLookup(pinned: ResolvedAddress): LookupFunction {
+  return (_hostname, options, callback) => {
+    if (options.all) {
+      callback(null, [pinned])
+      return
+    }
+    callback(null, pinned.address, pinned.family)
+  }
+}
+
 const blockedV4: Array<[string, number]> = [
   ["0.0.0.0", 8],
   ["10.0.0.0", 8],
@@ -136,6 +146,15 @@ function inIpv6Cidr(value: Uint8Array, network: Uint8Array, prefix: number) {
   return (value[fullBytes] & mask) === (network[fullBytes] & mask)
 }
 
+function mappedIpv4Address(value: Uint8Array) {
+  const isMapped =
+    value.slice(0, 10).every((byte) => byte === 0) &&
+    value[10] === 0xff &&
+    value[11] === 0xff
+  if (!isMapped) return undefined
+  return Array.from(value.slice(12)).join(".")
+}
+
 export function isPublicAddress(address: string) {
   const family = isIP(address)
   if (family === 4) {
@@ -145,12 +164,9 @@ export function isPublicAddress(address: string) {
     )
   }
   if (family === 6) {
-    const normalized = address.toLowerCase()
-    if (normalized.startsWith("::ffff:")) {
-      const embedded = normalized.slice("::ffff:".length)
-      if (isIP(embedded) === 4) return isPublicAddress(embedded)
-    }
     const value = ipv6Bytes(address)
+    const mappedIpv4 = mappedIpv4Address(value)
+    if (mappedIpv4) return isPublicAddress(mappedIpv4)
     return !blockedV6.some(([network, prefix]) =>
       inIpv6Cidr(value, ipv6Bytes(network), prefix),
     )
@@ -165,9 +181,6 @@ function nodeRequest(
 ): Promise<RawPageResponse> {
   return new Promise((resolve, reject) => {
     const pinned = addresses[0]
-    const lookup: LookupFunction = (_hostname, _options, callback) => {
-      callback(null, pinned.address, pinned.family)
-    }
     const transport = url.protocol === "https:" ? httpsRequest : httpRequest
     const request = transport(
       url,
@@ -177,7 +190,7 @@ function nodeRequest(
           accept: "text/html,text/plain;q=0.9",
           "user-agent": "FitCheck Vacancy Extractor/1.0",
         },
-        lookup,
+        lookup: createPinnedLookup(pinned),
         signal: AbortSignal.timeout(limits.timeoutMs),
       },
       (response) => {

@@ -2,6 +2,7 @@
 
 import { describe, expect, it, vi } from "vitest"
 import {
+  createPinnedLookup,
   fetchPublicPage,
   isPublicAddress,
   type NetworkDependencies,
@@ -23,6 +24,8 @@ describe("public address policy", () => {
     "::",
     "::1",
     "::ffff:127.0.0.1",
+    "::ffff:7f00:1",
+    "::ffff:a00:1",
     "2001:db8::1",
     "fc00::1",
     "fe80::1",
@@ -42,6 +45,19 @@ describe("public address policy", () => {
 })
 
 describe("fetchPublicPage", () => {
+  it("returns an address array when Node requests all pinned DNS results", async () => {
+    const lookup = createPinnedLookup({ address: "93.184.216.34", family: 4 })
+
+    const result = await new Promise<unknown>((resolve, reject) => {
+      lookup("jobs.example", { all: true }, (error, addresses) => {
+        if (error) reject(error)
+        else resolve(addresses)
+      })
+    })
+
+    expect(result).toEqual([{ address: "93.184.216.34", family: 4 }])
+  })
+
   it("rejects non-HTTP URLs and embedded credentials", async () => {
     await expect(fetchPublicPage("file:///etc/passwd", dependencies())).rejects
       .toMatchObject({ code: "invalid_url" })
