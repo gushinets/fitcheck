@@ -9,11 +9,18 @@ function allowedOrigins() {
 }
 
 export async function POST(request: Request) {
+  const origins = allowedOrigins()
+  const origin = request.headers.get("origin") ?? ""
+  const requestOrigin = new URL(request.url).origin
+  if (origin && origin !== requestOrigin && !origins.includes(origin)) {
+    return json({ error: "origin_not_allowed" }, 403)
+  }
+
   const apiKey = process.env.DEEPSEEK_API_KEY
   if (!apiKey) return json({ error: "server_not_configured" }, 503)
 
   const handler = createSkillSuggestionsHandler({
-    allowedOrigins: allowedOrigins(),
+    allowedOrigins: origins,
     transport: createDeepSeekSkillSuggestionTransport({
       apiKey,
       model: process.env.DEEPSEEK_MODEL,
@@ -24,7 +31,8 @@ export async function POST(request: Request) {
 
 export async function OPTIONS(request: Request) {
   const origin = request.headers.get("origin") ?? ""
-  if (!allowedOrigins().includes(origin)) {
+  const requestOrigin = new URL(request.url).origin
+  if (origin !== requestOrigin && !allowedOrigins().includes(origin)) {
     return json({ error: "origin_not_allowed" }, 403)
   }
 

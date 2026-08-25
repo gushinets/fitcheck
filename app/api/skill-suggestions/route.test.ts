@@ -25,12 +25,25 @@ afterEach(() => {
 describe("POST /api/skill-suggestions route", () => {
   it("reports missing DeepSeek configuration without calling a provider", async () => {
     vi.stubEnv("DEEPSEEK_API_KEY", "")
+    vi.stubEnv("ALLOWED_ORIGINS", allowedOrigin)
 
     const response = await POST(request())
 
     expect(response.status).toBe(503)
     await expect(response.json()).resolves.toEqual({
       error: "server_not_configured",
+    })
+  })
+
+  it("rejects a foreign origin before reporting missing DeepSeek configuration", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "")
+    vi.stubEnv("ALLOWED_ORIGINS", allowedOrigin)
+
+    const response = await POST(request("https://evil.example"))
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toEqual({
+      error: "origin_not_allowed",
     })
   })
 
@@ -81,6 +94,21 @@ describe("POST /api/skill-suggestions route", () => {
 })
 
 describe("OPTIONS /api/skill-suggestions", () => {
+  it("allows the route's own origin without an allowlist entry", async () => {
+    vi.stubEnv("ALLOWED_ORIGINS", allowedOrigin)
+    const preflight = new Request("http://localhost:3000/api/skill-suggestions", {
+      method: "OPTIONS",
+      headers: { origin: "http://localhost:3000" },
+    })
+
+    const response = await OPTIONS(preflight)
+
+    expect(response.status).toBe(204)
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "http://localhost:3000",
+    )
+  })
+
   it("allows a configured origin with CORS headers", async () => {
     vi.stubEnv("ALLOWED_ORIGINS", allowedOrigin)
     const preflight = new Request("http://localhost:3000/api/skill-suggestions", {
