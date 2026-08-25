@@ -1,10 +1,5 @@
-"use client"
-
-import { ExtensionApp } from "@/components/extension/extension-app"
-import { createPreviewRuntime } from "@/lib/extension/preview-adapter"
-
-const runtime = createPreviewRuntime()
+import { WebsiteApp } from "@/components/web/website-app"
 
 export default function Page() {
-  return <ExtensionApp runtime={runtime} previewControls />
+  return <WebsiteApp />
 }

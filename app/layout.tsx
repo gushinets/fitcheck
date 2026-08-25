@@ -7,9 +7,9 @@ const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
 
 export const metadata: Metadata = {
-  title: 'FitCheck — Upwork Job Fit',
+  title: 'FitCheck — AI Vacancy Fit Analysis',
   description:
-    'Decide whether a job is worth your connects. FitCheck scores each Upwork job against your freelancer profile with a GO / NO-GO verdict.',
+    'Compare any public vacancy with your freelancer profile and get a real AI-powered Fit Score with strengths, risks, and a GO / NO-GO verdict.',
   generator: 'v0.app',
   icons: {
     icon: [

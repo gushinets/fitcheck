@@ -106,12 +106,16 @@ function newestFirst(entries: WebHistoryEntry[]) {
 export function createWebsiteRepository(
   databaseName = DEFAULT_DATABASE_NAME,
 ): WebsiteRepository {
-  const database = openDatabase(databaseName)
+  let databasePromise: Promise<IDBDatabase> | null = null
+  const database = () => {
+    databasePromise ??= openDatabase(databaseName)
+    return databasePromise
+  }
 
   return {
     async createUser(input) {
       const parsed = localAccountSchema.parse(input)
-      const db = await database
+      const db = await database()
       const lookup = db.transaction("users", "readonly")
       const existing = await requestResult(
         lookup.objectStore("users").index("email").get(parsed.email),
@@ -146,7 +150,7 @@ export function createWebsiteRepository(
     },
 
     async authenticate(email, password) {
-      const db = await database
+      const db = await database()
       const transaction = db.transaction("users", "readonly")
       const stored = (await requestResult(
         transaction
@@ -173,7 +177,7 @@ export function createWebsiteRepository(
     },
 
     async loadSnapshot() {
-      const db = await database
+      const db = await database()
       const transaction = db.transaction(
         ["users", "profiles", "preferences", "drafts", "history", "meta"],
         "readonly",
@@ -218,14 +222,14 @@ export function createWebsiteRepository(
     },
 
     async signOut() {
-      const db = await database
+      const db = await database()
       const transaction = db.transaction("meta", "readwrite")
       transaction.objectStore("meta").delete(ACTIVE_SESSION_KEY)
       await transactionDone(transaction)
     },
 
     async saveLocale(userId: string, locale: Locale) {
-      const db = await database
+      const db = await database()
       const transaction = db.transaction("preferences", "readwrite")
       transaction.objectStore("preferences").put({ userId, locale })
       await transactionDone(transaction)
@@ -233,7 +237,7 @@ export function createWebsiteRepository(
 
     async saveProfile(userId: string, profile: FreelancerProfile) {
       const validProfile = freelancerProfileSchema.parse(profile)
-      const db = await database
+      const db = await database()
       const transaction = db.transaction("profiles", "readwrite")
       transaction.objectStore("profiles").put({
         userId,
@@ -243,7 +247,7 @@ export function createWebsiteRepository(
     },
 
     async saveDraft(userId: string, draft: VacancyDraft | null) {
-      const db = await database
+      const db = await database()
       const transaction = db.transaction("drafts", "readwrite")
       if (draft) {
         transaction.objectStore("drafts").put({
@@ -257,7 +261,7 @@ export function createWebsiteRepository(
     },
 
     async addHistory(entry: WebHistoryEntry) {
-      const db = await database
+      const db = await database()
       const transaction = db.transaction("history", "readwrite")
       const store = transaction.objectStore("history")
       store.put(entry)
@@ -275,7 +279,7 @@ export function createWebsiteRepository(
       entryId: string,
       feedback: AnalysisFeedback,
     ) {
-      const db = await database
+      const db = await database()
       const transaction = db.transaction("history", "readwrite")
       const store = transaction.objectStore("history")
       const entry = (await requestResult(
@@ -286,7 +290,7 @@ export function createWebsiteRepository(
     },
 
     async clearHistory(userId: string) {
-      const db = await database
+      const db = await database()
       const transaction = db.transaction("history", "readwrite")
       const store = transaction.objectStore("history")
       const keys = await requestResult(store.index("userId").getAllKeys(userId))
@@ -295,7 +299,7 @@ export function createWebsiteRepository(
     },
 
     async deleteUser(userId: string) {
-      const db = await database
+      const db = await database()
       const transaction = db.transaction(
         ["users", "profiles", "preferences", "drafts", "history", "meta"],
         "readwrite",
