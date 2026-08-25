@@ -68,6 +68,7 @@ function logProviderError(error: unknown) {
     name?: string
     status?: number
     code?: string
+    message?: string
     error?: { type?: string }
   }
   console.error("[fitcheck] OpenRouter request failed", {
@@ -75,6 +76,7 @@ function logProviderError(error: unknown) {
     status: candidate.status,
     code: candidate.code,
     type: candidate.error?.type,
+    message: candidate.message?.slice(0, 500),
   })
 }
 
