@@ -47,6 +47,17 @@ describe("POST /api/analyze", () => {
     })
   })
 
+  it("accepts the website's own origin without a duplicate allowlist entry", async () => {
+    const handler = createAnalyzeHandler({
+      allowedOrigins: [allowedOrigin],
+      transport,
+    })
+
+    const response = await handler(request(validBody, "http://localhost:3000"))
+
+    expect(response.status).toBe(200)
+  })
+
   it("returns 400 for an invalid profile", async () => {
     const handler = createAnalyzeHandler({
       allowedOrigins: [allowedOrigin],
@@ -132,6 +143,17 @@ describe("POST /api/analyze", () => {
     await expect(response.json()).resolves.toMatchObject({
       score: 82,
       status: "GO",
+    })
+  })
+
+  it("reports missing OpenRouter configuration instead of returning a mock", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "")
+
+    const response = await POST(request(validBody))
+
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toEqual({
+      error: "server_not_configured",
     })
   })
 })

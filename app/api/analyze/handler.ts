@@ -51,7 +51,12 @@ function errorResponse(error: unknown, origin: string) {
 export function createAnalyzeHandler(options: HandlerOptions) {
   return async function handleAnalyze(request: Request) {
     const origin = request.headers.get("origin") ?? ""
-    if (!options.allowedOrigins.includes(origin)) {
+    const requestOrigin = new URL(request.url).origin
+    if (
+      origin &&
+      origin !== requestOrigin &&
+      !options.allowedOrigins.includes(origin)
+    ) {
       return json({ error: "origin_not_allowed" }, 403)
     }
 
