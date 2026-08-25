@@ -61,6 +61,14 @@ describe("suggestSkills", () => {
     })
   })
 
+  it("skips whitespace-only entries among valid skills", async () => {
+    const result = await suggestSkills(request, async () => ({
+      skills: [" Python ", "   ", "\t", " FastAPI ", "\n"],
+    }))
+
+    expect(result).toEqual({ skills: ["Python", "FastAPI"] })
+  })
+
   it("rejects malformed provider output", async () => {
     const run = suggestSkills(request, async () => ({ skills: ["Python", 42] }))
 

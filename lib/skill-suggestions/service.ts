@@ -35,6 +35,8 @@ function normalizeSkills(skills: string[]) {
 
   for (const value of skills) {
     const skill = value.trim()
+    if (!skill) continue
+
     const key = skill.toLocaleLowerCase()
     if (seen.has(key)) continue
 
