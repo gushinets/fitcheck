@@ -71,7 +71,8 @@ export function ProfileEditor({
     skills: parsedSkills,
     experienceYears: Number(experience),
     preferredRate: Number(rate),
-    desiredMonthlyIncome: Number(monthlyIncome),
+    desiredMonthlyIncome:
+      monthlyIncome.trim() === "" ? Number.NaN : Number(monthlyIncome),
     workFormats,
     englishLevel,
   }
@@ -177,7 +178,7 @@ export function ProfileEditor({
         <div className="space-y-1.5">
           <Label htmlFor="profile-monthly-income">{copy.desiredMonthlyIncome}</Label>
           <div className="relative">
-            <Input id="profile-monthly-income" type="number" min={0} value={monthlyIncome} onChange={(event) => setMonthlyIncome(event.target.value)} className="pr-20" />
+            <Input id="profile-monthly-income" type="number" min={0} required value={monthlyIncome} onChange={(event) => setMonthlyIncome(event.target.value)} className="pr-20" />
             <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">{copy.monthlyCurrency}</span>
           </div>
         </div>

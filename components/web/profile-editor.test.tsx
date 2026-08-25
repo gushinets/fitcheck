@@ -137,6 +137,26 @@ describe("ProfileEditor", () => {
     })
   })
 
+  it("keeps save disabled when monthly income is blank", async () => {
+    const user = userEvent.setup()
+    renderEditor()
+
+    await user.type(
+      screen.getByLabelText("Specialization"),
+      "Backend Developer",
+    )
+    await user.type(screen.getByLabelText("Skills"), "TypeScript")
+    await user.click(screen.getByRole("checkbox", { name: "Remote" }))
+
+    const monthlyIncome = screen.getByLabelText("Desired monthly income")
+    expect(screen.getByRole("button", { name: "Save profile" })).toBeEnabled()
+
+    await user.clear(monthlyIncome)
+
+    expect(screen.getByRole("button", { name: "Save profile" })).toBeDisabled()
+    expect(monthlyIncome).toBeRequired()
+  })
+
   it.each([
     ["en" as const, "$/hour", "$/month", "Work formats", "Office"],
     ["ru" as const, "₽/час", "₽/месяц", "Формат работы", "Офис"],
