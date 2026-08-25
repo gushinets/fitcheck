@@ -1,8 +1,6 @@
 import { createOpenRouterTransport } from "@/lib/analysis/openrouter"
 import { corsHeaders, createAnalyzeHandler, json } from "./handler"
 
-export const runtime = "nodejs"
-
 function allowedOrigins() {
   return (process.env.ALLOWED_ORIGINS ?? "http://localhost:3000")
     .split(",")

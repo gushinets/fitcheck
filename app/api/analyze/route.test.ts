@@ -9,14 +9,6 @@ import {
 import { createAnalyzeHandler } from "./handler"
 import { POST } from "./route"
 
-const { createOpenRouterTransportMock } = vi.hoisted(() => ({
-  createOpenRouterTransportMock: vi.fn(),
-}))
-
-vi.mock("@/lib/analysis/openrouter", () => ({
-  createOpenRouterTransport: createOpenRouterTransportMock,
-}))
-
 const allowedOrigin = "chrome-extension://fitcheck-test"
 const validBody = {
   profile: defaultProfile,
@@ -30,7 +22,6 @@ const transport: AnalysisTransport = async () => goAnalysis
 afterEach(() => {
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
-  vi.clearAllMocks()
 })
 
 function request(body: unknown, origin = allowedOrigin) {
@@ -116,14 +107,38 @@ describe("POST /api/analyze", () => {
     vi.stubEnv("OPENROUTER_MODEL", "openrouter/free")
     vi.stubEnv("OPENAI_API_KEY", "")
     vi.stubEnv("ALLOWED_ORIGINS", allowedOrigin)
-    createOpenRouterTransportMock.mockReturnValue(async () => goAnalysis)
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            id: "generation-test",
+            object: "chat.completion",
+            created: 0,
+            model: "test/free-model",
+            choices: [
+              {
+                index: 0,
+                finish_reason: "stop",
+                message: {
+                  role: "assistant",
+                  content: JSON.stringify(goAnalysis),
+                },
+              },
+            ],
+            usage: {
+              prompt_tokens: 1,
+              completion_tokens: 1,
+              total_tokens: 2,
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    )
 
     const response = await POST(request(validBody))
 
-    expect(createOpenRouterTransportMock).toHaveBeenCalledWith({
-      apiKey: "test-openrouter-key",
-      model: "openrouter/free",
-    })
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toMatchObject({
       score: 82,
