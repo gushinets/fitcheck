@@ -1,0 +1,56 @@
+import { describe, expect, it, vi } from "vitest"
+import { render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
+import { webMessages } from "@/lib/i18n/web-messages"
+import { WebApiError } from "@/lib/web/api"
+import { VacancySource } from "./vacancy-source"
+
+describe("VacancySource", () => {
+  it("preserves URL and text buffers while switching input modes", async () => {
+    const user = userEvent.setup()
+    const onReview = vi.fn()
+    render(<VacancySource copy={webMessages.en} onLoadUrl={vi.fn()} onReview={onReview} />)
+
+    await user.click(screen.getByRole("button", { name: "Paste text" }))
+    await user.type(screen.getByLabelText("Vacancy title"), "Backend role")
+    await user.type(
+      screen.getByLabelText("Vacancy description"),
+      "Build production APIs for a fast-growing SaaS platform.",
+    )
+    await user.click(screen.getByRole("button", { name: "From URL" }))
+    await user.type(
+      screen.getByLabelText("Vacancy URL"),
+      "https://jobs.example/backend",
+    )
+    await user.click(screen.getByRole("button", { name: "Paste text" }))
+
+    expect(screen.getByLabelText("Vacancy title")).toHaveValue("Backend role")
+    await user.click(screen.getByRole("button", { name: "Review vacancy" }))
+    expect(onReview).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceMode: "text", title: "Backend role" }),
+    )
+  })
+
+  it("offers manual paste after URL extraction fails", async () => {
+    const user = userEvent.setup()
+    render(
+      <VacancySource
+        copy={webMessages.en}
+        onLoadUrl={async () => {
+          throw new WebApiError("extraction_insufficient")
+        }}
+        onReview={vi.fn()}
+      />,
+    )
+
+    await user.type(
+      screen.getByLabelText("Vacancy URL"),
+      "https://jobs.example/blocked",
+    )
+    await user.click(screen.getByRole("button", { name: "Load vacancy" }))
+
+    expect(await screen.findByText(/could not find enough vacancy text/i)).toBeVisible()
+    await user.click(screen.getByRole("button", { name: "Paste text instead" }))
+    expect(screen.getByLabelText("Vacancy description")).toBeVisible()
+  })
+})

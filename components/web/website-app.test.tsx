@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import type { WebsiteApi } from "@/lib/web/api"
 import { createMemoryWebsiteRepository } from "@/lib/web/memory-repository"
+import { defaultProfile, goAnalysis } from "@/lib/mock-data"
 import { WebsiteApp } from "./website-app"
 
 const api: WebsiteApi = {
@@ -77,5 +78,53 @@ describe("FitCheck website authentication", () => {
     await user.click(screen.getByRole("button", { name: "Sign in" }))
 
     expect(await screen.findByText("Incorrect password")).toBeVisible()
+  })
+})
+
+describe("FitCheck vacancy workflow", () => {
+  it("returns to source selection with the draft intact and sends a real analysis request", async () => {
+    const user = userEvent.setup()
+    const repository = createMemoryWebsiteRepository()
+    const localUser = await repository.createUser({
+      name: "Nikita",
+      email: "me@example.com",
+      password: "password-123",
+    })
+    await repository.saveProfile(localUser.id, defaultProfile)
+    const analyzeVacancy = vi.fn(async () => goAnalysis)
+    render(
+      <WebsiteApp
+        repository={repository}
+        api={{ extractVacancy: vi.fn(), analyzeVacancy }}
+      />,
+    )
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Choose how to add a vacancy",
+      }),
+    ).toBeVisible()
+    await user.click(screen.getByRole("button", { name: "Paste text" }))
+    await user.type(screen.getByLabelText("Vacancy title"), "Backend role")
+    await user.type(
+      screen.getByLabelText("Vacancy description"),
+      "Build production APIs for a fast-growing SaaS platform.",
+    )
+    await user.click(screen.getByRole("button", { name: "Review vacancy" }))
+    await user.click(
+      screen.getByRole("button", { name: "Back to vacancy selection" }),
+    )
+    expect(screen.getByLabelText("Vacancy title")).toHaveValue("Backend role")
+    await user.click(screen.getByRole("button", { name: "Review vacancy" }))
+    await user.click(screen.getByRole("button", { name: "Analyze vacancy" }))
+
+    expect(await screen.findByText("82 / 100")).toBeVisible()
+    expect(analyzeVacancy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profile: defaultProfile,
+        job: expect.objectContaining({ title: "Backend role" }),
+        locale: "en",
+      }),
+    )
   })
 })
