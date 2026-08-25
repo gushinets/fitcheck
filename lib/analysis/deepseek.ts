@@ -47,6 +47,11 @@ const fitAnalysisJsonSchema = {
   ],
 } as const
 
+type DeepSeekChatCompletionParams =
+  OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming & {
+    thinking: { type: "disabled" }
+  }
+
 function mapProviderError(error: unknown): AnalysisServiceError {
   if (error instanceof AnalysisServiceError) return error
   if (error instanceof OpenAI.APIConnectionTimeoutError) {
@@ -96,7 +101,7 @@ export function createDeepSeekTransport(options: {
 
   return async (_request, prompt) => {
     try {
-      const response = await client.chat.completions.create({
+      const completionParams = {
         model,
         max_tokens: 1200,
         messages: [
@@ -109,7 +114,11 @@ export function createDeepSeekTransport(options: {
         response_format: {
           type: "json_object",
         },
-      })
+        thinking: {
+          type: "disabled",
+        },
+      } satisfies DeepSeekChatCompletionParams
+      const response = await client.chat.completions.create(completionParams)
       const output = response.choices[0]?.message.content
       if (!output) {
         throw new AnalysisServiceError("invalid_output", "Model returned no output")

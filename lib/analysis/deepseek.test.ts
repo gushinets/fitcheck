@@ -85,6 +85,9 @@ describe("DeepSeek analysis transport", () => {
       response_format: {
         type: "json_object",
       },
+      thinking: {
+        type: "disabled",
+      },
     })
     expect(result).toEqual(goAnalysis)
   })
