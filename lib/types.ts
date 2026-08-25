@@ -17,7 +17,7 @@ export interface FreelancerProfile {
 
 export interface Job {
   id: string
-  url: string
+  url?: string
   title: string
   description: string
   skills: string[]

@@ -21,7 +21,7 @@ export const freelancerProfileSchema = z.object({
 
 export const jobSchema = z.object({
   id: trimmedString(200),
-  url: z.url().max(2000),
+  url: z.url().max(2000).optional(),
   title: trimmedString(300),
   description: trimmedString(20_000),
   skills: z.array(trimmedString(80)).max(100),
