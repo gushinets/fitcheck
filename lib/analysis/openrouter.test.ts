@@ -72,6 +72,7 @@ describe("OpenRouter analysis transport", () => {
     )
     expect(requestedBody).toMatchObject({
       model: "openrouter/free",
+      max_tokens: 1200,
       messages: [
         { role: "system", content: "System instructions" },
         { role: "user", content: "User input" },

@@ -78,6 +78,7 @@ export function createOpenRouterTransport(options: {
     try {
       const response = await client.chat.completions.create({
         model,
+        max_tokens: 1200,
         messages: [
           { role: "system", content: prompt.instructions },
           { role: "user", content: prompt.input },
