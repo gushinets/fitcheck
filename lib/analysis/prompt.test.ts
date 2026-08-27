@@ -72,6 +72,23 @@ describe("buildAnalysisPrompt", () => {
     )
   })
 
+  it("uses the active locale currency for vacancy rates and fixed budgets", () => {
+    const job = {
+      ...detectedJob,
+      hourlyRateMin: 1_500,
+      hourlyRateMax: 2_500,
+      fixedBudget: 80_000,
+    }
+
+    const en = buildAnalysisPrompt(request({ job, locale: "en" }))
+    const ru = buildAnalysisPrompt(request({ job, locale: "ru" }))
+
+    expect(en.input).toContain("Hourly rate: $1500–$2500")
+    expect(en.input).toContain("Fixed budget: $80000")
+    expect(ru.input).toContain("Hourly rate: ₽1500–₽2500")
+    expect(ru.input).toContain("Fixed budget: ₽80000")
+  })
+
   it("includes user corrections as calibration rather than facts", () => {
     const prompt = buildAnalysisPrompt(
       request({

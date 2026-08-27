@@ -28,10 +28,23 @@ export async function analyzeJob(
   request: AnalysisRequest,
   transport: AnalysisTransport,
 ): Promise<FitAnalysis> {
-  const raw = await transport(request, buildAnalysisPrompt(request))
-  const parsed = fitAnalysisSchema.safeParse(raw)
-  if (!parsed.success) {
-    throw new AnalysisServiceError("invalid_output", "Model output failed validation")
+  const prompt = buildAnalysisPrompt(request)
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const raw = await transport(request, prompt)
+      const parsed = fitAnalysisSchema.safeParse(raw)
+      if (parsed.success) return normalizeAnalysis(parsed.data)
+      if (attempt === 1) {
+        throw new AnalysisServiceError(
+          "invalid_output",
+          "Model output failed validation",
+        )
+      }
+    } catch (error) {
+      const retryable =
+        error instanceof AnalysisServiceError && error.code === "invalid_output"
+      if (!retryable || attempt === 1) throw error
+    }
   }
-  return normalizeAnalysis(parsed.data)
+  throw new AnalysisServiceError("invalid_output", "Model output failed validation")
 }

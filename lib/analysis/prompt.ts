@@ -55,9 +55,9 @@ export function buildAnalysisPrompt(request: AnalysisRequest): AnalysisPrompt {
       `Hourly rate: ${
         job.hourlyRateMin === undefined
           ? "not provided"
-          : `$${job.hourlyRateMin}–$${job.hourlyRateMax ?? job.hourlyRateMin}`
+          : `${currency}${job.hourlyRateMin}–${currency}${job.hourlyRateMax ?? job.hourlyRateMin}`
       }`,
-      `Fixed budget: ${job.fixedBudget === undefined ? "not provided" : `$${job.fixedBudget}`}`,
+      `Fixed budget: ${job.fixedBudget === undefined ? "not provided" : `${currency}${job.fixedBudget}`}`,
       `Experience level: ${value(job.experienceLevel)}`,
       `Posted: ${value(job.postedAgo)}`,
       `Client rating: ${value(job.clientRating)}`,

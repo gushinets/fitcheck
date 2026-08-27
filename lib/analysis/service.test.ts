@@ -32,4 +32,30 @@ describe("analyzeJob", () => {
       }),
     )
   })
+
+  it("retries once when the first model result violates the contract", async () => {
+    let attempts = 0
+
+    const result = await analyzeJob(request, async () => {
+      attempts += 1
+      return attempts === 1
+        ? { ...goAnalysis, strengths: ["Only one"] }
+        : goAnalysis
+    })
+
+    expect(result).toEqual(goAnalysis)
+    expect(attempts).toBe(2)
+  })
+
+  it("retries an invalid transport output only once", async () => {
+    let attempts = 0
+
+    const run = analyzeJob(request, async () => {
+      attempts += 1
+      throw new AnalysisServiceError("invalid_output", "Invalid JSON")
+    })
+
+    await expect(run).rejects.toMatchObject({ code: "invalid_output" })
+    expect(attempts).toBe(2)
+  })
 })
