@@ -23,6 +23,6 @@ describe("popup App", () => {
     render(<App runtime={runtime} />)
 
     expect(await screen.findByText("FitCheck")).toBeVisible()
-    expect(await screen.findByRole("button", { name: /analyze job/i })).toBeVisible()
+    expect(await screen.findByRole("button", { name: /analyze task/i })).toBeVisible()
   })
 })

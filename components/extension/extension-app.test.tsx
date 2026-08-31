@@ -44,14 +44,14 @@ describe("ExtensionApp", () => {
     render(<ExtensionApp runtime={testRuntime} />)
 
     await user.click(
-      await screen.findByRole("button", { name: /analyze job/i }),
+      await screen.findByRole("button", { name: /analyze task/i }),
     )
 
     expect(await screen.findByLabelText("Fit score 82 out of 100")).toBeVisible()
     expect(testRuntime.savedEntries).toHaveLength(1)
   })
 
-  it("shows an unsupported state outside an Upwork job", async () => {
+  it("shows an unsupported state outside an Upwork task", async () => {
     const testRuntime = runtime({
       async getCurrentJob() {
         return { ok: false, reason: "unsupported" }
@@ -60,7 +60,7 @@ describe("ExtensionApp", () => {
 
     render(<ExtensionApp runtime={testRuntime} />)
 
-    expect(await screen.findByText("Open an Upwork job")).toBeVisible()
+    expect(await screen.findByText("Open an Upwork task")).toBeVisible()
   })
 
   it("does not store a failed analysis", async () => {
@@ -73,7 +73,7 @@ describe("ExtensionApp", () => {
     render(<ExtensionApp runtime={testRuntime} />)
 
     await user.click(
-      await screen.findByRole("button", { name: /analyze job/i }),
+      await screen.findByRole("button", { name: /analyze task/i }),
     )
 
     expect(await screen.findByRole("button", { name: /try again/i })).toBeVisible()

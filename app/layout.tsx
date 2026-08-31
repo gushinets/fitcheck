@@ -7,9 +7,9 @@ const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
 
 export const metadata: Metadata = {
-  title: 'FitCheck — AI Vacancy Fit Analysis',
+  title: 'FitCheck — AI Task Fit Analysis',
   description:
-    'Compare any public vacancy with your freelancer profile and get a real AI-powered Fit Score with strengths, risks, and a GO / NO-GO verdict.',
+    'Compare any public freelance task with your profile and get an AI-powered Fit Score with strengths, risks, and a GO / NO-GO verdict.',
   generator: 'v0.app',
   icons: {
     icon: [

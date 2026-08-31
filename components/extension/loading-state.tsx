@@ -26,7 +26,7 @@ export function LoadingState({ copy = messages.en }: { copy?: Messages }) {
       </div>
       <h2 className="text-[15px] font-semibold">{copy.analyzing}</h2>
       <p className="mt-1 text-center text-xs text-muted-foreground">
-        Comparing this job with your profile.
+        {copy.comparingTask}
       </p>
 
       <ul className="mt-6 w-full max-w-[260px] space-y-2.5" aria-live="polite">

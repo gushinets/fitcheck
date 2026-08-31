@@ -178,7 +178,7 @@ describe("FitCheck profile skill suggestions", () => {
   })
 })
 
-describe("FitCheck vacancy workflow", () => {
+describe("FitCheck task workflow", () => {
   it("returns to source selection with the draft intact and sends a real analysis request", async () => {
     const user = userEvent.setup()
     const repository = createMemoryWebsiteRepository()
@@ -198,22 +198,22 @@ describe("FitCheck vacancy workflow", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: "Choose how to add a vacancy",
+        name: "Choose how to add a task",
       }),
     ).toBeVisible()
     await user.click(screen.getByRole("button", { name: "Paste text" }))
-    await user.type(screen.getByLabelText("Vacancy title"), "Backend role")
+    await user.type(screen.getByLabelText("Task title"), "Backend role")
     await user.type(
-      screen.getByLabelText("Vacancy description"),
+      screen.getByLabelText("Task description"),
       "Build production APIs for a fast-growing SaaS platform.",
     )
-    await user.click(screen.getByRole("button", { name: "Review vacancy" }))
+    await user.click(screen.getByRole("button", { name: "Review task" }))
     await user.click(
-      screen.getByRole("button", { name: "Back to vacancy selection" }),
+      screen.getByRole("button", { name: "Back to task selection" }),
     )
-    expect(screen.getByLabelText("Vacancy title")).toHaveValue("Backend role")
-    await user.click(screen.getByRole("button", { name: "Review vacancy" }))
-    await user.click(screen.getByRole("button", { name: "Analyze vacancy" }))
+    expect(screen.getByLabelText("Task title")).toHaveValue("Backend role")
+    await user.click(screen.getByRole("button", { name: "Review task" }))
+    await user.click(screen.getByRole("button", { name: "Analyze task" }))
 
     expect(await screen.findByLabelText("Fit score 82 out of 100")).toBeVisible()
     expect(analyzeVacancy).toHaveBeenCalledWith(
@@ -226,7 +226,7 @@ describe("FitCheck vacancy workflow", () => {
     expect((await repository.loadSnapshot()).history).toHaveLength(1)
   })
 
-  it("keeps the reviewed vacancy and skips history when analysis fails", async () => {
+  it("keeps the reviewed task and skips history when analysis fails", async () => {
     const user = userEvent.setup()
     const repository = createMemoryWebsiteRepository()
     const localUser = await repository.createUser({
@@ -256,13 +256,34 @@ describe("FitCheck vacancy workflow", () => {
       />,
     )
 
-    await user.click(await screen.findByRole("button", { name: "Review vacancy" }))
-    await user.click(screen.getByRole("button", { name: "Analyze vacancy" }))
+    await user.click(await screen.findByRole("button", { name: "Review task" }))
+    await user.click(screen.getByRole("button", { name: "Analyze task" }))
 
     expect(
       await screen.findByText("The analysis service is temporarily unavailable"),
     ).toBeVisible()
-    expect(screen.getByRole("heading", { name: "Review the vacancy" })).toBeVisible()
+    expect(screen.getByRole("heading", { name: "Review the task" })).toBeVisible()
     expect((await repository.loadSnapshot()).history).toHaveLength(0)
+  })
+
+  it("uses task language in the Russian workflow", async () => {
+    const user = userEvent.setup()
+    const repository = createMemoryWebsiteRepository()
+    const localUser = await repository.createUser({
+      name: "Nikita",
+      email: "me@example.com",
+      password: "password-123",
+    })
+    await repository.saveProfile(localUser.id, defaultProfile)
+    render(<WebsiteApp repository={repository} api={api} />)
+
+    await user.click(await screen.findByRole("button", { name: "RU" }))
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Выберите способ добавления задачи",
+      }),
+    ).toBeVisible()
+    expect(screen.getByLabelText("Ссылка на задачу")).toBeVisible()
   })
 })

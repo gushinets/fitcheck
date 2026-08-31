@@ -1,6 +1,6 @@
 # FitCheck
 
-FitCheck is a bilingual website for testing whether a real vacancy fits a freelancer profile. A user can load any public vacancy URL or paste its text, review the extracted details, and send the vacancy to an LLM for a Fit Score, strengths, risks, and a GO / NO-GO recommendation.
+FitCheck is a bilingual service for checking whether a freelance task fits a freelancer profile. A user can load any public task URL or paste its text, review the extracted details, and send the task to an LLM for a Fit Score, strengths, risks, and a GO / NO-GO recommendation. The flow is designed for repeated use throughout the day while browsing new tasks.
 
 The website supports English and Russian with a manual RU / EN switch. Local accounts, profiles, drafts, analysis history, and score corrections are stored in IndexedDB in the current browser. The server receives only the current extraction or analysis request and does not persist user data.
 
@@ -33,9 +33,9 @@ Never expose `DEEPSEEK_API_KEY` in a public environment variable or client-side 
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000), create a local account, complete the freelancer profile, and add a real vacancy.
+Open [http://localhost:3000](http://localhost:3000), create a local account, complete the freelancer profile, and add a real task.
 
-URL import is best-effort. FitCheck accepts arbitrary public HTTP(S) pages, blocks private/internal network addresses, limits redirects and response size, and extracts readable vacancy content. Pages that require authentication, execute content only in the browser, or block automated requests may not load; paste the vacancy text manually in that case.
+URL import is best-effort. FitCheck accepts arbitrary public HTTP(S) pages, blocks private/internal network addresses, limits redirects and response size, and extracts readable task content. Pages that require authentication, execute content only in the browser, or block automated requests may not load; paste the task text manually in that case.
 
 ## Verify
 

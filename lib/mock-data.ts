@@ -145,7 +145,7 @@ export const historySeed: HistoryEntry[] = [
 ]
 
 export const loadingSteps = [
-  "Reading job requirements",
+  "Reading task requirements",
   "Comparing skills",
   "Checking rate and experience",
   "Evaluating risks",

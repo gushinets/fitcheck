@@ -12,20 +12,20 @@ describe("VacancySource", () => {
     render(<VacancySource copy={webMessages.en} onLoadUrl={vi.fn()} onReview={onReview} />)
 
     await user.click(screen.getByRole("button", { name: "Paste text" }))
-    await user.type(screen.getByLabelText("Vacancy title"), "Backend role")
+    await user.type(screen.getByLabelText("Task title"), "Backend role")
     await user.type(
-      screen.getByLabelText("Vacancy description"),
+      screen.getByLabelText("Task description"),
       "Build production APIs for a fast-growing SaaS platform.",
     )
     await user.click(screen.getByRole("button", { name: "From URL" }))
     await user.type(
-      screen.getByLabelText("Vacancy URL"),
+      screen.getByLabelText("Task URL"),
       "https://jobs.example/backend",
     )
     await user.click(screen.getByRole("button", { name: "Paste text" }))
 
-    expect(screen.getByLabelText("Vacancy title")).toHaveValue("Backend role")
-    await user.click(screen.getByRole("button", { name: "Review vacancy" }))
+    expect(screen.getByLabelText("Task title")).toHaveValue("Backend role")
+    await user.click(screen.getByRole("button", { name: "Review task" }))
     expect(onReview).toHaveBeenCalledWith(
       expect.objectContaining({ sourceMode: "text", title: "Backend role" }),
     )
@@ -44,13 +44,13 @@ describe("VacancySource", () => {
     )
 
     await user.type(
-      screen.getByLabelText("Vacancy URL"),
+      screen.getByLabelText("Task URL"),
       "https://jobs.example/blocked",
     )
-    await user.click(screen.getByRole("button", { name: "Load vacancy" }))
+    await user.click(screen.getByRole("button", { name: "Load task" }))
 
-    expect(await screen.findByText(/could not find enough vacancy text/i)).toBeVisible()
+    expect(await screen.findByText(/could not find enough task text/i)).toBeVisible()
     await user.click(screen.getByRole("button", { name: "Paste text instead" }))
-    expect(screen.getByLabelText("Vacancy description")).toBeVisible()
+    expect(screen.getByLabelText("Task description")).toBeVisible()
   })
 })
