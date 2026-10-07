@@ -14,6 +14,22 @@ function request(overrides: Partial<AnalysisRequest> = {}): AnalysisRequest {
 }
 
 describe("buildAnalysisPrompt", () => {
+  it.each(["primary", "confident", "basic"] as const)("uses %s proficiency in the analysis evidence", (level) => {
+    const prompt = buildAnalysisPrompt(request({
+      profile: { ...defaultProfile, skills: ["Make.com", "n8n"], skillLevels: { "make.com": "primary", n8n: level } },
+    }))
+    expect(prompt.input).toContain(`n8n: ${level}`)
+    expect(prompt.input).toContain("Make.com: primary")
+    expect(prompt.instructions).toContain("Basic familiarity is not evidence of independent delivery")
+    expect(prompt.instructions).toContain("Reflect proficiency gaps in both the skills breakdown and the overall score")
+    expect(prompt.instructions).toContain("Explain relevant proficiency levels in strengths or risks")
+  })
+
+  it("does not invent proficiency for legacy skills", () => {
+    const prompt = buildAnalysisPrompt(request({ profile: { ...defaultProfile, skills: ["n8n"] } }))
+    expect(prompt.input).toContain("n8n: not specified")
+  })
+
   it("includes locale-formatted income and work format preferences", () => {
     const en = buildAnalysisPrompt(
       request({

@@ -55,6 +55,11 @@ export function ProfileForm({
     onSubmit({
       specialization: specialization.trim(),
       skills,
+      ...(initial.skillLevels ? {
+        skillLevels: Object.fromEntries(Object.entries(initial.skillLevels).filter(
+          ([key]) => skills.some((skill) => skill.trim().toLowerCase() === key),
+        )),
+      } : {}),
       experienceYears: Number(experienceYears) || 0,
       preferredRate: Number(preferredRate) || 0,
       desiredMonthlyIncome: initial.desiredMonthlyIncome,

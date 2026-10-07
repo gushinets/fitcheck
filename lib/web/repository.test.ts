@@ -13,6 +13,13 @@ describe("IndexedDB website repository", () => {
     repository = createWebsiteRepository(databaseName)
   })
 
+  it("restores skill proficiency after reopening the repository", async () => {
+    const user = await repository.createUser({ name: "Nikita", email: "me@example.com", password: "password-123" })
+    await repository.saveProfile(user.id, { ...defaultProfile, skills: ["Make.com", "n8n"], skillLevels: { "make.com": "primary", n8n: "basic" } })
+    const snapshot = await createWebsiteRepository(databaseName).loadSnapshot()
+    expect(snapshot.profile?.skillLevels).toEqual({ "make.com": "primary", n8n: "basic" })
+  })
+
   it("creates a user, restores the session, and authenticates after sign out", async () => {
     const user = await repository.createUser({
       name: "Nikita",

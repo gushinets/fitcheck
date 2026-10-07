@@ -11,6 +11,7 @@ import type {
   EnglishLevel,
   FreelancerProfile,
   Locale,
+  SkillLevel,
   WorkFormat,
 } from "@/lib/types"
 
@@ -46,6 +47,7 @@ export function ProfileEditor({
 }) {
   const [specialization, setSpecialization] = useState(profile?.specialization ?? "")
   const [skills, setSkills] = useState(profile?.skills.join(", ") ?? "")
+  const [skillLevels, setSkillLevels] = useState<Record<string, SkillLevel>>(profile?.skillLevels ?? {})
   const [experience, setExperience] = useState(String(profile?.experienceYears ?? 0))
   const [rate, setRate] = useState(String(profile?.preferredRate ?? 0))
   const [monthlyIncome, setMonthlyIncome] = useState(
@@ -59,16 +61,24 @@ export function ProfileEditor({
   const [suggestionError, setSuggestionError] = useState<string | null>(null)
   const [suggesting, setSuggesting] = useState(false)
   const suggestionRequestId = useRef(0)
-  const parsedSkills = skills.split(",").map((skill) => skill.trim()).filter(Boolean)
+  const parsedSkills = [...new Map(
+    skills.split(",")
+      .map((skill) => skill.trim())
+      .filter(Boolean)
+      .map((skill) => [skill.toLowerCase(), skill]),
+  ).values()]
   const normalizedSkills = new Set(
-    parsedSkills.map((skill) => skill.toLocaleLowerCase()),
+    parsedSkills.map((skill) => skill.toLowerCase()),
   )
   const visibleSuggestions = suggestions?.filter(
-    (skill) => !normalizedSkills.has(skill.toLocaleLowerCase()),
+    (skill) => !normalizedSkills.has(skill.toLowerCase()),
   )
   const profileCandidate = {
     specialization,
     skills: parsedSkills,
+    ...(Object.keys(skillLevels).length ? {
+      skillLevels: Object.fromEntries(Object.entries(skillLevels).filter(([key]) => normalizedSkills.has(key))),
+    } : {}),
     experienceYears: Number(experience),
     preferredRate: Number(rate),
     desiredMonthlyIncome:
@@ -100,7 +110,7 @@ export function ProfileEditor({
         setSuggestions(
           nextSuggestions
             .filter(
-              (skill) => !normalizedSkills.has(skill.toLocaleLowerCase()),
+              (skill) => !normalizedSkills.has(skill.toLowerCase()),
             )
             .slice(0, 10),
         )
@@ -157,6 +167,30 @@ export function ProfileEditor({
           <Label htmlFor="profile-skills">{copy.skills}</Label>
           <Input id="profile-skills" value={skills} placeholder={copy.skillsPlaceholder} onChange={(event) => setSkills(event.target.value)} />
           <p className="text-xs text-muted-foreground">{copy.skillsExample}</p>
+          {parsedSkills.length ? (
+            <div className="space-y-2 pt-2">
+              <p className="text-xs text-muted-foreground">{copy.skillLevelsHint}</p>
+              {parsedSkills.map((skill, index) => {
+                const key = skill.toLowerCase()
+                return (
+                  <div key={key} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2">
+                    <Label htmlFor={`skill-level-${index}`}>{copy.skillLevel}: {skill}</Label>
+                    <select id={`skill-level-${index}`} value={Object.hasOwn(skillLevels, key) ? skillLevels[key] : ""} onChange={(event) => {
+                      const level = event.target.value as SkillLevel | ""
+                      setSkillLevels((current) => level
+                        ? { ...current, [key]: level }
+                        : Object.fromEntries(Object.entries(current).filter(([name]) => name !== key)))
+                    }} className="h-9 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+                      <option value="">{copy.skillLevelUnspecified}</option>
+                      <option value="primary">{copy.skillLevelPrimary}</option>
+                      <option value="confident">{copy.skillLevelConfident}</option>
+                      <option value="basic">{copy.skillLevelBasic}</option>
+                    </select>
+                  </div>
+                )
+              })}
+            </div>
+          ) : null}
           {visibleSuggestions?.length ? (
             <div className="flex flex-wrap gap-2 pt-1">
               {visibleSuggestions.map((skill) => (

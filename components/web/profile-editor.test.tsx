@@ -5,6 +5,7 @@ import { webMessages } from "@/lib/i18n/web-messages"
 import type { SkillSuggestionRequest } from "@/lib/skill-suggestions/schema"
 import type { FreelancerProfile, Locale } from "@/lib/types"
 import { ProfileEditor } from "./profile-editor"
+import { defaultProfile } from "@/lib/mock-data"
 
 function renderEditor({
   locale = "en",
@@ -27,6 +28,26 @@ function renderEditor({
 }
 
 describe("ProfileEditor", () => {
+  it("changes and saves a level for each skill", async () => {
+    const user = userEvent.setup()
+    const onSave = vi.fn()
+    render(<ProfileEditor profile={{ ...defaultProfile, skills: ["Make.com", "n8n"], skillLevels: { "make.com": "primary", n8n: "confident" } }} locale="ru" copy={webMessages.ru} onSave={onSave} onSuggestSkills={vi.fn()} />)
+    expect(screen.getByRole("combobox", { name: "Уровень: Make.com" })).toHaveValue("primary")
+    await user.selectOptions(screen.getByRole("combobox", { name: "Уровень: n8n" }), "basic")
+    await user.click(screen.getByRole("button", { name: "Сохранить изменения" }))
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ skillLevels: { "make.com": "primary", n8n: "basic" } }))
+  })
+
+  it("removes orphaned levels when a skill is deleted", async () => {
+    const user = userEvent.setup()
+    const onSave = vi.fn()
+    render(<ProfileEditor profile={{ ...defaultProfile, skills: ["Make.com", "n8n"], skillLevels: { "make.com": "primary", n8n: "basic" } }} locale="en" copy={webMessages.en} onSave={onSave} onSuggestSkills={vi.fn()} />)
+    await user.clear(screen.getByLabelText("Skills"))
+    await user.type(screen.getByLabelText("Skills"), "MAKE.COM")
+    await user.click(screen.getByRole("button", { name: "Save changes" }))
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ skills: ["MAKE.COM"], skillLevels: { "make.com": "primary" } }))
+  })
+
   it("suggests skills on demand, excludes duplicates, and appends a selected chip", async () => {
     const user = userEvent.setup()
     const onSuggestSkills = vi.fn(async () => [

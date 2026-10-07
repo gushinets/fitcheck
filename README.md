@@ -46,6 +46,18 @@ pnpm lint
 pnpm build:web
 ```
 
+Skill proficiency is saved per profile skill as Primary, Confident, or Basic.
+Older profiles keep an unspecified level until the user chooses one. Analysis
+uses these levels when assessing skills, overall fit, strengths, and risks.
+
+The optional live proficiency evaluation compares three otherwise identical n8n
+profiles against the real model. It requires a configured server key and consumes
+API credits; it is skipped during ordinary test runs:
+
+```bash
+FITCHECK_RUN_LIVE_EVAL=1 node --env-file=.env.local node_modules/vitest/vitest.mjs run lib/analysis/skill-levels.live.test.ts
+```
+
 ## Deployment
 
 Deploy the Next.js application to a runtime that supports route handlers. Configure `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL`, and `ALLOWED_ORIGINS` with the production website origin, for example `https://fitcheck.example.com`.

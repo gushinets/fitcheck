@@ -8,10 +8,13 @@ export type EnglishLevel =
   | "Fluent"
 
 export type WorkFormat = "remote" | "office" | "hybrid"
+export type SkillLevel = "primary" | "confident" | "basic"
 
 export interface FreelancerProfile {
   specialization: string
   skills: string[]
+  /** Proficiency keyed by the trimmed, lower-case skill name. Omitted for legacy profiles. */
+  skillLevels?: Record<string, SkillLevel>
   experienceYears: number
   preferredRate: number
   desiredMonthlyIncome: number

@@ -14,10 +14,20 @@ export const englishLevelSchema = z.enum([
 ])
 
 export const workFormatSchema = z.enum(["remote", "office", "hybrid"])
+export const skillLevelSchema = z.enum(["primary", "confident", "basic"])
+
+// Validate entries as a Map so Zod does not discard an own "__proto__" skill.
+const skillLevelsSchema = z.preprocess(
+  (value) => Object.prototype.toString.call(value) === "[object Object]"
+    ? new Map(Object.entries(value as Record<string, unknown>))
+    : null,
+  z.map(trimmedString(80), skillLevelSchema).transform((levels) => Object.fromEntries(levels)),
+)
 
 export const freelancerProfileSchema = z.object({
   specialization: trimmedString(120),
   skills: z.array(trimmedString(80)).min(1).max(50),
+  skillLevels: skillLevelsSchema.optional(),
   experienceYears: z.number().min(0).max(60),
   preferredRate: moneySchema,
   desiredMonthlyIncome: moneySchema,
@@ -29,7 +39,12 @@ export const freelancerProfileSchema = z.object({
       "Work formats must be unique",
     ),
   englishLevel: englishLevelSchema,
-})
+}).refine(
+  (profile) => Object.keys(profile.skillLevels ?? {}).every(
+    (key) => key === key.toLowerCase() && profile.skills.some((skill) => skill.toLowerCase() === key),
+  ),
+  { message: "Skill levels must refer to skills in the profile", path: ["skillLevels"] },
+)
 
 export function normalizeFreelancerProfile(value: unknown): FreelancerProfile {
   const candidate = value as Partial<FreelancerProfile>

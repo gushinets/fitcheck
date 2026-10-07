@@ -50,6 +50,27 @@ const memory = {
 }
 
 describe("analysis contracts", () => {
+  it("retains each skill's proficiency and rejects invalid levels", () => {
+    expect(freelancerProfileSchema.parse({
+      ...profile, skillLevels: { python: "primary", django: "basic" },
+    })).toMatchObject({ skillLevels: { python: "primary", django: "basic" } })
+    expect(freelancerProfileSchema.safeParse({
+      ...profile, skillLevels: { python: "expert" },
+    }).success).toBe(false)
+  })
+
+  it("preserves proficiency for prototype-like skill names", () => {
+    const levels = Object.fromEntries([["__proto__", "basic"], ["constructor", "confident"]])
+    const parsed = freelancerProfileSchema.parse({ ...profile, skills: ["__proto__", "constructor"], skillLevels: levels })
+    expect(Object.entries(parsed.skillLevels ?? {})).toEqual([["__proto__", "basic"], ["constructor", "confident"]])
+  })
+
+  it("rejects proficiency for a skill missing from the profile", () => {
+    expect(freelancerProfileSchema.safeParse({
+      ...profile, skillLevels: { n8n: "primary" },
+    }).success).toBe(false)
+  })
+
   it("accepts an hourly rate of 2500", () => {
     expect(
       freelancerProfileSchema.safeParse({ ...profile, preferredRate: 2500 })

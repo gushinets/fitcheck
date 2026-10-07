@@ -33,6 +33,26 @@ function request(body: unknown, origin = allowedOrigin) {
 }
 
 describe("POST /api/analyze", () => {
+  it.each(["primary", "confident", "basic"] as const)("passes %s proficiency through validation to the model", async (level) => {
+    let modelEvidence = ""
+    let modelLevel: unknown
+    const handler = createAnalyzeHandler({
+      allowedOrigins: [allowedOrigin],
+      transport: async (input, prompt) => {
+        modelLevel = input.profile.skillLevels?.n8n
+        modelEvidence = prompt.input
+        return goAnalysis
+      },
+    })
+    const response = await handler(request({
+      ...validBody,
+      profile: { ...defaultProfile, skills: ["n8n"], skillLevels: { n8n: level } },
+    }))
+    expect(response.status).toBe(200)
+    expect(modelLevel).toBe(level)
+    expect(modelEvidence).toContain(`n8n: ${level}`)
+  })
+
   it("rejects an origin outside the allowlist", async () => {
     const handler = createAnalyzeHandler({
       allowedOrigins: [allowedOrigin],
