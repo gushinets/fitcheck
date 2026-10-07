@@ -1,4 +1,5 @@
 import { load, type CheerioAPI } from "cheerio"
+import { isFreelancerProjectUrl } from "./freelancer"
 import type { PublicPageResponse } from "./network"
 import {
   extractedVacancySchema,
@@ -133,9 +134,12 @@ function extractHtml(page: PublicPageResponse): ExtractedVacancy {
     $("h1").first().text().trim() ||
     $("title").text().trim()
   const structuredDescription = textValue(jobPosting?.description)
+  const isFreelancerProject = isFreelancerProjectUrl(new URL(page.finalUrl))
   const description = structuredDescription
     ? htmlFragmentText(structuredDescription)
-    : visibleDescription($)
+    : isFreelancerProject
+      ? htmlFragmentText($(".Project-description").first().html() ?? "")
+      : visibleDescription($)
   const visibleSkills = $("[class*='skill'] li, [data-test*='skill']")
     .toArray()
     .map((element) => $(element).text())

@@ -1,0 +1,123 @@
+<!-- Reduced from the public Freelancer.com page fetched on 2026-10-07. -->
+<html><head><meta property="og:title" content="Shopify and Foxway API Bridge Development"></head><body><nav>Hire freelancers Log In Post a Project</nav><h1>Shopify and Foxway API Bridge Development</h1><p class="Project-description whitespace-pre-line mb-mid"> We are looking for an experienced developer or development team to build a bridge integration between Foxway Market &amp; Dropshipping API and Shopify.
+The goal is to automatically import and maintain selected products from the supplier’s API, apply custom pricing logic, and handle dropshipping orders bidirectionally, including order statuses and tracking.
+1) Environment &amp; Technology
+E-shop platform: Shopify
+Supplier: Foxway Market &amp; Dropshipping API (Swagger documentation, test &amp; production API keys available)
+Preferred solution:
+Shopify module or
+External integration service (bridge) connected via Shopify Webservice API
+Must support separate test and production environments
+2) Functional Requirements – MVP
+A) Product Catalog Import &amp; Management
+The integration must import products from Foxway API into Shopify.
+It must be possible to select which products are imported (not the full catalog).
+Filtering options must include:
+Item group / product type (mobiles, tablets, smartwatches, laptops, etc.)
+Manufacturer / brand
+Condition / grade (if available in API data)
+Availability (quantity &gt; 0)
+Manual SKU whitelist / blacklist
+Product creation:
+Minimum required mode: 1 SKU = 1 simple product
+SKU must be stored and mapped for future updates
+Products must be updated automatically:
+price updates
+stock quantity / availability updates
+Behavior when stock = 0 must be configurable (disable product / out of stock)
+B) Pricing Logic (Mandatory)
+Foxway provides NET wholesale prices in EUR.
+The shop sells in EUR.
+The integration must include a pricing engine with:
+
+Manual exchange rate (set in admin)
+OR automatic exchange rate (e.g. ECB / CNB / other – developer proposal)
+Optional exchange rate safety margin (e.g. +0.5–2%)
+Configurable update frequency (manual / daily)
+Exchange rate changes must:
+affect product prices only
+never retroactively affect existing orders
+Price calculation flow:
+Foxway NET price (EUR)
+
+Margin application
+Rounding
+VAT handled by Shopify configuration
+Margin rules:
+Percentage markup
+Fixed markup
+Combination of percentage + fixed
+Minimum margin / minimum selling price
+
+Ability to define rules per:
+product category / item group
+brand
+price range (optional)
+C) Dropshipping Orders (Bidirectional)
+When an order is created in Shopify, the integration must:
+create a dropshipping order via Foxway API
+send SKU, quantity, order reference
+send customer delivery address, email, phone
+send payment status (paid / unpaid)
+Supported workflows:
+Create order only after payment
+OR create order first and confirm payment later (reservation logic)
+Order synchronization:
+Import order statuses from Foxway:
+Open
+Pending
+In Process
+Shipped
+Cancelled
+Map these statuses to Shopify order states
+When status = “Shipped”, retrieve tracking number(s) and update Shopify
+Order cancellation:
+Cancellation from Shopify must be propagated to Foxway when allowed by order state
+3) Phase 2 – Optional Extensions (Priced Separately)
+A) Product Variants &amp; Deduplication
+Support 1 product = model, SKUs as variants (e.g. condition, storage, color)
+B) Availability Re-check
+Real-time availability check immediately before order submission to avoid overselling
+C) AI Content Enrichment
+Since API data may only contain SKU, price, and basic name:
+Automatic generation of:
+product title (EN/CZ – CZ required)
+short &amp; long description
+bullet points
+SEO meta title &amp; description
+Must follow templates for refurbished / used products
+Must never overwrite manually edited products
+Optional image enrichment:
+lookup by model
+external database
+developer-proposed solution (AI images acceptable only if clearly illustrative)
+D) Documents &amp; Invoices
+Download invoices / pro-forma documents from Foxway
+Optionally upload documents to Foxway orders (packing slip, branding)
+4) Administration &amp; Operations
+Admin configuration for:
+API credentials (test / production)
+catalog filters
+pricing rules
+currency conversion
+sync schedules
+Logging:
+catalog imports
+price/stock updates
+order creation &amp; status sync
+error handling
+Retry mechanisms for failed API calls
+Orders must never be lost due to temporary API issues
+5) Provided by Us
+Foxway API documentation &amp; Swagger URLs
+Test and production API keys
+Shopify access / staging environment
+Pricing &amp; category strategy
+6) What to Include in Your Response
+Please include:
+Proposed architecture (Shopify module vs external bridge)
+Time and cost estimate:
+MVP
+Phase 2 extensions
+Relevant experience (Shopify, ERP/API integrations, dropshipping)
+Proposal for AI content generation (if applicable) </p><p class="User-bid-text">Unrelated bidder proposal: I have 15 years of experience.</p></body></html>

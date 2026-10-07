@@ -2,6 +2,7 @@
 
 import { describe, expect, it, vi } from "vitest"
 import {
+  ExtractionNetworkError,
   createPinnedLookup,
   fetchPublicPage,
   isPublicAddress,
@@ -45,6 +46,44 @@ describe("public address policy", () => {
 })
 
 describe("fetchPublicPage", () => {
+  it("loads a Freelancer project larger than the generic page limit", async () => {
+    const result = await fetchPublicPage(
+      "https://www.freelancer.com/projects/n8n/Automation-Developer-Needed-40731652.html",
+      dependencies({
+        request: async (_url, _addresses, limits) => {
+          const body = "x".repeat(1_350_000)
+          if (Buffer.byteLength(body) > limits.maxBytes) {
+            throw new ExtractionNetworkError("response_too_large")
+          }
+          return { status: 200, headers: { "content-type": "text/html" }, body }
+        },
+      }),
+    )
+    expect(result.body).toHaveLength(1_350_000)
+  })
+
+  it.each([
+    ["https://www.freelancer.com/projects/n8n/role", 3_000_001],
+    ["https://freelancer.com.evil.example/projects/n8n/role", 1_000_001],
+    ["https://www.freelancer.com/users/profile", 1_000_001],
+  ])("still bounds oversized pages at %s", async (url, size) => {
+    await expect(fetchPublicPage(url, dependencies({
+      request: async () => ({
+        status: 200,
+        headers: { "content-type": "text/html" },
+        body: "x".repeat(size),
+      }),
+    }))).rejects.toMatchObject({ code: "response_too_large" })
+  })
+
+  it("restores the generic size limit after redirecting away from Freelancer", async () => {
+    await expect(fetchPublicPage("https://www.freelancer.com/projects/n8n/role", dependencies({
+      request: async (url) => url.hostname === "www.freelancer.com"
+        ? { status: 302, headers: { location: "https://jobs.example/role" }, body: "" }
+        : { status: 200, headers: { "content-type": "text/html" }, body: "x".repeat(1_000_001) },
+    }))).rejects.toMatchObject({ code: "response_too_large" })
+  })
+
   it("returns an address array when Node requests all pinned DNS results", async () => {
     const lookup = createPinnedLookup({ address: "93.184.216.34", family: 4 })
 

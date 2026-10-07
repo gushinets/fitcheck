@@ -31,13 +31,13 @@ describe("VacancySource", () => {
     )
   })
 
-  it("offers manual paste after URL extraction fails", async () => {
+  it.each(["extraction_insufficient", "fetch_failed"] as const)("offers manual paste after %s", async (code) => {
     const user = userEvent.setup()
     render(
       <VacancySource
         copy={webMessages.en}
         onLoadUrl={async () => {
-          throw new WebApiError("extraction_insufficient")
+          throw new WebApiError(code)
         }}
         onReview={vi.fn()}
       />,
@@ -45,11 +45,13 @@ describe("VacancySource", () => {
 
     await user.type(
       screen.getByLabelText("Task URL"),
-      "https://jobs.example/blocked",
+      "https://www.freelancer.com/projects/n8n/deleted",
     )
     await user.click(screen.getByRole("button", { name: "Load task" }))
 
-    expect(await screen.findByText(/could not find enough task text/i)).toBeVisible()
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      code === "extraction_insufficient" ? /could not find enough task text/i : /could not be loaded/i,
+    )
     await user.click(screen.getByRole("button", { name: "Paste text instead" }))
     expect(screen.getByLabelText("Task description")).toBeVisible()
   })

@@ -11,6 +11,23 @@ const fixture = readFileSync(
 )
 
 describe("vacancy content extraction", () => {
+  it.each([
+    ["n8n", "n8n Automation Developer Needed", "Hiring: n8n Automation Developer"],
+    ["whatsapp", "Configuración Closer Ventas WhatsApp", "Necesito convertir mi línea de WhatsApp Business"],
+    ["lead-generation", "B2B Lead Generation Specialist Needed", "CRITICAL REQUIREMENTS FOR APPLICANTS"],
+    ["shopify", "Shopify and Foxway API Bridge Development", "bridge integration between Foxway"],
+  ])("extracts the actual Freelancer %s task without bidder proposals", (name, title, description) => {
+    const result = extractVacancyContent({
+      finalUrl: `https://www.freelancer.com/projects/test/${name}`,
+      contentType: "text/html",
+      body: readFileSync(fileURLToPath(new URL(`./__fixtures__/freelancer-${name}.html`, import.meta.url)), "utf8"),
+    })
+    expect(result.title).toBe(title)
+    expect(result.description).toContain(description)
+    expect(result.description).not.toContain("Unrelated bidder proposal")
+    expect(result.description).not.toContain("Hire freelancers")
+  })
+
   it("prefers structured JobPosting fields and removes page chrome", () => {
     const result = extractVacancyContent({
       finalUrl: "https://jobs.example/42",

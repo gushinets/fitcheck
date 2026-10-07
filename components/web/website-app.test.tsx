@@ -179,6 +179,28 @@ describe("FitCheck profile skill suggestions", () => {
 })
 
 describe("FitCheck task workflow", () => {
+  it("opens review after loading a Freelancer URL", async () => {
+    const user = userEvent.setup()
+    const repository = createMemoryWebsiteRepository()
+    const localUser = await repository.createUser({ name: "Nikita", email: "me@example.com", password: "password-123" })
+    await repository.saveProfile(localUser.id, defaultProfile)
+    render(<WebsiteApp repository={repository} api={{
+      ...api,
+      extractVacancy: async (url) => ({
+        id: "freelancer-draft", sourceMode: "url", sourceUrl: url,
+        title: "n8n Automation Developer Needed",
+        description: "Build reliable automations using n8n and connect tools, APIs and CRMs.",
+        skills: [], updatedAt: "2026-10-07T12:00:00.000Z",
+      }),
+    }} />)
+
+    await user.type(await screen.findByLabelText("Task URL"), "https://www.freelancer.com/projects/n8n/Automation-Developer-Needed-40731652.html")
+    await user.click(screen.getByRole("button", { name: "Load task" }))
+    expect(await screen.findByRole("heading", { name: "Review the task" })).toBeVisible()
+    expect(screen.getByLabelText("Task title")).toHaveValue("n8n Automation Developer Needed")
+    expect(screen.getByLabelText("Task description")).toHaveValue("Build reliable automations using n8n and connect tools, APIs and CRMs.")
+  })
+
   it("returns to source selection with the draft intact and sends a real analysis request", async () => {
     const user = userEvent.setup()
     const repository = createMemoryWebsiteRepository()

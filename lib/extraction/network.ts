@@ -2,9 +2,12 @@ import { lookup as dnsLookup } from "node:dns/promises"
 import { request as httpRequest } from "node:http"
 import { request as httpsRequest } from "node:https"
 import { isIP, type LookupFunction } from "node:net"
+import { isFreelancerProjectUrl } from "./freelancer"
 
 const MAX_REDIRECTS = 3
 const MAX_BYTES = 1_000_000
+// Freelancer's server-rendered project pages include bids and hydration data.
+const FREELANCER_MAX_BYTES = 3_000_000
 const TIMEOUT_MS = 8_000
 
 export type ExtractionNetworkErrorCode =
@@ -288,10 +291,11 @@ export async function fetchPublicPage(
 
   for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
     const addresses = await validatedAddresses(url, dependencies)
+    const maxBytes = isFreelancerProjectUrl(url) ? FREELANCER_MAX_BYTES : MAX_BYTES
     let response: RawPageResponse
     try {
       response = await dependencies.request(url, addresses, {
-        maxBytes: MAX_BYTES,
+        maxBytes,
         timeoutMs: TIMEOUT_MS,
       })
     } catch (error) {
@@ -311,7 +315,7 @@ export async function fetchPublicPage(
     if (response.status < 200 || response.status >= 300) {
       throw new ExtractionNetworkError("fetch_failed")
     }
-    if (Buffer.byteLength(response.body) > MAX_BYTES) {
+    if (Buffer.byteLength(response.body) > maxBytes) {
       throw new ExtractionNetworkError("response_too_large")
     }
     const contentType = response.headers["content-type"]
