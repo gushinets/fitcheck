@@ -130,13 +130,15 @@ describe("analysis contracts", () => {
     expect(result.success).toBe(false)
   })
 
-  it("requires exactly three strengths", () => {
+  it("allows fewer confirmed strengths and rejects forced extra ones", () => {
     const result = fitAnalysisSchema.safeParse({
       ...analysis,
       strengths: analysis.strengths.slice(0, 2),
     })
 
-    expect(result.success).toBe(false)
+    expect(result.success).toBe(true)
+    expect(fitAnalysisSchema.safeParse({ ...analysis, strengths: [] }).success).toBe(true)
+    expect(fitAnalysisSchema.safeParse({ ...analysis, strengths: [...analysis.strengths, "Fourth"] }).success).toBe(false)
   })
 
   it("normalizes a score of seventy to GO", () => {

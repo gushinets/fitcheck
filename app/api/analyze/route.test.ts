@@ -17,7 +17,7 @@ const validBody = {
   memory: [],
 }
 
-const transport: AnalysisTransport = async () => goAnalysis
+const transport: AnalysisTransport = async () => ({ ...goAnalysis, strengths: [] })
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -41,7 +41,7 @@ describe("POST /api/analyze", () => {
       transport: async (input, prompt) => {
         modelLevel = input.profile.skillLevels?.n8n
         modelEvidence = prompt.input
-        return goAnalysis
+        return { ...goAnalysis, strengths: [] }
       },
     })
     const response = await handler(request({
@@ -130,7 +130,7 @@ describe("POST /api/analyze", () => {
     vi.stubEnv("ALLOWED_ORIGINS", allowedOrigin)
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
+      vi.fn(async (_input: unknown, init?: RequestInit) =>
         new Response(
           JSON.stringify({
             id: "generation-test",
@@ -143,7 +143,9 @@ describe("POST /api/analyze", () => {
                 finish_reason: "stop",
                 message: {
                   role: "assistant",
-                  content: JSON.stringify(goAnalysis),
+                  content: JSON.stringify(JSON.parse(String(init?.body)).messages[0].content.startsWith("Verify every factual assertion")
+                    ? { supported: true, unsupportedClaims: [] }
+                    : { ...goAnalysis, strengths: ["skill:0"] }),
                 },
               },
             ],

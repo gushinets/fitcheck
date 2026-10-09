@@ -16,6 +16,10 @@ const entry: WebHistoryEntry = {
 }
 
 describe("AnalysisResult", () => {
+  it("explains when no confirmed strengths were found", () => {
+    render(<AnalysisResult entry={{ ...entry, analysis: { ...entry.analysis, strengths: [] } }} copy={webMessages.ru} onBack={vi.fn()} onAnalyzeAnother={vi.fn()} onSaveFeedback={vi.fn()} />)
+    expect(screen.getByText("Подтверждённые сильные стороны не найдены.")).toBeVisible()
+  })
   it("displays an upper-only fixed budget after review", () => {
     render(<AnalysisResult entry={{ ...entry, job: { ...entry.job, fixedBudgetMax: 750, budgetCurrency: "EUR" } }} copy={webMessages.en} onBack={vi.fn()} onAnalyzeAnother={vi.fn()} onSaveFeedback={vi.fn()} />)
     expect(screen.getByText("≤750 EUR")).toBeVisible()

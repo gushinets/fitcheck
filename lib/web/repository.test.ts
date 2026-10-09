@@ -132,7 +132,9 @@ describe("IndexedDB website repository", () => {
     })
 
     for (let index = 0; index < 51; index += 1) {
-      await repository.addHistory(historyEntry(user.id, index))
+      const entry = historyEntry(user.id, index)
+      entry.analysis = { ...entry.analysis, strengths: ["Your profile lists Python; this skill appears in the task. Proficiency is not specified."], strengthEvidence: [{ id: "skill:0", profileFields: ["skills.0"], taskFields: ["skills", "title"] }] }
+      await repository.addHistory(entry)
     }
     await repository.saveFeedback(user.id, "entry-50", {
       correctedScore: 75,
@@ -149,6 +151,7 @@ describe("IndexedDB website repository", () => {
     expect(snapshot.history).toHaveLength(50)
     expect(snapshot.history.map((entry) => entry.id)).not.toContain("entry-0")
     expect(snapshot.history[0]?.feedback?.correctedScore).toBe(75)
+    expect(snapshot.history[0]?.analysis.strengthEvidence).toEqual([{ id: "skill:0", profileFields: ["skills.0"], taskFields: ["skills", "title"] }])
   })
 
   it("deletes only the selected local user and their data", async () => {

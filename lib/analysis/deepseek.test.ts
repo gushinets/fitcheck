@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import OpenAI from "openai"
 import { goAnalysis } from "@/lib/mock-data"
+import { defaultProfile, detectedJob } from "@/lib/mock-data"
 import { createDeepSeekTransport } from "./deepseek"
 
 afterEach(() => {
@@ -10,6 +11,22 @@ afterEach(() => {
 })
 
 describe("DeepSeek analysis transport", () => {
+  it.each([true, false])("verifies report grounding using the original profile and task (%s)", async (supported) => {
+    let auditInput = ""
+    vi.stubGlobal("fetch", vi.fn(async (_input: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body))
+      auditInput = body.messages[0].content + body.messages[1].content
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ supported, unsupportedClaims: supported ? [] : ["Czech proficiency is not required for AI-generated CZ content"] }) } }] }), { status: 200, headers: { "content-type": "application/json" } })
+    }))
+    const transport = createDeepSeekTransport({ apiKey: "test-key" })
+    expect(transport.verifyGrounding).toBeTypeOf("function")
+    const result = await transport.verifyGrounding!({ profile: defaultProfile, job: { ...detectedJob, description: "AI generation of product titles (EN/CZ – CZ required)" }, locale: "en", memory: [] }, goAnalysis)
+    expect(result).toEqual({ supported, unsupportedClaims: supported ? [] : ["Czech proficiency is not required for AI-generated CZ content"] })
+    expect(auditInput).toContain("AI-generated")
+    expect(auditInput).toContain("EN/CZ")
+    expect(auditInput).toContain("Backend Developer")
+    expect(auditInput).toContain("unsupportedClaims")
+  })
   it("sends a JSON chat completion through the direct DeepSeek API", async () => {
     let requestedUrl = ""
     let requestedBody: Record<string, unknown> = {}

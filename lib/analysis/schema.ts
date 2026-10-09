@@ -93,7 +93,8 @@ export const fitAnalysisSchema = z.object({
   status: z.enum(["GO", "NO_GO"]),
   label: trimmedString(80),
   summary: trimmedString(800),
-  strengths: z.array(trimmedString(240)).length(3),
+  strengths: z.array(trimmedString(240)).max(3),
+  strengthEvidence: z.array(z.object({ id: trimmedString(120), profileFields: z.array(trimmedString(120)).min(1), taskFields: z.array(trimmedString(120)).min(1) })).max(3).optional(),
   risks: z.array(trimmedString(240)).max(3),
   breakdown: z.object({
     skills: scoreSchema,

@@ -82,7 +82,7 @@ export function AnalysisResult({
           </div>
         </div>
         <div className="space-y-6">
-          <ListCard title={copy.strengths} items={analysis.strengths} tone="success" />
+          <ListCard title={copy.strengths} items={analysis.strengths} tone="success" emptyMessage={copy.noConfirmedStrengths} />
           <ListCard title={copy.risks} items={analysis.risks} tone="warning" />
           <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
             {!correcting ? (
@@ -101,7 +101,7 @@ export function AnalysisResult({
   )
 }
 
-function ListCard({ title, items, tone }: { title: string; items: string[]; tone: "success" | "warning" }) {
+function ListCard({ title, items, tone, emptyMessage }: { title: string; items: string[]; tone: "success" | "warning"; emptyMessage?: string }) {
   const Icon = tone === "success" ? CheckCircle2 : TriangleAlert
-  return <div className="rounded-3xl border border-border bg-card p-6 shadow-sm"><h2 className="text-xl font-semibold">{title}</h2><ul className="mt-5 space-y-4">{items.map((item) => <li key={item} className="flex gap-3 text-sm leading-6"><Icon className={`mt-1 size-4 shrink-0 ${tone === "success" ? "text-success" : "text-warning"}`} aria-hidden="true" /><span>{item}</span></li>)}</ul></div>
+  return <div className="rounded-3xl border border-border bg-card p-6 shadow-sm"><h2 className="text-xl font-semibold">{title}</h2>{!items.length && emptyMessage ? <p className="mt-5 text-sm text-muted-foreground">{emptyMessage}</p> : <ul className="mt-5 space-y-4">{items.map((item) => <li key={item} className="flex gap-3 text-sm leading-6"><Icon className={`mt-1 size-4 shrink-0 ${tone === "success" ? "text-success" : "text-warning"}`} aria-hidden="true" /><span>{item}</span></li>)}</ul>}</div>
 }

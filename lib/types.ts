@@ -56,6 +56,8 @@ export interface FitAnalysis {
   label: string
   summary: string
   strengths: string[]
+  /** Server-verified profile and task sources, aligned with strengths. Absent in legacy reports. */
+  strengthEvidence?: { id: string; profileFields: string[]; taskFields: string[] }[]
   risks: string[]
   breakdown: FitBreakdown
 }

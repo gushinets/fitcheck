@@ -51,6 +51,7 @@ export function ResultScreen({
             {copy.strengths}
           </h3>
           <ul className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3">
+            {analysis.strengths.length === 0 && <li className="text-[13px] text-muted-foreground">{copy.noConfirmedStrengths}</li>}
             {analysis.strengths.map((s) => (
               <StrengthItem key={s} text={s} />
             ))}
