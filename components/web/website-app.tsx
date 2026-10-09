@@ -239,6 +239,7 @@ export function WebsiteApp({
       ...(entry.job.hourlyRateMin === undefined ? {} : { hourlyRateMin: entry.job.hourlyRateMin }),
       ...(entry.job.hourlyRateMax === undefined ? {} : { hourlyRateMax: entry.job.hourlyRateMax }),
       ...(entry.job.fixedBudget === undefined ? {} : { fixedBudget: entry.job.fixedBudget }),
+      ...(entry.job.fixedBudgetMax === undefined ? {} : { fixedBudgetMax: entry.job.fixedBudgetMax }),
       updatedAt: entry.createdAt,
     }
     setDraft(restoredDraft)

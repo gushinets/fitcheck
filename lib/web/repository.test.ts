@@ -124,6 +124,7 @@ describe("IndexedDB website repository", () => {
       sourceMode: "text",
       title: "Backend role",
       fixedBudget: 500,
+      fixedBudgetMax: 750,
       budgetCurrency: "EUR",
       description: "Build production APIs for a growing SaaS product.",
       skills: ["Python"],
@@ -144,7 +145,7 @@ describe("IndexedDB website repository", () => {
     expect(snapshot.preferences?.locale).toBe("ru")
     expect(snapshot.profile).toEqual(defaultProfile)
     expect(snapshot.draft?.title).toBe("Backend role")
-    expect(snapshot.draft).toMatchObject({ fixedBudget: 500, budgetCurrency: "EUR" })
+    expect(snapshot.draft).toMatchObject({ fixedBudget: 500, fixedBudgetMax: 750, budgetCurrency: "EUR" })
     expect(snapshot.history).toHaveLength(50)
     expect(snapshot.history.map((entry) => entry.id)).not.toContain("entry-0")
     expect(snapshot.history[0]?.feedback?.correctedScore).toBe(75)

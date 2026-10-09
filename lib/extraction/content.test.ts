@@ -11,6 +11,22 @@ const fixture = readFileSync(
 )
 
 describe("vacancy content extraction", () => {
+  it("fills fields from a plain-text description including the full euro budget", () => {
+    expect(extractVacancyContent({ finalUrl: "https://jobs.example/lead", contentType: "text/plain", body: "Lead Generation\nBudget: €250–750\nSkills: Lead generation, Cold outreach" })).toMatchObject({ skills: ["Lead generation", "Cold outreach"], fixedBudget: 250, fixedBudgetMax: 750, budgetCurrency: "EUR" })
+  })
+
+  it("reads Freelancer project heading budget and description skills, ignoring bids", () => {
+    expect(extractVacancyContent({ finalUrl: "https://www.freelancer.com/projects/n8n/test", contentType: "text/html", body: '<h1>n8n Developer</h1><div class="Project-heading"><h2>$250-750 USD</h2></div><p class="Project-description">Build n8n workflows with Google Sheets.</p><p class="User-bid-text">Budget: €5000\nSkills: Photoshop</p>' })).toMatchObject({ skills: ["n8n", "Google Sheets"], fixedBudget: 250, fixedBudgetMax: 750, budgetCurrency: "USD" })
+  })
+
+  it("keeps structured salary fields together when the description has conflicting budget", () => {
+    expect(extractVacancyContent({ finalUrl: "https://jobs.example/42", contentType: "text/html", body: fixture.replace("Build and maintain", "Budget: €250–750<br>Build and maintain") })).toMatchObject({ hourlyRateMin: 40, hourlyRateMax: 60, budgetCurrency: "USD" })
+  })
+
+  it("fills missing structured budget currency and upper bound from matching description evidence", () => {
+    const body = '<script type="application/ld+json">' + JSON.stringify({ "@type": "JobPosting", title: "Lead Generation", description: "Budget: €250–750", baseSalary: { value: { minValue: 250 } } }) + '</script>'
+    expect(extractVacancyContent({ finalUrl: "https://jobs.example/42", contentType: "text/html", body })).toMatchObject({ fixedBudget: 250, fixedBudgetMax: 750, budgetCurrency: "EUR" })
+  })
   it.each([
     ["n8n", "n8n Automation Developer Needed", "Hiring: n8n Automation Developer"],
     ["whatsapp", "Configuración Closer Ventas WhatsApp", "Necesito convertir mi línea de WhatsApp Business"],
@@ -26,6 +42,8 @@ describe("vacancy content extraction", () => {
     expect(result.description).toContain(description)
     expect(result.description).not.toContain("Unrelated bidder proposal")
     expect(result.description).not.toContain("Hire freelancers")
+    expect(result).toMatchObject({ fixedBudget: 250, fixedBudgetMax: 750, budgetCurrency: name === "lead-generation" ? "EUR" : "USD" })
+    expect(result.skills.length).toBeGreaterThan(0)
   })
 
   it("prefers structured JobPosting fields and removes page chrome", () => {

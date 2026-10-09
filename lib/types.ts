@@ -33,6 +33,8 @@ export interface Job {
   hourlyRateMin?: number
   hourlyRateMax?: number
   fixedBudget?: number
+  /** Upper bound; fixedBudget is the lower bound when this is present. */
+  fixedBudgetMax?: number
   budgetCurrency?: Currency
   experienceLevel?: string
   postedAgo?: string

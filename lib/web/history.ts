@@ -24,6 +24,7 @@ export function draftToJob(draft: VacancyDraft): Job {
     ...(draft.fixedBudget === undefined
       ? {}
       : { fixedBudget: draft.fixedBudget }),
+    ...(draft.fixedBudgetMax === undefined ? {} : { fixedBudgetMax: draft.fixedBudgetMax }),
   }
 }
 

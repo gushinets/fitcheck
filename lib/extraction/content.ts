@@ -1,5 +1,6 @@
 import { load, type CheerioAPI } from "cheerio"
 import { currencySchema } from "@/lib/currency"
+import { extractDescriptionFields, type DescriptionFields } from "./fields"
 import { isFreelancerProjectUrl } from "./freelancer"
 import type { PublicPageResponse } from "./network"
 import {
@@ -95,7 +96,7 @@ function uniqueSkills(values: string[]) {
   return skills.slice(0, 100)
 }
 
-function salaryFields(jobPosting: JsonRecord | null) {
+function salaryFields(jobPosting: JsonRecord | null): Omit<DescriptionFields, "skills"> {
   const baseSalary = record(jobPosting?.baseSalary)
   const value = record(baseSalary?.value)
   const unit = textValue(value?.unitText).toUpperCase()
@@ -112,7 +113,7 @@ function salaryFields(jobPosting: JsonRecord | null) {
       ...(Number.isFinite(max) ? { hourlyRateMax: max } : {}),
     }
   }
-  return { fixedBudget: min, ...currencyFields }
+  return { fixedBudget: min, ...(Number.isFinite(max) && max !== min ? { fixedBudgetMax: max } : {}), ...currencyFields }
 }
 
 function visibleDescription($: CheerioAPI) {
@@ -147,26 +148,39 @@ function extractHtml(page: PublicPageResponse): ExtractedVacancy {
   const visibleSkills = $("[class*='skill'] li, [data-test*='skill']")
     .toArray()
     .map((element) => $(element).text())
+  const { skills: descriptionSkills, ...descriptionMoney } = extractDescriptionFields(description)
+  const { skills: headingSkills, ...headingMoney } = extractDescriptionFields(
+    isFreelancerProject ? $(".Project-heading h2").toArray().map((element) => $(element).text()).join("\n") : "",
+  )
+  const structuredMoney = salaryFields(jobPosting)
+  const fallbackMoney = Object.keys(headingMoney).length ? headingMoney : descriptionMoney
+  const compatibleFixedBudget = "fixedBudget" in structuredMoney && structuredMoney.fixedBudget === fallbackMoney.fixedBudget
+    && (!structuredMoney.budgetCurrency || !fallbackMoney.budgetCurrency || structuredMoney.budgetCurrency === fallbackMoney.budgetCurrency)
+  const compatibleHourlyRate = "hourlyRateMin" in structuredMoney && structuredMoney.hourlyRateMin === fallbackMoney.hourlyRateMin
+    && (!structuredMoney.budgetCurrency || !fallbackMoney.budgetCurrency || structuredMoney.budgetCurrency === fallbackMoney.budgetCurrency)
+  const money = Object.keys(structuredMoney).length
+    ? { ...(compatibleFixedBudget || compatibleHourlyRate ? fallbackMoney : {}), ...structuredMoney }
+    : fallbackMoney
+  const pageSkills = uniqueSkills([...structuredSkills(jobPosting?.skills), ...visibleSkills])
 
   return extractedVacancySchema.parse({
     sourceUrl: page.finalUrl,
     title: title.slice(0, 300),
     description: description.slice(0, 20_000),
-    skills: uniqueSkills([
-      ...structuredSkills(jobPosting?.skills),
-      ...visibleSkills,
-    ]),
-    ...salaryFields(jobPosting),
+    skills: pageSkills.length ? pageSkills : uniqueSkills([...descriptionSkills, ...headingSkills]),
+    ...money,
   })
 }
 
 function extractPlainText(page: PublicPageResponse): ExtractedVacancy {
   const lines = normalizedLines(page.body).split("\n")
+  const title = (lines.shift() ?? "").slice(0, 300)
+  const description = lines.join("\n").slice(0, 20_000)
   return extractedVacancySchema.parse({
     sourceUrl: page.finalUrl,
-    title: (lines.shift() ?? "").slice(0, 300),
-    description: lines.join("\n").slice(0, 20_000),
-    skills: [],
+    title,
+    description,
+    ...extractDescriptionFields(description),
   })
 }
 

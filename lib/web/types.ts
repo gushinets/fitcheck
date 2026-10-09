@@ -46,6 +46,7 @@ export interface VacancyDraft {
   hourlyRateMin?: number
   hourlyRateMax?: number
   fixedBudget?: number
+  fixedBudgetMax?: number
   budgetCurrency?: Currency
   updatedAt: string
 }

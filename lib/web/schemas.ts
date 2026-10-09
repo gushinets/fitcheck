@@ -20,6 +20,7 @@ const vacancyFields = {
   hourlyRateMin: optionalMoney,
   hourlyRateMax: optionalMoney,
   fixedBudget: optionalMoney,
+  fixedBudgetMax: optionalMoney,
   budgetCurrency: currencySchema.optional(),
   updatedAt: z.iso.datetime(),
 }

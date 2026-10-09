@@ -75,7 +75,7 @@ export function buildAnalysisPrompt(request: AnalysisRequest): AnalysisPrompt {
           ? "not provided"
           : formatMoney(formatRateRange(job.hourlyRateMin, job.hourlyRateMax), job.budgetCurrency)
       }`,
-      `Fixed budget: ${job.fixedBudget === undefined ? "not provided" : formatMoney(job.fixedBudget, job.budgetCurrency)}`,
+      `Fixed budget: ${job.fixedBudget === undefined && job.fixedBudgetMax === undefined ? "not provided" : formatMoney(job.fixedBudgetMax === undefined ? job.fixedBudget! : formatRateRange(job.fixedBudget, job.fixedBudgetMax), job.budgetCurrency)}`,
       `Experience level: ${value(job.experienceLevel)}`,
       `Posted: ${value(job.postedAgo)}`,
       `Client rating: ${value(job.clientRating)}`,

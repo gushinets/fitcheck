@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import type { WebMessages } from "@/lib/i18n/web-messages"
 import { WebApiError } from "@/lib/web/api"
 import { vacancyDraftSchema } from "@/lib/web/schemas"
+import { extractDescriptionFields } from "@/lib/extraction/fields"
 import type { VacancyDraft, VacancySourceMode } from "@/lib/web/types"
 
 export function VacancySource({
@@ -44,13 +45,16 @@ export function VacancySource({
 
   function reviewText(event: React.FormEvent) {
     event.preventDefault()
+    const extracted = extractDescriptionFields(description)
+    const manualSkills = skills.split(",").map((skill) => skill.trim()).filter(Boolean)
     const parsed = vacancyDraftSchema.safeParse({
+      ...extracted,
       ...(initialDraft?.sourceMode === "text" ? initialDraft : {}),
       id: initialDraft?.id ?? crypto.randomUUID(),
       sourceMode: "text",
       title,
       description,
-      skills: skills.split(",").map((skill) => skill.trim()).filter(Boolean),
+      skills: manualSkills.length ? manualSkills : extracted.skills,
       updatedAt: new Date().toISOString(),
     })
     if (parsed.success) onReview(parsed.data)

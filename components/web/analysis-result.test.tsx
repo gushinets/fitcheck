@@ -16,6 +16,14 @@ const entry: WebHistoryEntry = {
 }
 
 describe("AnalysisResult", () => {
+  it("displays an upper-only fixed budget after review", () => {
+    render(<AnalysisResult entry={{ ...entry, job: { ...entry.job, fixedBudgetMax: 750, budgetCurrency: "EUR" } }} copy={webMessages.en} onBack={vi.fn()} onAnalyzeAnother={vi.fn()} onSaveFeedback={vi.fn()} />)
+    expect(screen.getByText("≤750 EUR")).toBeVisible()
+  })
+  it("displays the full fixed budget range", () => {
+    render(<AnalysisResult entry={{ ...entry, job: { ...entry.job, fixedBudget: 250, fixedBudgetMax: 750, budgetCurrency: "EUR" } }} copy={webMessages.en} onBack={vi.fn()} onAnalyzeAnother={vi.fn()} onSaveFeedback={vi.fn()} />)
+    expect(screen.getByText("250–750 EUR")).toBeVisible()
+  })
   it("shows stored currencies and a conversion notice in the Russian report", () => {
     render(<AnalysisResult entry={{ ...entry,
       profile: { ...entry.profile, preferredRate: 25, rateCurrency: "USD" },

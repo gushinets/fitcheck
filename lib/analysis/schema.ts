@@ -66,6 +66,7 @@ export const jobSchema = z.object({
   hourlyRateMin: z.number().min(0).max(100_000).optional(),
   hourlyRateMax: z.number().min(0).max(100_000).optional(),
   fixedBudget: z.number().min(0).max(100_000_000).optional(),
+  fixedBudgetMax: z.number().min(0).max(100_000_000).optional(),
   budgetCurrency: currencySchema.optional(),
   experienceLevel: trimmedString(100).optional(),
   postedAgo: trimmedString(100).optional(),

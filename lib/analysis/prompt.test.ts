@@ -14,6 +14,13 @@ function request(overrides: Partial<AnalysisRequest> = {}): AnalysisRequest {
 }
 
 describe("buildAnalysisPrompt", () => {
+  it("includes an upper-only fixed budget after review", () => {
+    expect(buildAnalysisPrompt(request({ job: { ...detectedJob, fixedBudgetMax: 750, budgetCurrency: "EUR" } })).input).toContain("Fixed budget: ≤750 EUR")
+  })
+  it("includes the full fixed budget range in evidence", () => {
+    const prompt = buildAnalysisPrompt(request({ job: { ...detectedJob, fixedBudget: 250, fixedBudgetMax: 750, budgetCurrency: "EUR" } }))
+    expect(prompt.input).toContain("Fixed budget: 250–750 EUR")
+  })
   it.each(["primary", "confident", "basic"] as const)("uses %s proficiency in the analysis evidence", (level) => {
     const prompt = buildAnalysisPrompt(request({
       profile: { ...defaultProfile, skills: ["Make.com", "n8n"], skillLevels: { "make.com": "primary", n8n: level } },

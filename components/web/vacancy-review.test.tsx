@@ -16,6 +16,16 @@ const draft: VacancyDraft = {
 }
 
 describe("VacancyReview", () => {
+  it("lets the user correct both ends of an extracted fixed budget range", async () => {
+    const onAnalyze = vi.fn()
+    render(<VacancyReview draft={{ ...draft, fixedBudget: 250, fixedBudgetMax: 750, budgetCurrency: "EUR" }} copy={webMessages.en} onBack={vi.fn()} onAnalyze={onAnalyze} />)
+    const user = userEvent.setup()
+    expect(screen.getByLabelText("Fixed budget to")).toHaveValue(750)
+    await user.clear(screen.getByLabelText("Fixed budget to"))
+    await user.type(screen.getByLabelText("Fixed budget to"), "900.5")
+    await user.click(screen.getByRole("button", { name: "Analyze task" }))
+    expect(onAnalyze).toHaveBeenCalledWith(expect.objectContaining({ fixedBudget: 250, fixedBudgetMax: 900.5, budgetCurrency: "EUR" }))
+  })
   it.each([
     ["en" as const, "EUR/hour"],
     ["ru" as const, "EUR/час"],

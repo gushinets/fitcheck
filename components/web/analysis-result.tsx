@@ -31,7 +31,7 @@ export function AnalysisResult({
   const rateComparison = compareHourlyRate(entry.profile, entry.job)
   const currencyNotice = rateComparison === "conversion_required" ? copy.rateConversionRequired
     : rateComparison === "unknown_currency" ? copy.rateCurrencyUnknown
-      : entry.job.fixedBudget !== undefined && rateComparison === "no_hourly_budget" ? copy.noHourlyBudget : null
+      : (entry.job.fixedBudget !== undefined || entry.job.fixedBudgetMax !== undefined) && rateComparison === "no_hourly_budget" ? copy.noHourlyBudget : null
   const breakdown = [
     [copy.skills, analysis.breakdown.skills],
     [copy.experience, analysis.breakdown.experience],
@@ -55,7 +55,7 @@ export function AnalysisResult({
             <dl className="mt-3 space-y-1 text-sm text-muted-foreground">
               <div className="flex flex-wrap gap-x-2"><dt>{copy.preferredRate}:</dt><dd>{formatMoney(entry.profile.preferredRate, entry.profile.rateCurrency, copy.currencyUnspecified)}{copy.perHour}</dd></div>
               {entry.job.hourlyRateMin !== undefined || entry.job.hourlyRateMax !== undefined ? <div className="flex flex-wrap gap-x-2"><dt>{copy.rate}:</dt><dd>{formatMoney(formatRateRange(entry.job.hourlyRateMin, entry.job.hourlyRateMax), entry.job.budgetCurrency, copy.currencyUnspecified)}{copy.perHour}</dd></div> : null}
-              {entry.job.fixedBudget !== undefined ? <div className="flex flex-wrap gap-x-2"><dt>{copy.fixedBudget}:</dt><dd>{formatMoney(entry.job.fixedBudget, entry.job.budgetCurrency, copy.currencyUnspecified)}</dd></div> : null}
+              {entry.job.fixedBudget !== undefined || entry.job.fixedBudgetMax !== undefined ? <div className="flex flex-wrap gap-x-2"><dt>{copy.fixedBudget}:</dt><dd>{formatMoney(entry.job.fixedBudgetMax === undefined ? entry.job.fixedBudget! : formatRateRange(entry.job.fixedBudget, entry.job.fixedBudgetMax), entry.job.budgetCurrency, copy.currencyUnspecified)}</dd></div> : null}
             </dl>
             {currencyNotice ? <p className="mt-3 text-sm text-muted-foreground">{currencyNotice}</p> : null}
             <div className="mt-6 flex flex-col gap-6 sm:flex-row sm:items-center">
