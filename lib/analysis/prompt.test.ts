@@ -14,6 +14,10 @@ function request(overrides: Partial<AnalysisRequest> = {}): AnalysisRequest {
 }
 
 describe("buildAnalysisPrompt", () => {
+  it("uses the selected profile currency for monthly income evidence", () => {
+    const prompt = buildAnalysisPrompt(request({ profile: { ...defaultProfile, desiredMonthlyIncome: 7500, rateCurrency: "EUR" } }))
+    expect(prompt.input).toContain("Desired monthly income: 7500 EUR")
+  })
   it("includes an upper-only fixed budget after review", () => {
     expect(buildAnalysisPrompt(request({ job: { ...detectedJob, fixedBudgetMax: 750, budgetCurrency: "EUR" } })).input).toContain("Fixed budget: ≤750 EUR")
   })

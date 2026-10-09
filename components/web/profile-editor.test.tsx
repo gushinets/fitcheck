@@ -28,6 +28,18 @@ function renderEditor({
 }
 
 describe("ProfileEditor", () => {
+  it.each(["en", "ru"] as const)("uses the selected profile currency for monthly income (%s)", async (locale) => {
+    const user = userEvent.setup()
+    const onSave = vi.fn()
+    render(<ProfileEditor profile={{ ...defaultProfile, desiredMonthlyIncome: 250000, rateCurrency: "EUR" }} locale={locale} copy={webMessages[locale]} onSave={onSave} onSuggestSkills={vi.fn()} />)
+    const income = screen.getByLabelText(webMessages[locale].desiredMonthlyIncome)
+    expect(income.parentElement).toHaveTextContent(locale === "ru" ? "EUR/месяц" : "EUR/month")
+    await user.selectOptions(screen.getByRole("combobox", { name: webMessages[locale].rateCurrency }), "USD")
+    expect(income.parentElement).toHaveTextContent(locale === "ru" ? "USD/месяц" : "USD/month")
+    expect(income).toHaveValue(250000)
+    await user.click(screen.getByRole("button", { name: webMessages[locale].saveChanges }))
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ rateCurrency: "USD", desiredMonthlyIncome: 250000 }))
+  })
   it("restores legacy duplicate skills as a single tag", async () => {
     const onSave = vi.fn()
     render(<ProfileEditor profile={{ ...defaultProfile, skills: ["Python", "python"], skillLevels: { python: "primary" } }} locale="en" copy={webMessages.en} onSave={onSave} onSuggestSkills={vi.fn()} />)
@@ -291,8 +303,8 @@ describe("ProfileEditor", () => {
   })
 
   it.each([
-    ["en" as const, "/hour", "$/month", "Work formats", "Office"],
-    ["ru" as const, "/час", "₽/месяц", "Формат работы", "Офис"],
+    ["en" as const, "/hour", "/month", "Work formats", "Office"],
+    ["ru" as const, "/час", "/месяц", "Формат работы", "Офис"],
   ])(
     "renders locale-specific currency and work-format labels for %s",
     (locale, hourlyCurrency, monthlyCurrency, workFormats, office) => {

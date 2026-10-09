@@ -196,14 +196,14 @@ export function ProfileEditor({
               {skills.map((skill, index) => {
                 const key = skill.toLowerCase()
                 return (
-                  <div key={key} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2">
-                    <Label htmlFor={`skill-level-${index}`}>{copy.skillLevel}: {skill}</Label>
+                  <div key={key} className="grid grid-cols-[minmax(0,1fr)_2rem] items-center gap-2 rounded-lg border border-border px-3 py-2 sm:grid-cols-[minmax(0,1fr)_10rem_2rem]">
+                    <Label htmlFor={`skill-level-${index}`} className="col-span-2 block min-w-0 break-words leading-5 sm:col-span-1">{copy.skillLevel}: {skill}</Label>
                     <select id={`skill-level-${index}`} value={Object.hasOwn(skillLevels, key) ? skillLevels[key] : ""} onChange={(event) => {
                       const level = event.target.value as SkillLevel | ""
                       setSkillLevels((current) => level
                         ? { ...current, [key]: level }
                         : Object.fromEntries(Object.entries(current).filter(([name]) => name !== key)))
-                    }} className="h-9 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+                    }} className="h-9 min-w-0 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
                       <option value="">{copy.skillLevelUnspecified}</option>
                       <option value="primary">{copy.skillLevelPrimary}</option>
                       <option value="confident">{copy.skillLevelConfident}</option>
@@ -250,7 +250,7 @@ export function ProfileEditor({
           <Label htmlFor="profile-monthly-income">{copy.desiredMonthlyIncome}</Label>
           <div className="relative">
             <Input id="profile-monthly-income" type="number" min={0} step="any" required value={monthlyIncome} onChange={(event) => setMonthlyIncome(event.target.value)} className="pr-20" />
-            <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">{copy.monthlyCurrency}</span>
+            <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">{rateCurrency}{copy.perMonth}</span>
           </div>
         </div>
         <fieldset className="space-y-2 sm:col-span-2">

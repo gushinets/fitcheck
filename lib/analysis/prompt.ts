@@ -70,7 +70,7 @@ export function buildAnalysisPrompt(request: AnalysisRequest): AnalysisPrompt {
       }),
       `Experience: ${profile.experienceYears} years`,
       `Preferred hourly rate: ${formatMoney(profile.preferredRate, profile.rateCurrency)}`,
-      `Desired monthly income: ${formatMoney(profile.desiredMonthlyIncome)}`,
+      `Desired monthly income: ${formatMoney(profile.desiredMonthlyIncome, profile.rateCurrency)}`,
       `Acceptable work formats: ${profile.workFormats.join(", ")}`,
       `English level: ${profile.englishLevel}`,
       "",
