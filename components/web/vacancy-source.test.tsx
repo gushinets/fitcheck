@@ -6,6 +6,15 @@ import { WebApiError } from "@/lib/web/api"
 import { VacancySource } from "./vacancy-source"
 
 describe("VacancySource", () => {
+  it("retains the reviewed manual budget and currency when returning to review", async () => {
+    const onReview = vi.fn()
+    render(<VacancySource copy={webMessages.en} onLoadUrl={vi.fn()} onReview={onReview} initialDraft={{
+      id: "manual", sourceMode: "text", title: "Backend role", description: "Build production APIs.", skills: [],
+      hourlyRateMin: 25, hourlyRateMax: 50, budgetCurrency: "EUR", updatedAt: new Date().toISOString(),
+    }} />)
+    await userEvent.setup().click(screen.getByRole("button", { name: "Review task" }))
+    expect(onReview).toHaveBeenCalledWith(expect.objectContaining({ hourlyRateMin: 25, hourlyRateMax: 50, budgetCurrency: "EUR" }))
+  })
   it("preserves URL and text buffers while switching input modes", async () => {
     const user = userEvent.setup()
     const onReview = vi.fn()

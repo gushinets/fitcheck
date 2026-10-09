@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest"
 import { defaultProfile, detectedJob, goAnalysis } from "@/lib/mock-data"
-import { createHistoryEntry, toCalibrationMemory } from "./history"
+import { createHistoryEntry, toCalibrationMemory, createAnalysisRequest } from "./history"
 
 describe("website history", () => {
+  it("keeps the reviewed currency in the analysis request", () => {
+    const result = createAnalysisRequest({ profile: defaultProfile, locale: "ru", history: [], draft: {
+      id: "draft", title: "Task", description: "Task description", skills: [], sourceMode: "text", fixedBudget: 500,
+      budgetCurrency: "EUR", updatedAt: "2026-10-09T12:00:00.000Z",
+    } })
+    expect(result.job).toMatchObject({ fixedBudget: 500, budgetCurrency: "EUR" })
+  })
   it("stores immutable profile and job snapshots", () => {
     const profile = structuredClone(defaultProfile)
     const job = structuredClone(detectedJob)

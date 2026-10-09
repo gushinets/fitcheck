@@ -1,6 +1,7 @@
 import { Clock } from "lucide-react"
 import type { Job } from "@/lib/types"
 import { messages, type Messages } from "@/lib/i18n/messages"
+import { formatMoney, formatRateRange } from "@/lib/currency"
 
 interface JobSummaryProps {
   job: Job
@@ -9,10 +10,9 @@ interface JobSummaryProps {
 }
 
 function formatRate(job: Job, copy: Messages) {
-  if (job.hourlyRateMin && job.hourlyRateMax) {
-    return `$${job.hourlyRateMin}–${job.hourlyRateMax}/hr`
+  if (job.hourlyRateMin !== undefined || job.hourlyRateMax !== undefined) {
+    return `${formatMoney(formatRateRange(job.hourlyRateMin, job.hourlyRateMax), job.budgetCurrency)}/hr`
   }
-  if (job.hourlyRateMin) return `$${job.hourlyRateMin}+/hr`
   return copy.rateNotListed
 }
 

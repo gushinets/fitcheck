@@ -50,6 +50,16 @@ const memory = {
 }
 
 describe("analysis contracts", () => {
+  it.each(["USD", "EUR", "RUB"])("retains %s independently on the profile and task", (currency) => {
+    const result = analysisRequestSchema.parse({ profile: { ...profile, rateCurrency: currency }, job: { ...job, budgetCurrency: currency }, locale: "ru", memory: [] })
+    expect(result.profile.rateCurrency).toBe(currency)
+    expect(result.job.budgetCurrency).toBe(currency)
+  })
+
+  it.each(["CHF", "usd", null])("rejects unsupported explicit currency %s", (currency) => {
+    expect(freelancerProfileSchema.safeParse({ ...profile, rateCurrency: currency }).success).toBe(false)
+    expect(analysisRequestSchema.safeParse({ profile, job: { ...job, budgetCurrency: currency }, locale: "en", memory: [] }).success).toBe(false)
+  })
   it("retains each skill's proficiency and rejects invalid levels", () => {
     expect(freelancerProfileSchema.parse({
       ...profile, skillLevels: { python: "primary", django: "basic" },

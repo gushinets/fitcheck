@@ -1,5 +1,6 @@
 import type {
   AnalysisFeedback,
+  Currency,
   FitAnalysis,
   FreelancerProfile,
   Job,
@@ -45,6 +46,7 @@ export interface VacancyDraft {
   hourlyRateMin?: number
   hourlyRateMax?: number
   fixedBudget?: number
+  budgetCurrency?: Currency
   updatedAt: string
 }
 

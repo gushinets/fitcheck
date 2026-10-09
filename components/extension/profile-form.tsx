@@ -62,6 +62,7 @@ export function ProfileForm({
       } : {}),
       experienceYears: Number(experienceYears) || 0,
       preferredRate: Number(preferredRate) || 0,
+      ...(initial.rateCurrency ? { rateCurrency: initial.rateCurrency } : {}),
       desiredMonthlyIncome: initial.desiredMonthlyIncome,
       workFormats: initial.workFormats,
       englishLevel,
@@ -109,7 +110,7 @@ export function ProfileForm({
           <Label htmlFor="rate">{copy.preferredRate}</Label>
           <div className="relative">
             <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-xs text-muted-foreground">
-              $
+              {initial.rateCurrency ?? ""}
             </span>
             <Input
               id="rate"
@@ -118,7 +119,7 @@ export function ProfileForm({
               onChange={(e) =>
                 setPreferredRate(e.target.value.replace(/[^0-9]/g, ""))
               }
-              className="pl-6 pr-10"
+              className="pl-10 pr-10"
             />
             <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">
               /hr

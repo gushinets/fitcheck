@@ -30,7 +30,7 @@ describe("buildAnalysisPrompt", () => {
     expect(prompt.input).toContain("n8n: not specified")
   })
 
-  it("includes locale-formatted income and work format preferences", () => {
+  it("does not invent a currency for legacy amounts", () => {
     const en = buildAnalysisPrompt(
       request({
         profile: {
@@ -52,11 +52,11 @@ describe("buildAnalysisPrompt", () => {
       }),
     )
 
-    expect(en.input).toContain("Preferred hourly rate: $2500")
-    expect(en.input).toContain("Desired monthly income: $12000")
+    expect(en.input).toContain("Preferred hourly rate: 2500 currency unspecified")
+    expect(en.input).toContain("Desired monthly income: 12000 currency unspecified")
     expect(en.input).toContain("Acceptable work formats: remote, hybrid")
-    expect(ru.input).toContain("Preferred hourly rate: ₽2500")
-    expect(ru.input).toContain("Desired monthly income: ₽300000")
+    expect(ru.input).toContain("Preferred hourly rate: 2500 currency unspecified")
+    expect(ru.input).toContain("Desired monthly income: 300000 currency unspecified")
     expect(en.instructions).toContain(
       "Missing task budget or work-mode evidence must not be treated as a mismatch",
     )
@@ -88,21 +88,33 @@ describe("buildAnalysisPrompt", () => {
     )
   })
 
-  it("uses the active locale currency for task rates and fixed budgets", () => {
+  it("keeps explicit currencies independent of the interface language", () => {
     const job = {
       ...detectedJob,
       hourlyRateMin: 1_500,
       hourlyRateMax: 2_500,
       fixedBudget: 80_000,
+      budgetCurrency: "EUR" as const,
     }
 
     const en = buildAnalysisPrompt(request({ job, locale: "en" }))
     const ru = buildAnalysisPrompt(request({ job, locale: "ru" }))
 
-    expect(en.input).toContain("Hourly rate: $1500–$2500")
-    expect(en.input).toContain("Fixed budget: $80000")
-    expect(ru.input).toContain("Hourly rate: ₽1500–₽2500")
-    expect(ru.input).toContain("Fixed budget: ₽80000")
+    expect(en.input).toContain("Hourly rate: 1500–2500 EUR")
+    expect(en.input).toContain("Fixed budget: 80000 EUR")
+    expect(ru.input).toContain("Hourly rate: 1500–2500 EUR")
+    expect(ru.input).toContain("Fixed budget: 80000 EUR")
+  })
+
+  it("supplies conversion-required evidence instead of comparing different currencies", () => {
+    const prompt = buildAnalysisPrompt(request({
+      profile: { ...defaultProfile, preferredRate: 25, rateCurrency: "USD" },
+      job: { ...detectedJob, hourlyRateMin: 25, hourlyRateMax: 50, budgetCurrency: "EUR" },
+    }))
+    expect(prompt.input).toContain("Preferred hourly rate: 25 USD")
+    expect(prompt.input).toContain("Rate comparison: conversion_required")
+    expect(prompt.instructions).toContain("Never invent an exchange rate")
+    expect(prompt.instructions).toContain("Do not penalize the score for an unavailable currency comparison")
   })
 
   it("includes user corrections as calibration rather than facts", () => {

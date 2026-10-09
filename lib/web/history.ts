@@ -14,6 +14,7 @@ export function draftToJob(draft: VacancyDraft): Job {
     title: draft.title,
     description: draft.description,
     skills: [...draft.skills],
+    ...(draft.budgetCurrency ? { budgetCurrency: draft.budgetCurrency } : {}),
     ...(draft.hourlyRateMin === undefined
       ? {}
       : { hourlyRateMin: draft.hourlyRateMin }),

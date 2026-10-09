@@ -6,6 +6,12 @@ import { vi } from "vitest"
 import { defaultProfile } from "@/lib/mock-data"
 
 describe("ProfileForm", () => {
+  it("preserves the explicit hourly currency when saving", async () => {
+    const onSubmit = vi.fn()
+    render(<ProfileForm initial={{ ...defaultProfile, rateCurrency: "EUR" }} submitLabel="Save profile" onSubmit={onSubmit} />)
+    await userEvent.setup().click(screen.getByRole("button", { name: "Save profile" }))
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ rateCurrency: "EUR", preferredRate: defaultProfile.preferredRate }))
+  })
   it("preserves proficiency when editing a legacy extension profile", async () => {
     const onSubmit = vi.fn()
     render(<ProfileForm initial={{ ...defaultProfile, skills: ["n8n"], skillLevels: { n8n: "basic" } }} submitLabel="Save profile" onSubmit={onSubmit} />)

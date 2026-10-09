@@ -4,6 +4,7 @@ import { JobSummary } from "./job-summary"
 import { AnalyzeButton } from "./analyze-button"
 import type { FreelancerProfile, Job } from "@/lib/types"
 import { messages, type Messages } from "@/lib/i18n/messages"
+import { formatMoney } from "@/lib/currency"
 
 interface ReadyScreenProps {
   job: Job
@@ -26,7 +27,7 @@ export function ReadyScreen({ job, profile, onAnalyze, copy = messages.en }: Rea
           </div>
           <p className="mt-1 text-[13px] font-semibold">{profile.specialization}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {profile.experienceYears} yrs · ${profile.preferredRate}/hr ·{" "}
+            {profile.experienceYears} yrs · {formatMoney(profile.preferredRate, profile.rateCurrency)}/hr ·{" "}
             {profile.englishLevel}
           </p>
         </div>

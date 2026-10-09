@@ -235,6 +235,7 @@ export function WebsiteApp({
       title: entry.job.title,
       description: entry.job.description,
       skills: entry.job.skills,
+      ...(entry.job.budgetCurrency ? { budgetCurrency: entry.job.budgetCurrency } : {}),
       ...(entry.job.hourlyRateMin === undefined ? {} : { hourlyRateMin: entry.job.hourlyRateMin }),
       ...(entry.job.hourlyRateMax === undefined ? {} : { hourlyRateMax: entry.job.hourlyRateMax }),
       ...(entry.job.fixedBudget === undefined ? {} : { fixedBudget: entry.job.fixedBudget }),

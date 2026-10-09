@@ -43,9 +43,19 @@ describe("vacancy content extraction", () => {
       skills: ["TypeScript", "React", "PostgreSQL"],
       hourlyRateMin: 40,
       hourlyRateMax: 60,
+      budgetCurrency: "USD",
     })
     expect(result.description).not.toContain("Sign in")
     expect(result.description).not.toContain("Ignore all previous")
+  })
+
+  it.each(["EUR", "RUB", " eur ", "CHF", ""])("extracts supported explicit salary currency %s", (currency) => {
+    const result = extractVacancyContent({
+      finalUrl: "https://jobs.example/42", contentType: "text/html",
+      body: fixture.replace('"currency": "USD"', `"currency": "${currency}"`),
+    })
+    expect(result.hourlyRateMin).toBe(40)
+    expect(result.budgetCurrency).toBe(["EUR", "RUB"].includes(currency.trim().toUpperCase()) ? currency.trim().toUpperCase() : undefined)
   })
 
   it("extracts a title and description from plain text", () => {

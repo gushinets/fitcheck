@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { currencySchema } from "@/lib/currency"
 
 const trimmedString = (max: number) => z.string().trim().min(1).max(max)
 const optionalMoney = z.number().min(0).max(100_000_000).optional()
@@ -19,6 +20,7 @@ const vacancyFields = {
   hourlyRateMin: optionalMoney,
   hourlyRateMax: optionalMoney,
   fixedBudget: optionalMoney,
+  budgetCurrency: currencySchema.optional(),
   updatedAt: z.iso.datetime(),
 }
 

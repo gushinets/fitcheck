@@ -45,6 +45,7 @@ export function VacancySource({
   function reviewText(event: React.FormEvent) {
     event.preventDefault()
     const parsed = vacancyDraftSchema.safeParse({
+      ...(initialDraft?.sourceMode === "text" ? initialDraft : {}),
       id: initialDraft?.id ?? crypto.randomUUID(),
       sourceMode: "text",
       title,

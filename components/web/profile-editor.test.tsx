@@ -28,6 +28,14 @@ function renderEditor({
 }
 
 describe("ProfileEditor", () => {
+  it.each(["USD", "EUR", "RUB"] as const)("saves %s without converting the rate", async (currency) => {
+    const user = userEvent.setup()
+    const onSave = vi.fn()
+    render(<ProfileEditor profile={{ ...defaultProfile, preferredRate: 25, rateCurrency: "USD" }} locale="ru" copy={webMessages.ru} onSave={onSave} onSuggestSkills={vi.fn()} />)
+    await user.selectOptions(screen.getByRole("combobox", { name: "Валюта ставки" }), currency)
+    await user.click(screen.getByRole("button", { name: "Сохранить изменения" }))
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ preferredRate: 25, rateCurrency: currency }))
+  })
   it("changes and saves a level for each skill", async () => {
     const user = userEvent.setup()
     const onSave = vi.fn()
@@ -245,8 +253,8 @@ describe("ProfileEditor", () => {
   })
 
   it.each([
-    ["en" as const, "$/hour", "$/month", "Work formats", "Office"],
-    ["ru" as const, "₽/час", "₽/месяц", "Формат работы", "Офис"],
+    ["en" as const, "/hour", "$/month", "Work formats", "Office"],
+    ["ru" as const, "/час", "₽/месяц", "Формат работы", "Офис"],
   ])(
     "renders locale-specific currency and work-format labels for %s",
     (locale, hourlyCurrency, monthlyCurrency, workFormats, office) => {

@@ -4,11 +4,13 @@ import { useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { currencies } from "@/lib/currency"
 import { freelancerProfileSchema } from "@/lib/analysis/schema"
 import type { WebMessages } from "@/lib/i18n/web-messages"
 import type { SkillSuggestionRequest } from "@/lib/skill-suggestions/schema"
 import type {
   EnglishLevel,
+  Currency,
   FreelancerProfile,
   Locale,
   SkillLevel,
@@ -50,6 +52,7 @@ export function ProfileEditor({
   const [skillLevels, setSkillLevels] = useState<Record<string, SkillLevel>>(profile?.skillLevels ?? {})
   const [experience, setExperience] = useState(String(profile?.experienceYears ?? 0))
   const [rate, setRate] = useState(String(profile?.preferredRate ?? 0))
+  const [rateCurrency, setRateCurrency] = useState<Currency | "">(profile?.rateCurrency ?? "")
   const [monthlyIncome, setMonthlyIncome] = useState(
     String(profile?.desiredMonthlyIncome ?? 0),
   )
@@ -81,6 +84,7 @@ export function ProfileEditor({
     } : {}),
     experienceYears: Number(experience),
     preferredRate: Number(rate),
+    ...(rateCurrency ? { rateCurrency } : {}),
     desiredMonthlyIncome:
       monthlyIncome.trim() === "" ? Number.NaN : Number(monthlyIncome),
     workFormats,
@@ -212,8 +216,13 @@ export function ProfileEditor({
           <Label htmlFor="profile-rate">{copy.preferredRate}</Label>
           <div className="relative">
             <Input id="profile-rate" type="number" min={0} step="any" value={rate} onChange={(event) => setRate(event.target.value)} className="pr-16" />
-            <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">{copy.hourlyCurrency}</span>
+            <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">{rateCurrency}{copy.perHour}</span>
           </div>
+          <Label htmlFor="profile-rate-currency">{copy.rateCurrency}</Label>
+          <select id="profile-rate-currency" value={rateCurrency} onChange={(event) => setRateCurrency(event.target.value as Currency | "")} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm">
+            <option value="">{copy.currencyUnspecified}</option>
+            {currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
+          </select>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="profile-monthly-income">{copy.desiredMonthlyIncome}</Label>

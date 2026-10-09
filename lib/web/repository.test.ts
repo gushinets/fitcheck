@@ -13,6 +13,12 @@ describe("IndexedDB website repository", () => {
     repository = createWebsiteRepository(databaseName)
   })
 
+  it.each(["USD", "EUR", "RUB"] as const)("preserves the hourly rate and %s currency after reopening", async (rateCurrency) => {
+    const user = await repository.createUser({ name: "Nikita", email: "me@example.com", password: "password-123" })
+    await repository.saveProfile(user.id, { ...defaultProfile, preferredRate: 25.5, rateCurrency })
+    expect((await createWebsiteRepository(databaseName).loadSnapshot()).profile).toMatchObject({ preferredRate: 25.5, rateCurrency })
+  })
+
   it("restores skill proficiency after reopening the repository", async () => {
     const user = await repository.createUser({ name: "Nikita", email: "me@example.com", password: "password-123" })
     await repository.saveProfile(user.id, { ...defaultProfile, skills: ["Make.com", "n8n"], skillLevels: { "make.com": "primary", n8n: "basic" } })
@@ -117,6 +123,8 @@ describe("IndexedDB website repository", () => {
       id: "draft-1",
       sourceMode: "text",
       title: "Backend role",
+      fixedBudget: 500,
+      budgetCurrency: "EUR",
       description: "Build production APIs for a growing SaaS product.",
       skills: ["Python"],
       updatedAt: "2026-08-25T12:00:00.000Z",
@@ -136,6 +144,7 @@ describe("IndexedDB website repository", () => {
     expect(snapshot.preferences?.locale).toBe("ru")
     expect(snapshot.profile).toEqual(defaultProfile)
     expect(snapshot.draft?.title).toBe("Backend role")
+    expect(snapshot.draft).toMatchObject({ fixedBudget: 500, budgetCurrency: "EUR" })
     expect(snapshot.history).toHaveLength(50)
     expect(snapshot.history.map((entry) => entry.id)).not.toContain("entry-0")
     expect(snapshot.history[0]?.feedback?.correctedScore).toBe(75)

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { currencySchema } from "@/lib/currency"
 
 const publicUrl = z
   .url()
@@ -18,6 +19,7 @@ export const extractedVacancySchema = z.object({
   hourlyRateMin: z.number().min(0).max(100_000).optional(),
   hourlyRateMax: z.number().min(0).max(100_000).optional(),
   fixedBudget: z.number().min(0).max(100_000_000).optional(),
+  budgetCurrency: currencySchema.optional(),
 })
 
 export type ExtractedVacancy = z.infer<typeof extractedVacancySchema>

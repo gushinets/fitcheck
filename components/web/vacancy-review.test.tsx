@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react"
 import { webMessages } from "@/lib/i18n/web-messages"
 import type { VacancyDraft } from "@/lib/web/types"
 import { VacancyReview } from "./vacancy-review"
+import userEvent from "@testing-library/user-event"
 
 const draft: VacancyDraft = {
   id: "draft-1",
@@ -16,12 +17,12 @@ const draft: VacancyDraft = {
 
 describe("VacancyReview", () => {
   it.each([
-    ["en" as const, "$/hour", "$"],
-    ["ru" as const, "₽/час", "₽"],
-  ])("shows %s vacancy money inputs with their locale currency", (locale, hourlyCurrency, fixedCurrency) => {
+    ["en" as const, "EUR/hour"],
+    ["ru" as const, "EUR/час"],
+  ])("shows explicit task currency in %s", (locale, hourlyCurrency) => {
     render(
       <VacancyReview
-        draft={draft}
+        draft={{ ...draft, budgetCurrency: "EUR" }}
         copy={webMessages[locale]}
         onBack={vi.fn()}
         onAnalyze={vi.fn()}
@@ -29,6 +30,15 @@ describe("VacancyReview", () => {
     )
 
     expect(screen.getAllByText(hourlyCurrency)).toHaveLength(2)
-    expect(screen.getByText(fixedCurrency)).toBeVisible()
+    expect(screen.getByRole("combobox")).toHaveValue("EUR")
+  })
+
+  it("saves a selected budget currency without changing amounts", async () => {
+    const onAnalyze = vi.fn()
+    render(<VacancyReview draft={draft} copy={webMessages.en} onBack={vi.fn()} onAnalyze={onAnalyze} />)
+    const user = userEvent.setup()
+    await user.selectOptions(screen.getByRole("combobox", { name: "Task budget currency" }), "RUB")
+    await user.click(screen.getByRole("button", { name: "Analyze task" }))
+    expect(onAnalyze).toHaveBeenCalledWith(expect.objectContaining({ fixedBudget: 80000, budgetCurrency: "RUB" }))
   })
 })

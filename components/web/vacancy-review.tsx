@@ -5,6 +5,8 @@ import { ArrowLeft, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { currencies } from "@/lib/currency"
+import type { Currency } from "@/lib/types"
 import type { WebMessages } from "@/lib/i18n/web-messages"
 import { vacancyDraftSchema } from "@/lib/web/schemas"
 import type { VacancyDraft } from "@/lib/web/types"
@@ -26,6 +28,7 @@ export function VacancyReview({
   const [rateMin, setRateMin] = useState(draft.hourlyRateMin?.toString() ?? "")
   const [rateMax, setRateMax] = useState(draft.hourlyRateMax?.toString() ?? "")
   const [fixedBudget, setFixedBudget] = useState(draft.fixedBudget?.toString() ?? "")
+  const [budgetCurrency, setBudgetCurrency] = useState<Currency | "">(draft.budgetCurrency ?? "")
 
   function currentDraft() {
     return vacancyDraftSchema.parse({
@@ -36,6 +39,7 @@ export function VacancyReview({
       hourlyRateMin: rateMin ? Number(rateMin) : undefined,
       hourlyRateMax: rateMax ? Number(rateMax) : undefined,
       fixedBudget: fixedBudget ? Number(fixedBudget) : undefined,
+      budgetCurrency: budgetCurrency || undefined,
       updatedAt: new Date().toISOString(),
     })
   }
@@ -51,10 +55,17 @@ export function VacancyReview({
         <div className="space-y-1.5"><Label htmlFor="review-title">{copy.vacancyTitle}</Label><Input id="review-title" value={title} onChange={(event) => setTitle(event.target.value)} /></div>
         <div className="space-y-1.5"><Label htmlFor="review-description">{copy.vacancyDescription}</Label><textarea id="review-description" value={description} onChange={(event) => setDescription(event.target.value)} className="min-h-64 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50" /></div>
         <div className="space-y-1.5"><Label htmlFor="review-skills">{copy.vacancySkills}</Label><Input id="review-skills" value={skills} onChange={(event) => setSkills(event.target.value)} /></div>
+        <div className="space-y-1.5">
+          <Label htmlFor="review-currency">{copy.budgetCurrency}</Label>
+          <select id="review-currency" value={budgetCurrency} onChange={(event) => setBudgetCurrency(event.target.value as Currency | "")} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm">
+            <option value="">{copy.currencyUnspecified}</option>
+            {currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
+          </select>
+        </div>
         <div className="grid gap-4 sm:grid-cols-3">
-          <div className="space-y-1.5"><Label htmlFor="review-rate-min">{copy.hourlyRateMin}</Label><div className="relative"><Input id="review-rate-min" type="number" min={0} value={rateMin} onChange={(event) => setRateMin(event.target.value)} className="pr-16" /><span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">{copy.hourlyCurrency}</span></div></div>
-          <div className="space-y-1.5"><Label htmlFor="review-rate-max">{copy.hourlyRateMax}</Label><div className="relative"><Input id="review-rate-max" type="number" min={0} value={rateMax} onChange={(event) => setRateMax(event.target.value)} className="pr-16" /><span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">{copy.hourlyCurrency}</span></div></div>
-          <div className="space-y-1.5"><Label htmlFor="review-budget">{copy.fixedBudget}</Label><div className="relative"><Input id="review-budget" type="number" min={0} value={fixedBudget} onChange={(event) => setFixedBudget(event.target.value)} className="pr-10" /><span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">{copy.currencySymbol}</span></div></div>
+          <div className="space-y-1.5"><Label htmlFor="review-rate-min">{copy.hourlyRateMin}</Label><div className="relative"><Input id="review-rate-min" type="number" min={0} value={rateMin} onChange={(event) => setRateMin(event.target.value)} className="pr-16" /><span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">{budgetCurrency}{copy.perHour}</span></div></div>
+          <div className="space-y-1.5"><Label htmlFor="review-rate-max">{copy.hourlyRateMax}</Label><div className="relative"><Input id="review-rate-max" type="number" min={0} value={rateMax} onChange={(event) => setRateMax(event.target.value)} className="pr-16" /><span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">{budgetCurrency}{copy.perHour}</span></div></div>
+          <div className="space-y-1.5"><Label htmlFor="review-budget">{copy.fixedBudget}</Label><div className="relative"><Input id="review-budget" type="number" min={0} value={fixedBudget} onChange={(event) => setFixedBudget(event.target.value)} className="pr-12" /><span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">{budgetCurrency}</span></div></div>
         </div>
         <Button type="submit" disabled={!title.trim() || !description.trim()} className="h-12 w-full text-base font-semibold sm:w-auto sm:min-w-56"><Sparkles className="size-4" aria-hidden="true" />{copy.analyzeVacancy}</Button>
       </form>

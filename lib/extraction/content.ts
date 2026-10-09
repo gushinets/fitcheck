@@ -1,4 +1,5 @@
 import { load, type CheerioAPI } from "cheerio"
+import { currencySchema } from "@/lib/currency"
 import { isFreelancerProjectUrl } from "./freelancer"
 import type { PublicPageResponse } from "./network"
 import {
@@ -102,13 +103,16 @@ function salaryFields(jobPosting: JsonRecord | null) {
   const min = Number(value.minValue ?? value.value)
   const max = Number(value.maxValue ?? value.value)
   if (!Number.isFinite(min)) return {}
+  const currency = currencySchema.safeParse(textValue(baseSalary?.currency).toUpperCase())
+  const currencyFields = currency.success ? { budgetCurrency: currency.data } : {}
   if (unit.includes("HOUR")) {
     return {
+      ...currencyFields,
       hourlyRateMin: min,
       ...(Number.isFinite(max) ? { hourlyRateMax: max } : {}),
     }
   }
-  return { fixedBudget: min }
+  return { fixedBudget: min, ...currencyFields }
 }
 
 function visibleDescription($: CheerioAPI) {

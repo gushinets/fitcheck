@@ -9,6 +9,7 @@ export type EnglishLevel =
 
 export type WorkFormat = "remote" | "office" | "hybrid"
 export type SkillLevel = "primary" | "confident" | "basic"
+export type Currency = "USD" | "EUR" | "RUB"
 
 export interface FreelancerProfile {
   specialization: string
@@ -17,6 +18,7 @@ export interface FreelancerProfile {
   skillLevels?: Record<string, SkillLevel>
   experienceYears: number
   preferredRate: number
+  rateCurrency?: Currency
   desiredMonthlyIncome: number
   workFormats: WorkFormat[]
   englishLevel: EnglishLevel
@@ -31,6 +33,7 @@ export interface Job {
   hourlyRateMin?: number
   hourlyRateMax?: number
   fixedBudget?: number
+  budgetCurrency?: Currency
   experienceLevel?: string
   postedAgo?: string
   clientRating?: number

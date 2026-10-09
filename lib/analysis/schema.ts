@@ -1,5 +1,6 @@
 import { z } from "zod"
 import type { FreelancerProfile } from "@/lib/types"
+import { currencySchema } from "@/lib/currency"
 
 const trimmedString = (max: number) => z.string().trim().min(1).max(max)
 const scoreSchema = z.number().int().min(0).max(100)
@@ -30,6 +31,7 @@ export const freelancerProfileSchema = z.object({
   skillLevels: skillLevelsSchema.optional(),
   experienceYears: z.number().min(0).max(60),
   preferredRate: moneySchema,
+  rateCurrency: currencySchema.optional(),
   desiredMonthlyIncome: moneySchema,
   workFormats: z
     .array(workFormatSchema)
@@ -64,6 +66,7 @@ export const jobSchema = z.object({
   hourlyRateMin: z.number().min(0).max(100_000).optional(),
   hourlyRateMax: z.number().min(0).max(100_000).optional(),
   fixedBudget: z.number().min(0).max(100_000_000).optional(),
+  budgetCurrency: currencySchema.optional(),
   experienceLevel: trimmedString(100).optional(),
   postedAgo: trimmedString(100).optional(),
   clientRating: z.number().min(0).max(5).optional(),

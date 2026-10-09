@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { WebMessages } from "@/lib/i18n/web-messages"
 import type { WebHistoryEntry } from "@/lib/web/types"
+import { formatMoney, formatRateRange } from "@/lib/currency"
+import { compareHourlyRate } from "@/lib/analysis/currency"
 
 export function AnalysisResult({
   entry,
@@ -26,6 +28,10 @@ export function AnalysisResult({
   const [note, setNote] = useState(entry.feedback?.note ?? "")
   const analysis = entry.analysis
   const isGo = analysis.status === "GO"
+  const rateComparison = compareHourlyRate(entry.profile, entry.job)
+  const currencyNotice = rateComparison === "conversion_required" ? copy.rateConversionRequired
+    : rateComparison === "unknown_currency" ? copy.rateCurrencyUnknown
+      : entry.job.fixedBudget !== undefined && rateComparison === "no_hourly_budget" ? copy.noHourlyBudget : null
   const breakdown = [
     [copy.skills, analysis.breakdown.skills],
     [copy.experience, analysis.breakdown.experience],
@@ -46,6 +52,12 @@ export function AnalysisResult({
         <div className="space-y-6">
           <div className="rounded-3xl border border-border bg-card p-6 shadow-sm sm:p-8">
             <p className="text-sm font-medium text-muted-foreground">{entry.job.title}</p>
+            <dl className="mt-3 space-y-1 text-sm text-muted-foreground">
+              <div className="flex flex-wrap gap-x-2"><dt>{copy.preferredRate}:</dt><dd>{formatMoney(entry.profile.preferredRate, entry.profile.rateCurrency, copy.currencyUnspecified)}{copy.perHour}</dd></div>
+              {entry.job.hourlyRateMin !== undefined || entry.job.hourlyRateMax !== undefined ? <div className="flex flex-wrap gap-x-2"><dt>{copy.rate}:</dt><dd>{formatMoney(formatRateRange(entry.job.hourlyRateMin, entry.job.hourlyRateMax), entry.job.budgetCurrency, copy.currencyUnspecified)}{copy.perHour}</dd></div> : null}
+              {entry.job.fixedBudget !== undefined ? <div className="flex flex-wrap gap-x-2"><dt>{copy.fixedBudget}:</dt><dd>{formatMoney(entry.job.fixedBudget, entry.job.budgetCurrency, copy.currencyUnspecified)}</dd></div> : null}
+            </dl>
+            {currencyNotice ? <p className="mt-3 text-sm text-muted-foreground">{currencyNotice}</p> : null}
             <div className="mt-6 flex flex-col gap-6 sm:flex-row sm:items-center">
               <div aria-label={`${copy.fitScore} ${analysis.score} ${copy.outOf100}`} className={`grid size-40 shrink-0 place-items-center rounded-full border-[12px] ${isGo ? "border-success-muted bg-success-muted/30" : "border-warning-muted bg-warning-muted/30"}`}>
                 <div className="text-center"><div className="text-5xl font-bold tracking-tight">{analysis.score}</div><div className="text-xs text-muted-foreground">/ 100</div></div>
