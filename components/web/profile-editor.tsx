@@ -1,6 +1,7 @@
 "use client"
 
 import { useRef, useState } from "react"
+import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -34,6 +35,15 @@ const workFormatOptions: {
   { value: "hybrid", label: "workHybrid" },
 ]
 
+function mergeSkills(current: string[], additions: string[]) {
+  const next = [...current]
+  for (const entry of additions) {
+    const skill = entry.trim()
+    if (skill && !next.some((existing) => existing.toLowerCase() === skill.toLowerCase())) next.push(skill)
+  }
+  return next
+}
+
 export function ProfileEditor({
   profile,
   locale,
@@ -48,7 +58,8 @@ export function ProfileEditor({
   onSuggestSkills: (input: SkillSuggestionRequest) => Promise<string[]>
 }) {
   const [specialization, setSpecialization] = useState(profile?.specialization ?? "")
-  const [skills, setSkills] = useState(profile?.skills.join(", ") ?? "")
+  const [skills, setSkills] = useState<string[]>(() => mergeSkills([], profile?.skills ?? []))
+  const [skillInput, setSkillInput] = useState("")
   const [skillLevels, setSkillLevels] = useState<Record<string, SkillLevel>>(profile?.skillLevels ?? {})
   const [experience, setExperience] = useState(String(profile?.experienceYears ?? 0))
   const [rate, setRate] = useState(String(profile?.preferredRate ?? 0))
@@ -64,21 +75,16 @@ export function ProfileEditor({
   const [suggestionError, setSuggestionError] = useState<string | null>(null)
   const [suggesting, setSuggesting] = useState(false)
   const suggestionRequestId = useRef(0)
-  const parsedSkills = [...new Map(
-    skills.split(",")
-      .map((skill) => skill.trim())
-      .filter(Boolean)
-      .map((skill) => [skill.toLowerCase(), skill]),
-  ).values()]
+  const skillsToSave = mergeSkills(skills, skillInput.split(","))
   const normalizedSkills = new Set(
-    parsedSkills.map((skill) => skill.toLowerCase()),
+    skillsToSave.map((skill) => skill.toLowerCase()),
   )
   const visibleSuggestions = suggestions?.filter(
     (skill) => !normalizedSkills.has(skill.toLowerCase()),
   )
   const profileCandidate = {
     specialization,
-    skills: parsedSkills,
+    skills: skillsToSave,
     ...(Object.keys(skillLevels).length ? {
       skillLevels: Object.fromEntries(Object.entries(skillLevels).filter(([key]) => normalizedSkills.has(key))),
     } : {}),
@@ -131,11 +137,18 @@ export function ProfileEditor({
   }
 
   function addSuggestedSkill(skill: string) {
-    setSkills((current) => {
-      if (!current.trim()) return skill
-      if (/[,]\s*$/.test(current)) return `${current} ${skill}`
-      return `${current}, ${skill}`
-    })
+    setSkills((current) => mergeSkills(current, [...skillInput.split(","), skill]))
+    setSkillInput("")
+  }
+
+  function commitSkillInput() {
+    setSkills((current) => mergeSkills(current, skillInput.split(",")))
+    setSkillInput("")
+  }
+
+  function removeSkill(skill: string) {
+    setSkills((current) => current.filter((value) => value !== skill))
+    setSkillLevels((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== skill.toLowerCase())))
   }
 
   function toggleWorkFormat(format: WorkFormat) {
@@ -169,12 +182,18 @@ export function ProfileEditor({
         </div>
         <div className="space-y-1.5 sm:col-span-2">
           <Label htmlFor="profile-skills">{copy.skills}</Label>
-          <Input id="profile-skills" value={skills} placeholder={copy.skillsPlaceholder} onChange={(event) => setSkills(event.target.value)} />
+          <Input id="profile-skills" value={skillInput} placeholder={copy.skillsPlaceholder} onChange={(event) => setSkillInput(event.target.value)} onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing || event.keyCode === 229) return
+            if (event.key === "Enter") {
+              event.preventDefault()
+              commitSkillInput()
+            }
+          }} />
           <p className="text-xs text-muted-foreground">{copy.skillsExample}</p>
-          {parsedSkills.length ? (
+          {skills.length ? (
             <div className="space-y-2 pt-2">
               <p className="text-xs text-muted-foreground">{copy.skillLevelsHint}</p>
-              {parsedSkills.map((skill, index) => {
+              {skills.map((skill, index) => {
                 const key = skill.toLowerCase()
                 return (
                   <div key={key} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2">
@@ -190,6 +209,9 @@ export function ProfileEditor({
                       <option value="confident">{copy.skillLevelConfident}</option>
                       <option value="basic">{copy.skillLevelBasic}</option>
                     </select>
+                    <button type="button" onClick={() => removeSkill(skill)} aria-label={`${copy.removeSkill}: ${skill}`} className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground">
+                      <X className="size-4" aria-hidden="true" />
+                    </button>
                   </div>
                 )
               })}

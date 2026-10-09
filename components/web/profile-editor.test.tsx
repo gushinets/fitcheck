@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { webMessages } from "@/lib/i18n/web-messages"
 import type { SkillSuggestionRequest } from "@/lib/skill-suggestions/schema"
@@ -28,6 +28,40 @@ function renderEditor({
 }
 
 describe("ProfileEditor", () => {
+  it("restores legacy duplicate skills as a single tag", async () => {
+    const onSave = vi.fn()
+    render(<ProfileEditor profile={{ ...defaultProfile, skills: ["Python", "python"], skillLevels: { python: "primary" } }} locale="en" copy={webMessages.en} onSave={onSave} onSuggestSkills={vi.fn()} />)
+    expect(screen.getAllByRole("combobox", { name: /^Proficiency:/ })).toHaveLength(1)
+    await userEvent.setup().click(screen.getByRole("button", { name: "Save changes" }))
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ skills: ["Python"], skillLevels: { python: "primary" } }))
+  })
+  it.each(["en", "ru"] as const)("adds separate trimmed tags on Enter without submitting (%s)", async (locale) => {
+    const user = userEvent.setup()
+    const onSave = vi.fn()
+    render(<ProfileEditor profile={{ ...defaultProfile, skills: ["Python"] }} locale={locale} copy={webMessages[locale]} onSave={onSave} onSuggestSkills={vi.fn()} />)
+    const input = screen.getByLabelText(webMessages[locale].skills)
+    await user.type(input, "  n8n  {Enter}")
+    expect(input).toHaveValue("")
+    expect(screen.getByRole("combobox", { name: `${webMessages[locale].skillLevel}: n8n` })).toBeVisible()
+    await user.type(input, " Make.com{Enter}  N8N {Enter}   {Enter}")
+    expect(screen.getAllByRole("combobox", { name: new RegExp(`^${webMessages[locale].skillLevel}:`) })).toHaveLength(3)
+    expect(onSave).not.toHaveBeenCalled()
+    await user.selectOptions(screen.getByRole("combobox", { name: `${webMessages[locale].skillLevel}: n8n` }), "basic")
+    await user.click(screen.getByRole("button", { name: webMessages[locale].saveChanges }))
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ skills: ["Python", "n8n", "Make.com"], skillLevels: { n8n: "basic" } }))
+  })
+
+  it("does not commit a skill while an IME composition is active", async () => {
+    renderEditor()
+    const input = screen.getByLabelText("Skills")
+    fireEvent.change(input, { target: { value: "日本語" } })
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true })
+    expect(input).toHaveValue("日本語")
+    expect(screen.queryByRole("combobox", { name: "Proficiency: 日本語" })).not.toBeInTheDocument()
+    await userEvent.setup().type(input, "{Enter}")
+    expect(input).toHaveValue("")
+    expect(screen.getByRole("combobox", { name: "Proficiency: 日本語" })).toBeVisible()
+  })
   it.each(["USD", "EUR", "RUB"] as const)("saves %s without converting the rate", async (currency) => {
     const user = userEvent.setup()
     const onSave = vi.fn()
@@ -50,10 +84,13 @@ describe("ProfileEditor", () => {
     const user = userEvent.setup()
     const onSave = vi.fn()
     render(<ProfileEditor profile={{ ...defaultProfile, skills: ["Make.com", "n8n"], skillLevels: { "make.com": "primary", n8n: "basic" } }} locale="en" copy={webMessages.en} onSave={onSave} onSuggestSkills={vi.fn()} />)
-    await user.clear(screen.getByLabelText("Skills"))
-    await user.type(screen.getByLabelText("Skills"), "MAKE.COM")
+    await user.click(screen.getByRole("button", { name: "Remove skill: n8n" }))
+    expect(screen.queryByRole("combobox", { name: "Proficiency: n8n" })).not.toBeInTheDocument()
+    await user.type(screen.getByLabelText("Skills"), "n8n{Enter}")
+    expect(screen.getByRole("combobox", { name: "Proficiency: n8n" })).toHaveValue("")
+    await user.click(screen.getByRole("button", { name: "Remove skill: n8n" }))
     await user.click(screen.getByRole("button", { name: "Save changes" }))
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ skills: ["MAKE.COM"], skillLevels: { "make.com": "primary" } }))
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ skills: ["Make.com"], skillLevels: { "make.com": "primary" } }))
   })
 
   it("suggests skills on demand, excludes duplicates, and appends a selected chip", async () => {
@@ -86,7 +123,8 @@ describe("ProfileEditor", () => {
     ).not.toBeInTheDocument()
     expect(await screen.findByRole("button", { name: "Python" })).toBeVisible()
     await user.click(screen.getByRole("button", { name: "Python" }))
-    expect(screen.getByLabelText("Skills")).toHaveValue("TypeScript, Python")
+    expect(screen.getByLabelText("Skills")).toHaveValue("")
+    expect(screen.getByRole("combobox", { name: "Proficiency: Python" })).toBeVisible()
     expect(
       screen.queryByRole("button", { name: "Python" }),
     ).not.toBeInTheDocument()
