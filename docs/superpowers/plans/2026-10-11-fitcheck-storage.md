@@ -134,8 +134,8 @@ Compose service `postgres` использует `postgres:17`, database/user/pas
 
 - [x] Fresh reviewer по всей ветке, включая spec и реальные результаты тестов; выбранный execution skill определяет dispatch. Отдельно проверить deferred constraints, миграционную блокировку, ownership graph, sensitive errors и wheel resources.
 - [x] Исправить Critical/Important findings через regression test RED→GREEN и повторить затронутые проверки; Minor исправить либо явно аргументировать.
-- [ ] Сверить spec coverage и git diff, отметить completed steps фактическими commit IDs/командами. Обновить ANY-644 результатом и статусом только после подтверждённых checks.
-- [ ] Передать готовую ветку пользователю; merge/push/deploy выполняются по его указанию. PostgreSQL контейнер остановить, одноразовый volume удалять только с соответствующим разрешением.
+- [x] Сверить spec coverage и git diff, отметить completed steps фактическими commit IDs/командами. Обновить ANY-644 результатом и статусом только после подтверждённых checks.
+- [x] Передать готовую ветку пользователю; merge/push/deploy выполняются по его указанию. PostgreSQL контейнер остановить, одноразовый volume удалять только с соответствующим разрешением.
 
 ## Первичные справочники
 
@@ -174,3 +174,5 @@ Compose service `postgres` использует `postgres:17`, database/user/pas
 - Final: Ruling: updated_at maintenance and permitted job transitions remain future services — current schema validates row states, not workflow transitions — cost if wrong: a service that omits timestamp/state handling can persist misleading metadata.
 
 Отложенных замечаний review нет. Бизнес-сервисы и orchestration перечислены выше как границы ANY-644, а не незавершённые исправления этой задачи.
+
+Final implementation fix commit: `363a517`. ANY-644 отмечена Done, Nikita / Cycle 9 сохранены. Интеграция в dev, push и production deploy ожидают выбора пользователя; рабочее дерево сохраняется до интеграции. Тестовый PostgreSQL остановлен после проверки.
