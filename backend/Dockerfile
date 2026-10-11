@@ -11,6 +11,8 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 COPY src ./src
+COPY migrations ./migrations
+COPY alembic.ini ./alembic.ini
 RUN uv sync --locked --no-dev --no-editable \
     && groupadd --gid 10001 fitcheck \
     && useradd --uid 10001 --gid fitcheck --no-create-home fitcheck

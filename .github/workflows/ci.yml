@@ -10,7 +10,23 @@ permissions:
 jobs:
   backend:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: fitcheck_test
+          POSTGRES_USER: fitcheck_test
+          POSTGRES_PASSWORD: fitcheck_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fitcheck_test -d fitcheck_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      FITCHECK_TEST_DATABASE_URL: postgresql+psycopg://fitcheck_test:fitcheck_test@127.0.0.1:5432/fitcheck_test
     defaults:
       run:
         working-directory: backend
@@ -29,8 +45,16 @@ jobs:
       - name: Install backend dependencies
         run: uv sync --locked
 
-      - name: Run backend tests
-        run: uv run pytest -q
+      - name: Run backend unit and wheel packaging tests
+        run: uv run pytest -m 'not integration' -q
+
+      - name: Run PostgreSQL integration tests
+        run: uv run pytest -m integration -q
+
+      - name: Check database schema drift
+        env:
+          FITCHECK_DATABASE_URL: postgresql+psycopg://fitcheck_test:fitcheck_test@127.0.0.1:5432/fitcheck_test
+        run: uv run python -m fitcheck_backend.storage.migrate check
 
       - name: Check OpenAPI drift
         run: uv run python scripts/export_openapi.py --check
