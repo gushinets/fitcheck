@@ -7168,6 +7168,7 @@
   },
   "x-fitcheck-legacy-error-status": {
     "blocked_address": 403,
+    "fetch_failed": 502,
     "invalid_output": 502,
     "invalid_url": 400,
     "rate_limit": 429,

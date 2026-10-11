@@ -1,6 +1,7 @@
-from typing import Annotated, Literal
+from typing import Annotated, Literal, get_args
+from types import NoneType
 from urllib.parse import urlsplit
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, StrictFloat, StrictInt, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, StrictFloat, StrictInt, field_validator, model_validator, model_serializer
 from pydantic.alias_generators import to_camel
 
 
@@ -14,6 +15,18 @@ def number(maximum: float):
 
 class DTO(BaseModel):
     model_config = ConfigDict(extra="forbid", alias_generator=to_camel, serialize_by_alias=True)
+
+    @model_serializer(mode="wrap")
+    def omit_absent_fields(self, handler, info):
+        result = handler(self)
+        for name, field in type(self).model_fields.items():
+            # A missing non-nullable field has a sentinel default of None. Explicitly
+            # nullable resource fields must retain their null (clear/no next cursor).
+            if field.default is None and NoneType not in get_args(field.annotation):
+                key = (field.serialization_alias or field.alias or name) if info.by_alias is not False else name
+                if result.get(key) is None:
+                    result.pop(key, None)
+        return result
 
 
 Locale = Literal["en", "ru"]

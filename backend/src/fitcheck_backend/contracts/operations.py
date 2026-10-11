@@ -57,5 +57,5 @@ PLANNED_OPERATIONS = [
 LEGACY_ERROR_STATUS = {
     "rate_limit": 429, "timeout": 504, "invalid_output": 502, "upstream": 502,
     "invalid_url": 400, "blocked_address": 403, "redirect_limit": 502,
-    "unsupported_content": 415, "response_too_large": 413,
+    "unsupported_content": 415, "response_too_large": 413, "fetch_failed": 502,
 }

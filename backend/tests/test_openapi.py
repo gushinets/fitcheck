@@ -88,3 +88,8 @@ def test_export_cli_detects_drift_without_rewriting(tmp_path):
     assert subprocess.run(command+['--check'],env=env,capture_output=True).returncode == 1
     assert output.read_text() == '{}\n'
     assert original.endswith(b'\n')
+
+
+def test_existing_legacy_error_codes_have_http_semantics():
+    mapping = export_openapi(create_app(Settings()))['x-fitcheck-legacy-error-status']
+    assert mapping == {'rate_limit':429, 'timeout':504, 'invalid_output':502, 'upstream':502, 'invalid_url':400, 'blocked_address':403, 'redirect_limit':502, 'unsupported_content':415, 'response_too_large':413, 'fetch_failed':502}

@@ -116,3 +116,26 @@ def test_import_preserves_existing_feedback_timestamp():
 def test_remaining_domain_boundaries(model,key,field,value):
     with pytest.raises(ValidationError):
         model.model_validate({**DATA[key],field:value})
+
+
+def test_default_serialization_omits_absent_but_preserves_nullable_fields():
+    from fitcheck_backend.contracts.resources import HistoryPage
+    vacancy = Vacancy.model_validate(DATA['vacancy'])
+    serialized = vacancy.model_dump(mode='json')
+    assert 'url' not in serialized
+    assert 'hourlyRateMax' not in serialized
+    assert HistoryPage(items=[], nextCursor=None, hasMore=False).model_dump(mode='json') == {'items': [], 'nextCursor': None, 'hasMore': False}
+
+
+def test_nested_http_response_omits_absent_optional_fields():
+    from fastapi.testclient import TestClient
+    from fitcheck_backend.api.app import create_app
+    from fitcheck_backend.config import Settings
+    from fitcheck_backend.contracts.resources import ExtractionResponse
+    app = create_app(Settings())
+    @app.get('/fixture', response_model=ExtractionResponse)
+    async def fixture():
+        return ExtractionResponse(vacancy=Vacancy.model_validate(DATA['vacancy']))
+    response = TestClient(app).get('/fixture')
+    assert response.status_code == 200
+    assert response.json() == {'vacancy': DATA['vacancy']}
