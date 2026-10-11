@@ -29,6 +29,17 @@ function makeEntry(index: number): HistoryEntry {
 }
 
 describe("extension storage", () => {
+  it("opens a legacy profile while discarding monthly income and retaining history", async () => {
+    const entry = makeEntry(1)
+    const store = createExtensionStore(memoryArea({ fitcheckState: {
+      version: 1,
+      profile: { ...defaultProfile, desiredMonthlyIncome: 7500 },
+      history: [entry],
+    } }))
+    const state = await store.load()
+    expect(state.profile).toEqual(defaultProfile)
+    expect(state.history).toEqual([entry])
+  })
   it("normalizes legacy stored profiles with compatibility defaults", async () => {
     const store = createExtensionStore(
       memoryArea({
@@ -51,7 +62,6 @@ describe("extension storage", () => {
       skills: ["Go"],
       experienceYears: 5,
       preferredRate: 80,
-      desiredMonthlyIncome: 0,
       workFormats: ["remote"],
       englishLevel: "Advanced",
     })

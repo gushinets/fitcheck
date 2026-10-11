@@ -17,7 +17,7 @@ describe.skipIf(!enabled)("live skill proficiency scoring", () => {
       profile: {
         specialization: "Automation developer",
         skills: ["Make.com", "n8n"],
-        experienceYears: 3, preferredRate: 25, desiredMonthlyIncome: 4000,
+        experienceYears: 3, preferredRate: 25,
         workFormats: ["remote"], englishLevel: "Advanced",
       },
       job: {

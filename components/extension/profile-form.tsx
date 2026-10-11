@@ -63,7 +63,6 @@ export function ProfileForm({
       experienceYears: Number(experienceYears) || 0,
       preferredRate: Number(preferredRate) || 0,
       ...(initial.rateCurrency ? { rateCurrency: initial.rateCurrency } : {}),
-      desiredMonthlyIncome: initial.desiredMonthlyIncome,
       workFormats: initial.workFormats,
       englishLevel,
     })

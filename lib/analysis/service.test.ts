@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { defaultProfile, detectedJob, goAnalysis } from "@/lib/mock-data"
 import { analyzeJob, AnalysisServiceError } from "./service"
 import type { AnalysisTransport } from "./service"
+import type { AnalysisRequest } from "@/lib/types"
 
 const request = {
   profile: defaultProfile,
@@ -11,6 +12,25 @@ const request = {
 }
 
 describe("analyzeJob", () => {
+  it("ignores legacy monthly income in generation and grounding inputs", async () => {
+    const inputs: unknown[] = []
+    const prompts: unknown[] = []
+    const transport: AnalysisTransport = Object.assign(async (input: AnalysisRequest, prompt: unknown) => {
+      inputs.push(input.profile)
+      prompts.push(prompt)
+      return { ...goAnalysis, strengths: [] }
+    }, { verifyGrounding: async (input: AnalysisRequest) => {
+      inputs.push(input.profile)
+      return true
+    } })
+    const firstProfile = { ...defaultProfile, desiredMonthlyIncome: 1000 }
+    const secondProfile = { ...defaultProfile, desiredMonthlyIncome: 900000 }
+    const first = await analyzeJob({ ...request, profile: firstProfile }, transport)
+    const second = await analyzeJob({ ...request, profile: secondProfile }, transport)
+    expect(first).toEqual(second)
+    expect(prompts[0]).toEqual(prompts[1])
+    for (const profile of inputs) expect(profile).not.toHaveProperty("desiredMonthlyIncome")
+  })
   it("passes grounding rejection reasons to the second generation", async () => {
     const prompts: string[] = []
     const transport: AnalysisTransport = Object.assign(async (_request: unknown, prompt: { instructions: string }) => {

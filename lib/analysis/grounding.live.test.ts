@@ -23,7 +23,7 @@ describe.skipIf(!enabled)("ANY-531 live report grounding", () => {
     }
     const extracted = extractVacancyContent({ finalUrl: "https://www.freelancer.com/projects/test/" + name, contentType: "text/html", body: readFileSync(new URL(`../extraction/__fixtures__/freelancer-${name}.html`, import.meta.url), "utf8") })
     const result = await analyzeJob({
-      profile: { specialization: "Make.com automation specialist", skills: ["Make.com", "n8n"], skillLevels: { "make.com": "primary", n8n: "basic" }, experienceYears: 3, preferredRate: 25, rateCurrency: "USD", desiredMonthlyIncome: 4000, englishLevel: "Advanced", workFormats: ["remote"] },
+      profile: { specialization: "Make.com automation specialist", skills: ["Make.com", "n8n"], skillLevels: { "make.com": "primary", n8n: "basic" }, experienceYears: 3, preferredRate: 25, rateCurrency: "USD", englishLevel: "Advanced", workFormats: ["remote"] },
       job: { id: name, ...extracted }, locale: "en", memory: [],
     }, createDeepSeekTransport({ apiKey: process.env.DEEPSEEK_API_KEY, model: process.env.DEEPSEEK_MODEL }))
     expect(result.strengths.join(" ")).not.toMatch(/ESP32|LoRa|Rhino|Shopify|Czech/)

@@ -64,9 +64,6 @@ export function ProfileEditor({
   const [experience, setExperience] = useState(String(profile?.experienceYears ?? 0))
   const [rate, setRate] = useState(String(profile?.preferredRate ?? 0))
   const [rateCurrency, setRateCurrency] = useState<Currency | "">(profile?.rateCurrency ?? "")
-  const [monthlyIncome, setMonthlyIncome] = useState(
-    String(profile?.desiredMonthlyIncome ?? 0),
-  )
   const [workFormats, setWorkFormats] = useState<WorkFormat[]>(
     profile?.workFormats ?? [],
   )
@@ -91,8 +88,6 @@ export function ProfileEditor({
     experienceYears: Number(experience),
     preferredRate: Number(rate),
     ...(rateCurrency ? { rateCurrency } : {}),
-    desiredMonthlyIncome:
-      monthlyIncome.trim() === "" ? Number.NaN : Number(monthlyIncome),
     workFormats,
     englishLevel,
   }
@@ -245,13 +240,6 @@ export function ProfileEditor({
             <option value="">{copy.currencyUnspecified}</option>
             {currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
           </select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="profile-monthly-income">{copy.desiredMonthlyIncome}</Label>
-          <div className="relative">
-            <Input id="profile-monthly-income" type="number" min={0} step="any" required value={monthlyIncome} onChange={(event) => setMonthlyIncome(event.target.value)} className="pr-20" />
-            <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">{rateCurrency}{copy.perMonth}</span>
-          </div>
         </div>
         <fieldset className="space-y-2 sm:col-span-2">
           <legend className="text-sm font-medium">{copy.workFormats}</legend>

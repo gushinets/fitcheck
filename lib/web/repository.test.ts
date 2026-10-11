@@ -80,9 +80,14 @@ describe("IndexedDB website repository", () => {
 
     expect((await repository.loadSnapshot()).profile).toEqual({
       ...legacyProfile,
-      desiredMonthlyIncome: 0,
       workFormats: ["remote"],
     })
+  })
+
+  it("opens a stored legacy profile while discarding monthly income", async () => {
+    const user = await repository.createUser({ name: "Nikita", email: "me@example.com", password: "password-123" })
+    await writeStoredProfile(databaseName, user.id, { ...defaultProfile, desiredMonthlyIncome: 7500 })
+    expect((await repository.loadSnapshot()).profile).toEqual(defaultProfile)
   })
 
   it("reports duplicate emails and incorrect passwords with typed codes", async () => {

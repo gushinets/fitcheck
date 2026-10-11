@@ -27,7 +27,6 @@ describe("ProfileForm", () => {
           skills: [],
           experienceYears: 0,
           preferredRate: 0,
-          desiredMonthlyIncome: 0,
           workFormats: ["remote"],
           englishLevel: "Intermediate",
         }}

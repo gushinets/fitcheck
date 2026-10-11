@@ -1,5 +1,5 @@
 import type { AnalysisRequest, FitAnalysis } from "@/lib/types"
-import { fitAnalysisSchema } from "./schema"
+import { analysisRequestSchema, fitAnalysisSchema } from "./schema"
 import { normalizeAnalysis } from "./normalize"
 import { buildAnalysisPrompt, type AnalysisPrompt } from "./prompt"
 import { buildStrengthEvidence } from "./grounding"
@@ -31,6 +31,7 @@ export async function analyzeJob(
   request: AnalysisRequest,
   transport: AnalysisTransport,
 ): Promise<FitAnalysis> {
+  request = analysisRequestSchema.parse(request)
   let prompt = buildAnalysisPrompt(request)
   const evidence = buildStrengthEvidence(request)
   for (let attempt = 0; attempt < 2; attempt += 1) {

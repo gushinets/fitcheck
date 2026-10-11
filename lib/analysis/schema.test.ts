@@ -50,6 +50,16 @@ const memory = {
 }
 
 describe("analysis contracts", () => {
+  it("accepts a profile without monthly income", () => {
+    const current = { ...profile }
+    Reflect.deleteProperty(current, "desiredMonthlyIncome")
+    expect(freelancerProfileSchema.safeParse(current).success).toBe(true)
+  })
+
+  it("discards monthly income from legacy analysis requests", () => {
+    const parsed = analysisRequestSchema.parse({ profile, job, locale: "en", memory: [] })
+    expect(parsed.profile).not.toHaveProperty("desiredMonthlyIncome")
+  })
   it.each(["USD", "EUR", "RUB"])("retains %s independently on the profile and task", (currency) => {
     const result = analysisRequestSchema.parse({ profile: { ...profile, rateCurrency: currency }, job: { ...job, budgetCurrency: currency }, locale: "ru", memory: [] })
     expect(result.profile.rateCurrency).toBe(currency)
@@ -96,7 +106,7 @@ describe("analysis contracts", () => {
     expect(
       freelancerProfileSchema.safeParse({
         ...profile,
-        desiredMonthlyIncome: Number.POSITIVE_INFINITY,
+        preferredRate: Number.POSITIVE_INFINITY,
       }).success,
     ).toBe(false)
   })

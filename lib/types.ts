@@ -19,7 +19,6 @@ export interface FreelancerProfile {
   experienceYears: number
   preferredRate: number
   rateCurrency?: Currency
-  desiredMonthlyIncome: number
   workFormats: WorkFormat[]
   englishLevel: EnglishLevel
 }

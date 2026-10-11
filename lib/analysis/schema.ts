@@ -32,7 +32,6 @@ export const freelancerProfileSchema = z.object({
   experienceYears: z.number().min(0).max(60),
   preferredRate: moneySchema,
   rateCurrency: currencySchema.optional(),
-  desiredMonthlyIncome: moneySchema,
   workFormats: z
     .array(workFormatSchema)
     .min(1)
@@ -52,7 +51,6 @@ export function normalizeFreelancerProfile(value: unknown): FreelancerProfile {
   const candidate = value as Partial<FreelancerProfile>
   return freelancerProfileSchema.parse({
     ...candidate,
-    desiredMonthlyIncome: candidate.desiredMonthlyIncome ?? 0,
     workFormats: candidate.workFormats ?? ["remote"],
   })
 }

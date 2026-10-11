@@ -10,7 +10,6 @@ export const defaultProfile: FreelancerProfile = {
   skills: ["Python", "Django", "FastAPI", "PostgreSQL", "Docker"],
   experienceYears: 5,
   preferredRate: 35,
-  desiredMonthlyIncome: 5_000,
   workFormats: ["remote", "hybrid"],
   englishLevel: "Upper Intermediate",
 }

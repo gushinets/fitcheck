@@ -28,17 +28,14 @@ function renderEditor({
 }
 
 describe("ProfileEditor", () => {
-  it.each(["en", "ru"] as const)("uses the selected profile currency for monthly income (%s)", async (locale) => {
-    const user = userEvent.setup()
-    const onSave = vi.fn()
-    render(<ProfileEditor profile={{ ...defaultProfile, desiredMonthlyIncome: 250000, rateCurrency: "EUR" }} locale={locale} copy={webMessages[locale]} onSave={onSave} onSuggestSkills={vi.fn()} />)
-    const income = screen.getByLabelText(webMessages[locale].desiredMonthlyIncome)
-    expect(income.parentElement).toHaveTextContent(locale === "ru" ? "EUR/месяц" : "EUR/month")
-    await user.selectOptions(screen.getByRole("combobox", { name: webMessages[locale].rateCurrency }), "USD")
-    expect(income.parentElement).toHaveTextContent(locale === "ru" ? "USD/месяц" : "USD/month")
-    expect(income).toHaveValue(250000)
-    await user.click(screen.getByRole("button", { name: webMessages[locale].saveChanges }))
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ rateCurrency: "USD", desiredMonthlyIncome: 250000 }))
+  it.each(["en", "ru"] as const)("edits a legacy profile without monthly income (%s)", async (locale) => {
+    let saved: FreelancerProfile | undefined
+    const legacy = { ...defaultProfile, desiredMonthlyIncome: 250000 }
+    render(<ProfileEditor profile={legacy} locale={locale} copy={webMessages[locale]} onSave={(profile) => { saved = profile }} onSuggestSkills={vi.fn()} />)
+    expect(screen.queryByLabelText(/Desired monthly income|Желаемый доход в месяц/)).not.toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole("button", { name: webMessages[locale].saveChanges }))
+    expect(saved).toMatchObject({ preferredRate: defaultProfile.preferredRate })
+    expect(saved).not.toHaveProperty("desiredMonthlyIncome")
   })
   it("restores legacy duplicate skills as a single tag", async () => {
     const onSave = vi.fn()
@@ -218,7 +215,7 @@ describe("ProfileEditor", () => {
     ).toBeEnabled()
   })
 
-  it("saves large rates, monthly income, and selected work formats", async () => {
+  it("saves large rates and selected work formats", async () => {
     const user = userEvent.setup()
     const onSave = vi.fn()
     renderEditor({ onSave })
@@ -232,8 +229,6 @@ describe("ProfileEditor", () => {
     await user.type(screen.getByLabelText("Experience"), "4")
     await user.clear(screen.getByLabelText("Preferred hourly rate"))
     await user.type(screen.getByLabelText("Preferred hourly rate"), "2500")
-    await user.clear(screen.getByLabelText("Desired monthly income"))
-    await user.type(screen.getByLabelText("Desired monthly income"), "7500")
     await user.selectOptions(screen.getByLabelText("English level"), "Advanced")
 
     expect(screen.getByRole("button", { name: "Save profile" })).toBeDisabled()
@@ -246,13 +241,12 @@ describe("ProfileEditor", () => {
       skills: ["TypeScript", "PostgreSQL"],
       experienceYears: 4,
       preferredRate: 2500,
-      desiredMonthlyIncome: 7500,
       workFormats: ["remote", "hybrid"],
       englishLevel: "Advanced",
     })
   })
 
-  it("saves fractional hourly rate and monthly income values", async () => {
+  it("saves fractional hourly rates", async () => {
     const user = userEvent.setup()
     const onSave = vi.fn()
     renderEditor({ onSave })
@@ -264,8 +258,6 @@ describe("ProfileEditor", () => {
     await user.type(screen.getByLabelText("Skills"), "TypeScript")
     await user.clear(screen.getByLabelText("Preferred hourly rate"))
     await user.type(screen.getByLabelText("Preferred hourly rate"), "45.5")
-    await user.clear(screen.getByLabelText("Desired monthly income"))
-    await user.type(screen.getByLabelText("Desired monthly income"), "7500.25")
     await user.click(screen.getByRole("checkbox", { name: "Remote" }))
 
     expect(screen.getByRole("button", { name: "Save profile" })).toBeEnabled()
@@ -276,42 +268,20 @@ describe("ProfileEditor", () => {
       skills: ["TypeScript"],
       experienceYears: 0,
       preferredRate: 45.5,
-      desiredMonthlyIncome: 7500.25,
       workFormats: ["remote"],
       englishLevel: "Intermediate",
     })
   })
 
-  it("keeps save disabled when monthly income is blank", async () => {
-    const user = userEvent.setup()
-    renderEditor()
-
-    await user.type(
-      screen.getByLabelText("Specialization"),
-      "Backend Developer",
-    )
-    await user.type(screen.getByLabelText("Skills"), "TypeScript")
-    await user.click(screen.getByRole("checkbox", { name: "Remote" }))
-
-    const monthlyIncome = screen.getByLabelText("Desired monthly income")
-    expect(screen.getByRole("button", { name: "Save profile" })).toBeEnabled()
-
-    await user.clear(monthlyIncome)
-
-    expect(screen.getByRole("button", { name: "Save profile" })).toBeDisabled()
-    expect(monthlyIncome).toBeRequired()
-  })
-
   it.each([
-    ["en" as const, "/hour", "/month", "Work formats", "Office"],
-    ["ru" as const, "/час", "/месяц", "Формат работы", "Офис"],
+    ["en" as const, "/hour", "Work formats", "Office"],
+    ["ru" as const, "/час", "Формат работы", "Офис"],
   ])(
     "renders locale-specific currency and work-format labels for %s",
-    (locale, hourlyCurrency, monthlyCurrency, workFormats, office) => {
+    (locale, hourlyCurrency, workFormats, office) => {
       renderEditor({ locale })
 
       expect(screen.getByText(hourlyCurrency)).toBeVisible()
-      expect(screen.getByText(monthlyCurrency)).toBeVisible()
       expect(screen.getByText(workFormats)).toBeVisible()
       expect(screen.getByRole("checkbox", { name: office })).toBeVisible()
     },
