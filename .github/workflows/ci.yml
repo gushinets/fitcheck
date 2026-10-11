@@ -8,6 +8,33 @@ permissions:
   contents: read
 
 jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.7"
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install backend dependencies
+        run: uv sync --locked
+
+      - name: Run backend tests
+        run: uv run pytest -q
+
+      - name: Check OpenAPI drift
+        run: uv run python scripts/export_openapi.py --check
+
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -29,6 +56,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Check backend TypeScript drift
+        run: pnpm backend:types:check
 
       - name: Run tests
         run: pnpm test

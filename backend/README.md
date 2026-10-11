@@ -35,3 +35,9 @@ Committed `../contracts/fitcheck.openapi.json` is the full roadmap contract. Liv
 Cookie mutations require verified Origin and X-CSRF-Token when implemented; extension login uses exact redirect allowlist and PKCE S256. Idempotency-Key is required by contracts for job starts, reanalysis, guest claim and import. Identity, ownership, quota and atomic admission enforcement belong to the annotated implementing tasks.
 
 From the repository root, `pnpm backend:types` regenerates TypeScript and `pnpm backend:types:check` verifies drift without writing. Generated types live in lib/backend/generated/schema.ts; edit Python DTOs instead. lib/backend/client.ts is a transport factory with mandatory success validation, structured errors, AbortSignal and configurable credentials. Its base URL is /backend/v1 for future web proxy or an API origin ending /v1 for extension use. Route arguments are relative to that base; external URLs/traversal are rejected. Redirects and automatic mutation retries are disabled. Existing UI does not import this transport yet.
+
+## Verification and rollout
+
+CI runs backend pytest and OpenAPI drift with Python 3.12/uv 0.12.7, plus generated TypeScript drift and the existing frontend test/typecheck/lint/Webpack/extension builds. For a fresh Node install run `pnpm install --frozen-lockfile` (postinstall prepares WXT types); `pnpm exec next typegen` generates Next route declarations when needed.
+
+Foundation ships no database, business auth or LLM routes. No Dokploy routing/secrets/applications change here. At ANY-653 the web proxy `/backend/*` and extension origin/identity configuration connect implemented API operations; old LLM routes must enforce the same policies or be disabled. At ANY-654 deploy API/worker/PostgreSQL and a single migration process, extend readiness to real dependencies and verify backup/restore.
