@@ -41,3 +41,14 @@ From the repository root, `pnpm backend:types` regenerates TypeScript and `pnpm 
 CI runs backend pytest and OpenAPI drift with Python 3.12/uv 0.12.7, plus generated TypeScript drift and the existing frontend test/typecheck/lint/Webpack/extension builds. For a fresh Node install run `pnpm install --frozen-lockfile` (postinstall prepares WXT types); `pnpm exec next typegen` generates Next route declarations when needed.
 
 Foundation ships no database, business auth or LLM routes. No Dokploy routing/secrets/applications change here. At ANY-653 the web proxy `/backend/*` and extension origin/identity configuration connect implemented API operations; old LLM routes must enforce the same policies or be disabled. At ANY-654 deploy API/worker/PostgreSQL and a single migration process, extend readiness to real dependencies and verify backup/restore.
+
+## Container deployment
+
+The user requested deployment after completing foundation. Build from the repository root:
+
+```sh
+docker build -f backend/Dockerfile -t fitcheck-api backend
+docker run --rm -p 8000:8000 fitcheck-api
+```
+
+The image installs locked production dependencies, runs as UID 10001, binds port 8000 and checks /health/ready. Build context is backend/; dotenv, local environments and test files are excluded. Dokploy uses repository fitcheck, branch dev, build path /, Dockerfile backend/Dockerfile and context backend. API is a separate application in FitCheck development, with its own domain and exact allowed web origin. It remains a foundation service: business routes and UI integration are later tasks.
