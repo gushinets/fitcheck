@@ -1,11 +1,16 @@
 from typing import Literal
 from urllib.parse import urlsplit
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="FITCHECK_", extra="forbid")
+    model_config = SettingsConfigDict(env_prefix="FITCHECK_", extra="forbid", hide_input_in_errors=True)
+    database_url: SecretStr | None = None
+    pool_size: int = Field(default=2, ge=1, le=20)
+    max_overflow: int = Field(default=3, ge=0, le=20)
+    pool_timeout_seconds: int = Field(default=5, ge=1, le=60)
+    statement_timeout_ms: int = Field(default=15000, ge=1, le=300000)
     env: Literal["dev", "test", "production"] = "dev"
     host: str = Field(default="127.0.0.1", min_length=1)
     port: int = Field(default=8000, ge=1, le=65535)
