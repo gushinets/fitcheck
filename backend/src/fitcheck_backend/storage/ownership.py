@@ -28,7 +28,7 @@ def transfer_guest_analyses(session: Session, guest_owner_id: UUID, user_owner_i
             kinds = {owner.id: owner.kind for owner in owners}
             if kinds.get(guest_owner_id) != "guest" or kinds.get(user_owner_id) != "user":
                 raise OwnershipConflict("Expected a guest and account owner")
-            guest = session.scalar(select(Guest).where(Guest.owner_id==guest_owner_id).with_for_update())
+            guest = session.scalar(select(Guest).where(Guest.owner_id==guest_owner_id).with_for_update().execution_options(populate_existing=True))
             user = session.scalar(select(User).where(User.owner_id==user_owner_id))
             if guest is None or user is None:
                 raise OwnershipConflict("Identity is unavailable")
@@ -36,7 +36,7 @@ def transfer_guest_analyses(session: Session, guest_owner_id: UUID, user_owner_i
                 if guest.claimed_by_user_id == user.id:
                     return 0
                 raise OwnershipConflict("Guest already belongs to another account")
-            jobs = session.scalars(select(Job).where(Job.owner_id==guest_owner_id).with_for_update()).all()
+            jobs = session.scalars(select(Job).where(Job.owner_id==guest_owner_id).with_for_update().execution_options(populate_existing=True)).all()
             if any(job.status not in {"succeeded", "failed"} for job in jobs):
                 raise OwnershipConflict("Guest jobs are still active")
             if session.scalar(select(QuotaReservation.id).where(QuotaReservation.owner_id==guest_owner_id, QuotaReservation.status=="reserved").limit(1)) is not None:

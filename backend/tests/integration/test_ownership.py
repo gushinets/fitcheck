@@ -119,3 +119,52 @@ def test_guest_analysis_cannot_use_account_input(db_session, storage_factory):
     vacancy = json.loads((Path(__file__).parents[1]/"fixtures/domain.json").read_text())["vacancy"]
     with pytest.raises(OwnerUnavailable):
         get_or_create_job(db_session, guest[0].id, "analysis", "wrong-mode", {"mode":"account", "profileRevision":"1", "vacancy":vacancy, "locale":"en"})
+
+
+def test_cached_guest_cannot_create_job_after_other_session_claim(engine, storage_factory):
+    from sqlalchemy.orm import Session
+    from fitcheck_backend.storage.ownership import transfer_guest_analyses
+    from fitcheck_backend.storage.job_repository import get_or_create_job, OwnerUnavailable
+    with Session(engine, expire_on_commit=False) as stale:
+        guest = storage_factory(stale, kind="guest")
+        user = storage_factory(stale)
+        stale.commit()
+        stale.refresh(guest[1])
+        with unit_of_work(engine) as fresh:
+            transfer_guest_analyses(fresh, guest[0].id, user[0].id)
+        assert guest[1].claimed_by_user_id is None  # Deliberately retained stale ORM object.
+        with pytest.raises(OwnerUnavailable):
+            get_or_create_job(stale, guest[0].id, "skill_suggestions", "stale-session", {"locale":"ru", "specialization":"Frontend"})
+
+
+def test_cached_guest_cannot_be_reclaimed_by_another_account(engine, storage_factory):
+    from sqlalchemy.orm import Session
+    from fitcheck_backend.storage.ownership import transfer_guest_analyses, OwnershipConflict
+    with Session(engine, expire_on_commit=False) as stale:
+        guest = storage_factory(stale, kind="guest")
+        first = storage_factory(stale)
+        second = storage_factory(stale)
+        stale.commit()
+        stale.refresh(guest[1])
+        with unit_of_work(engine) as fresh:
+            transfer_guest_analyses(fresh, guest[0].id, first[0].id)
+        assert guest[1].claimed_by_user_id is None
+        with pytest.raises(OwnershipConflict):
+            transfer_guest_analyses(stale, guest[0].id, second[0].id)
+        stale.rollback()
+        with unit_of_work(engine) as fresh:
+            assert fresh.scalar(select(Guest.claimed_by_user_id).where(Guest.owner_id==guest[0].id)) == first[1].id
+
+
+def test_claim_uses_current_terminal_job_state(engine, storage_factory):
+    from sqlalchemy.orm import Session
+    from fitcheck_backend.storage.ownership import transfer_guest_analyses
+    with Session(engine, expire_on_commit=False) as stale:
+        guest = storage_factory(stale, kind="guest", terminal=False)
+        user = storage_factory(stale)
+        stale.commit()
+        stale.refresh(guest[2])
+        with unit_of_work(engine) as fresh:
+            fresh.execute(update(Job).where(Job.id==guest[2].id).values(status="succeeded", finished_at=utcnow()))
+        assert guest[2].status == "queued"
+        assert transfer_guest_analyses(stale, guest[0].id, user[0].id) == 1

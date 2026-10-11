@@ -10,9 +10,12 @@ pytestmark = pytest.mark.integration
 def test_wrong_owner_link_rejected(db_session, storage_factory):
     a = storage_factory(db_session)
     b = storage_factory(db_session)
-    with pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError) as caught:
         with db_session.begin_nested():
-            db_session.execute(update(AnalysisRecord).where(AnalysisRecord.id == a[4].id).values(vacancy_id=b[3].id))
+            db_session.add(AnalysisRecord(owner_id=a[0].id, vacancy_id=b[3].id, snapshot={}, analysis={}))
+            db_session.flush()
+    assert caught.value.orig.sqlstate == "23503"
+    assert caught.value.orig.diag.constraint_name == "fk_analyses_vacancy_id_vacancies"
 
 
 def test_wrong_job_type_and_partial_null_rejected(db_session, storage_factory):

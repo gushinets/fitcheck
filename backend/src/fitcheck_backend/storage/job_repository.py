@@ -31,7 +31,7 @@ def get_or_create_job(session: Session, owner_id: UUID, job_type: Literal["analy
     if owner is None:
         raise OwnerUnavailable("Owner is unavailable")
     if owner.kind == "guest":
-        guest = session.scalar(select(Guest).where(Guest.owner_id==owner_id))
+        guest = session.scalar(select(Guest).where(Guest.owner_id==owner_id).execution_options(populate_existing=True))
         if guest is None or guest.claimed_by_user_id is not None:
             raise OwnerUnavailable("Guest session has already been claimed")
     if job_type == "analysis" and payload["mode"] != ("guest" if owner.kind == "guest" else "account"):

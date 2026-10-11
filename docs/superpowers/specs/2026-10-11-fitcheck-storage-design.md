@@ -84,7 +84,7 @@ Alembic живёт в `backend/migrations`, version table принадлежит
 
 ## Retention и удаление
 
-Предлагаемая политика для согласования: account profiles/history сохраняются до удаления аккаунта; guest данные — 30 дней после expires_at, неприсвоенные аккаунту; expired/revoked sessions и consumed/expired auth tokens — 7 дней после срока действия/отзыва; terminal jobs и idempotency записи — не менее 30 дней после завершения; обезличенный технический provider ledger — 90 дней.
+Согласованная политика: account profiles/history сохраняются до удаления аккаунта; guest данные — 30 дней после expires_at, неприсвоенные аккаунту; expired/revoked sessions и consumed/expired auth tokens — 7 дней после срока действия/отзыва; terminal jobs и idempotency записи — не менее 30 дней после завершения; обезличенный технический provider ledger — 90 дней.
 
 Удаление аккаунта/неприсвоенного гостя удаляет identity и все личные данные транзакционно через owners и согласованные cascades. Claimed guest не очищается как неприсвоенный. Analyses, snapshot и revisions не сохраняются бесконечно после удаления владельца. Ledger при удалении очищает owner/job ссылки и сохраняет только технические метрики без текста, токенов доступа или request identifiers, связывающих запись с пользователем. FK ledger используют SET NULL; состав nullable ссылок и CHECK явно допускает обезличенное состояние.
 

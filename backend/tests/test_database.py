@@ -63,3 +63,42 @@ def test_unit_of_work_rolls_back_and_closes(monkeypatch):
     with database.unit_of_work(object()):
         pass
     assert events == ["commit", "close"]
+
+
+def test_tls_query_secret_never_appears_in_engine_repr():
+    from fitcheck_backend.storage.database import create_engine
+    engine = create_engine(Settings(database_url="postgresql://user:normal@localhost/db?sslpassword=secret-client-key-passphrase&sslmode=require"))
+    try:
+        assert "secret-client-key-passphrase" not in repr(engine)
+        assert "sslpassword" not in engine.url.query
+        assert engine.url.query["sslmode"] == "require"
+    finally:
+        engine.dispose()
+
+
+def test_malformed_password_authority_rejected_without_disclosure():
+    from fitcheck_backend.storage.database import create_engine, StorageConfigurationError
+    with pytest.raises(StorageConfigurationError) as caught:
+        create_engine(Settings(database_url="postgresql://user:pass@word@localhost/db"))
+    assert "word" not in str(caught.value)
+
+
+def test_encoded_password_special_characters_are_safe():
+    from fitcheck_backend.storage.database import create_engine
+    engine = create_engine(Settings(database_url="postgresql://user:pass%40word%3Asecret%2F@localhost/db?sslmode=require"))
+    try:
+        assert engine.url.password == "pass@word:secret/"
+        assert "pass@word" not in repr(engine) and "secret" not in repr(engine)
+    finally:
+        engine.dispose()
+
+
+def test_malformed_dsn_cli_is_safe():
+    import os
+    import subprocess
+    import sys
+    env = dict(os.environ, FITCHECK_DATABASE_URL="postgresql://user:pass@word@localhost/db")
+    result = subprocess.run([sys.executable,"-m","fitcheck_backend.storage.migrate","upgrade"], env=env, capture_output=True, text=True)
+    assert result.returncode == 1
+    assert "word" not in result.stderr and "pass" not in result.stderr
+    assert "Invalid PostgreSQL database configuration" in result.stderr
