@@ -29,6 +29,8 @@ pnpm-debug.log*
 /.vercel/
 /.idea/
 /.vscode/
+/.worktrees/
+/.superpowers/
 *.swp
 *.swo
 
