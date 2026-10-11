@@ -28,10 +28,10 @@ class Job(OwnedMixin, CreatedMixin, IdentityMixin, Base):
     lease_expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     started_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
-    error: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    output: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    error: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True), nullable=True)
+    output: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True), nullable=True)
     __table_args__ = (
-        UniqueConstraint("owner_id", "type", "idempotency_key"), UniqueConstraint("id", "owner_id"), UniqueConstraint("id", "owner_id", "type"),
+        UniqueConstraint("owner_id", "type", "idempotency_key"), UniqueConstraint("id", "owner_id", name="uq_jobs_id_owner"), UniqueConstraint("id", "owner_id", "type", name="uq_jobs_id_owner_type"),
         CheckConstraint("type IN ('analysis','skill_suggestions','import')", name="type"),
         CheckConstraint("status IN ('queued','running','succeeded','failed')", name="status"),
         CheckConstraint("jsonb_typeof(input) = 'object'", name="input_object"),

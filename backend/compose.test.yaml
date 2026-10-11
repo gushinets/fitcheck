@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: fitcheck_test
+      POSTGRES_USER: fitcheck_test
+      POSTGRES_PASSWORD: fitcheck_test
+    ports:
+      - "127.0.0.1:55464:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fitcheck_test -d fitcheck_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
