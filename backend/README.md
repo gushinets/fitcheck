@@ -21,3 +21,15 @@ Database and migrations are ANY-644, authentication ANY-645, profiles ANY-646, e
 The HTTP boundary generates X-Request-ID; client-supplied IDs are ignored. Errors are `{error:{code,message,requestId,details}}`; details contain field locations/codes only. Validation errors use 400, 404/405 share the envelope, unexpected exceptions use a safe 500. Actual body bytes are limited even without/trusting Content-Length; mutation bodies must use application/json. Logs contain request ID/method/path/status only; uvicorn access logging is disabled to avoid query logging.
 
 CORS allows only configured origins and explicit methods/headers. Web http(s) origins allow credentials; extension origins do not. Cross-origin rejection is not authorization or CSRF protection; business identity/ownership and cookie mutation Origin/CSRF checks arrive in ANY-645.
+
+## API contracts
+
+```sh
+# From backend/
+uv run python scripts/export_openapi.py
+uv run python scripts/export_openapi.py --check
+```
+
+Committed `../contracts/fitcheck.openapi.json` is the full roadmap contract. Live `/openapi.json` contains only implemented health routes. Full-export business routes are annotated `x-fitcheck-implementation: planned` and `x-fitcheck-owner-task`; they return 404 in the current runtime. Export requires no environment/DB/provider setup. DTOs use camelCase, reject unknown new-request fields, and omit missing optional values (explicit null only for clearable resources). Legacy import accepts and discards desiredMonthlyIncome and never accepts local passwords/tokens.
+
+Cookie mutations require verified Origin and X-CSRF-Token when implemented; extension login uses exact redirect allowlist and PKCE S256. Idempotency-Key is required by contracts for job starts, reanalysis, guest claim and import. Identity, ownership, quota and atomic admission enforcement belong to the annotated implementing tasks.

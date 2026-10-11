@@ -1,0 +1,90 @@
+import copy
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+from fastapi.testclient import TestClient
+from openapi_spec_validator import validate
+from fitcheck_backend.api.app import create_app
+from fitcheck_backend.config import Settings
+from fitcheck_backend.contracts.openapi import export_openapi
+
+EXPECTED = {
+    '/v1/auth/register': {'post'}, '/v1/auth/login': {'post'}, '/v1/auth/logout': {'post'},
+    '/v1/auth/verify-email': {'post'}, '/v1/auth/password-reset/request': {'post'}, '/v1/auth/password-reset/confirm': {'post'},
+    '/v1/me': {'get','delete'}, '/v1/auth/extension/authorize': {'post'}, '/v1/auth/extension/token': {'post'}, '/v1/auth/extension/revoke': {'post'},
+    '/v1/profile': {'get','put'}, '/v1/preferences': {'get','put'}, '/v1/draft': {'get','put','delete'},
+    '/v1/extractions': {'post'}, '/v1/skill-suggestion-jobs': {'post'}, '/v1/analysis-jobs': {'post'}, '/v1/jobs/{jobId}': {'get'},
+    '/v1/analyses/{analysisId}': {'get'}, '/v1/history': {'get','delete'}, '/v1/analyses/{analysisId}/feedback': {'put'},
+    '/v1/analyses/{analysisId}/application-status': {'put'}, '/v1/analyses/{analysisId}/reanalyses': {'post'},
+    '/v1/guest-sessions': {'post'}, '/v1/quota': {'get'}, '/v1/guest-claims': {'post'}, '/v1/import-jobs': {'post'}, '/v1/import-jobs/{importId}': {'get'},
+}
+
+
+def test_complete_valid_contract_and_live_route_separation():
+    app = create_app(Settings())
+    document = export_openapi(app)
+    validate(document)
+    ids = []
+    for path, methods in EXPECTED.items():
+        assert set(document['paths'][path]) == methods
+        for method in methods:
+            operation = document['paths'][path][method]
+            assert operation['x-fitcheck-implementation'] == 'planned'
+            assert operation['x-fitcheck-owner-task'].startswith('ANY-')
+            ids.append(operation['operationId'])
+            for status in ['400','401','403','404','409','413','415','429','500','502','503','504']:
+                assert operation['responses'][status]['content']['application/json']['schema']['$ref'].endswith('/ErrorEnvelope')
+            response = getattr(TestClient(app), method)(path.replace('{jobId}', 'j').replace('{analysisId}', 'a').replace('{importId}', 'i'))
+            assert response.status_code == 404
+    assert len(ids) == len(set(ids))
+    assert set(app.openapi()['paths']) == {'/health/live','/health/ready'}
+    for path in ['/health/live','/health/ready']:
+        assert document['paths'][path]['get']['x-fitcheck-implementation'] == 'implemented'
+        assert document['paths'][path]['get']['responses'] == app.openapi()['paths'][path]['get']['responses']
+    assert document['components']['schemas']['HealthResponse'] == app.openapi()['components']['schemas']['HealthResponse']
+
+
+def test_security_idempotency_and_pagination():
+    document = export_openapi(create_app(Settings()))
+    profile = document['paths']['/v1/profile']['put']
+    assert profile['security'] == [{'webSession': []}, {'extensionBearer': []}]
+    assert profile['x-fitcheck-cookie-mutation'] == {'originRequired': True, 'csrfHeader': 'X-CSRF-Token'}
+    authorize = document['paths']['/v1/auth/extension/authorize']['post']
+    assert authorize['security'] == [{'webSession': []}]
+    assert authorize['x-fitcheck-pkce'] == 'S256; exact configured extension redirect; one-time code'
+    claim = document['paths']['/v1/guest-claims']['post']
+    assert claim['security'] == [{'webSession': [], 'guestSession': []}]
+    for path in ['/v1/analysis-jobs','/v1/skill-suggestion-jobs','/v1/import-jobs','/v1/guest-claims','/v1/analyses/{analysisId}/reanalyses']:
+        assert any(p['name'] == 'Idempotency-Key' and p['required'] for p in document['paths'][path]['post']['parameters'])
+    history = document['paths']['/v1/history']['get']
+    params = {p['name']: p for p in history['parameters']}
+    assert params['limit']['schema']['minimum'] == 1
+    assert params['limit']['schema']['maximum'] == 100
+    assert params['verdict']['schema']['enum'] == ['GO','NO_GO']
+    assert 'desiredMonthlyIncome' not in document['components']['schemas']['FreelancerProfile']['properties']
+    assert document['components']['schemas']['FreelancerProfile']['properties']['rateCurrency']['enum'] == ['USD','EUR','RUB']
+
+
+def test_export_is_deterministic_and_config_independent(monkeypatch):
+    document = export_openapi(create_app(Settings()))
+    monkeypatch.setenv('FITCHECK_PORT', 'invalid')
+    monkeypatch.setenv('DEEPSEEK_API_KEY','secret-should-not-appear')
+    assert export_openapi(create_app(Settings(port=8000))) == document
+    assert 'secret-should-not-appear' not in json.dumps(document)
+
+
+def test_export_cli_detects_drift_without_rewriting(tmp_path):
+    backend = Path(__file__).resolve().parents[1]
+    output = tmp_path / 'contract.json'
+    env = {**os.environ, 'PYTHONPATH': str(backend / 'src'), 'FITCHECK_PORT':'invalid'}
+    command = [sys.executable, str(backend / 'scripts/export_openapi.py'), '--output', str(output)]
+    first = subprocess.run(command, env=env, capture_output=True)
+    assert first.returncode == 0, first.stderr.decode()
+    original = output.read_bytes()
+    assert subprocess.run(command+['--check'],env=env,capture_output=True).returncode == 0
+    output.write_text('{}\n')
+    assert subprocess.run(command+['--check'],env=env,capture_output=True).returncode == 1
+    assert output.read_text() == '{}\n'
+    assert original.endswith(b'\n')
