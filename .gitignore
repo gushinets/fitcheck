@@ -41,3 +41,8 @@ Thumbs.db
 # Packaged extensions and local certificates
 *.zip
 *.pem
+
+# Python backend
+.venv/
+__pycache__/
+.pytest_cache/
