@@ -63,12 +63,14 @@ def test_http_pending_verified_extension_and_deletion(http_auth):
     result=register(c)
     h={'Origin':WEB,'X-CSRF-Token':result.json()['csrfToken']}
     challenge=b64(hashlib.sha256(('v'*43).encode()).digest())
-    body={'redirectUri':REDIRECT,'codeChallenge':challenge,'codeChallengeMethod':'S256','state':'state'}
+    body={'redirectUri':REDIRECT,'codeChallenge':challenge,'codeChallengeMethod':'S256','state':' state '}
     assert c.post('/v1/auth/extension/authorize',headers=h,json=body).status_code==403
     assert c.get('/v1/auth/verify-email',params={'token':a.mailer.messages[-1].token}).status_code==405
     assert c.post('/v1/auth/verify-email',headers=h,json={'token':a.mailer.messages[-1].token}).status_code==204
     assert c.get('/v1/me').json()['emailVerified']
-    code=c.post('/v1/auth/extension/authorize',headers=h,json=body).json()['code']
+    authorization=c.post('/v1/auth/extension/authorize',headers=h,json=body).json()
+    assert authorization['state']==' state '
+    code=authorization['code']
     web_cookie=c.cookies.get('__Host-fitcheck_session')
     c.cookies.clear()
     issued=c.post('/v1/auth/extension/token',headers={'Origin':EXT},json={'code':code,'codeVerifier':'v'*43,'redirectUri':REDIRECT})

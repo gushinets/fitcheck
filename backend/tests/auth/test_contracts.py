@@ -26,3 +26,12 @@ def test_password_schema_is_write_only():
     assert RegistrationCredentials.model_json_schema()['properties']['password']['writeOnly']
     with pytest.raises(ValidationError):
         LoginCredentials(email='a@example.com', password='x', ownerId='forged')
+
+
+def test_extension_opaque_state_is_echoed_exactly():
+    from fitcheck_backend.contracts.resources import ExtensionAuthorize, ExtensionCode
+    value = ' state with whitespace '
+    request = ExtensionAuthorize(redirectUri='https://'+'a'*32+'.chromiumapp.org/callback',
+        codeChallenge='a'*43,codeChallengeMethod='S256',state=value)
+    assert request.state == value
+    assert ExtensionCode(code='a'*43,state=value,expiresIn=120).model_dump()['state'] == value

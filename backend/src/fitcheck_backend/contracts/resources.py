@@ -188,12 +188,12 @@ class ExtensionAuthorize(DTO):
     redirect_uri: PublicUrl
     code_challenge: Annotated[str, Field(strict=True, pattern=r"^[A-Za-z0-9_-]{43}$")]
     code_challenge_method: Literal["S256"]
-    state: text(200)
+    state: Annotated[str, Field(strict=True, min_length=1, max_length=200)]
 
 
 class ExtensionCode(DTO):
     code: text(1024)
-    state: text(200)
+    state: Annotated[str, Field(strict=True, min_length=1, max_length=200)]
     expires_in: Annotated[int, Field(strict=True, ge=1)]
 
 
