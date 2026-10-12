@@ -66,3 +66,34 @@ def storage_factory():
         session.flush()
         return owner, identity, job, vacancy, analysis, annotation
     return build
+
+
+@pytest.fixture
+def auth_components(engine):
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+    from argon2 import PasswordHasher
+    from fitcheck_backend.auth.crypto import AuthCrypto
+    from fitcheck_backend.auth.passwords import PasswordCodec
+    from fitcheck_backend.auth.rate_limit import AuthRateLimiter
+    from fitcheck_backend.auth.mail import MailDeliveryError
+    from fitcheck_backend.auth.service import AuthService
+    now = [datetime(2026, 1, 1, tzinfo=timezone.utc)]
+    clock = lambda: now[0]
+    crypto = AuthCrypto(b'x' * 32, clock)
+    passwords = PasswordCodec(hasher=PasswordHasher(memory_cost=8192, time_cost=1, parallelism=1))
+    limiter = AuthRateLimiter(engine, crypto, clock)
+    class CapturingMailer:
+        enabled = True
+        fail = False
+        def __init__(self):
+            self.messages = []
+        def available(self):
+            return self.enabled
+        def send(self, message):
+            if self.fail:
+                raise MailDeliveryError()
+            self.messages.append(message)
+    mailer = CapturingMailer()
+    service = AuthService(engine, crypto, passwords, limiter, mailer, clock)
+    return SimpleNamespace(engine=engine, now=now, clock=clock, crypto=crypto, passwords=passwords, limiter=limiter, mailer=mailer, service=service)
