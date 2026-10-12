@@ -41,11 +41,8 @@ class AuthRepository:
             AuthSession.token_digest == digest, AuthSession.kind == kind, AuthSession.expires_at > now,
             AuthSession.revoked_at.is_(None)).execution_options(populate_existing=True))
 
-    def create_token(self, user: User, purpose: str, digest: str, expires_at: datetime, *,
-                     issued_session_id: UUID | None = None, code_challenge: str | None = None,
-                     redirect_uri: str | None = None) -> AuthToken:
-        value = AuthToken(user_id=user.id, purpose=purpose, token_digest=digest, expires_at=expires_at,
-                          issued_session_id=issued_session_id, code_challenge=code_challenge, redirect_uri=redirect_uri)
+    def create_token(self, user: User, purpose: str, digest: str, expires_at: datetime) -> AuthToken:
+        value = AuthToken(user_id=user.id, purpose=purpose, token_digest=digest, expires_at=expires_at)
         self.session.add(value)
         self.session.flush()
         return value

@@ -63,5 +63,3 @@ FITCHECK_RUN_LIVE_EVAL=1 node --env-file=.env.local node_modules/vitest/vitest.m
 Deploy the Next.js application to a runtime that supports route handlers. Configure `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL`, and `ALLOWED_ORIGINS` with the production website origin, for example `https://fitcheck.example.com`.
 
 The login is intentionally local-only for product testing: there is no email confirmation, remote session, cross-device synchronization, subscription, or server database. Clearing browser site data removes local FitCheck data. Use the profile page's **Delete local account** action to remove one account and all of its associated local data.
-
-The legacy Chrome extension source remains in the repository but is not part of the current website product flow.

@@ -82,31 +82,3 @@ export interface AnalysisRequest {
   locale: Locale
   memory: CalibrationEntry[]
 }
-
-export interface HistoryEntry {
-  id: string
-  jobTitle: string
-  score: number
-  status: FitStatus
-  timestamp: string
-  createdAt: string
-  analysis: FitAnalysis
-  job: Job
-  feedback?: AnalysisFeedback
-}
-
-/** Which section of the extension the user is viewing. */
-export type Tab = "analyze" | "history" | "profile"
-
-/**
- * The state of the "analyze" flow. Kept separate from navigation so the
- * primary decision is always the first thing rendered.
- */
-export type AnalyzeState =
-  | "ready"
-  | "loading"
-  | "result"
-  | "details"
-  | "feedback"
-  | "unsupported"
-  | "error"

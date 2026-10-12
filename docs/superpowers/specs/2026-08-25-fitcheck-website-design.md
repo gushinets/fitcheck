@@ -1,5 +1,7 @@
 # FitCheck Website — Design Specification
 
+> **Scope update — 2026-10-12:** The user chose FitCheck as a website-only product and authorized removal of the extension code, builds, and authentication. This document is a historical implementation record; completed steps, test results, and migration history remain evidence of the work at that time. Extension steps and compatibility requirements are superseded and must not be executed or restored. Future work uses website cookie sessions with web-origin CSRF, website IndexedDB as the legacy import source, independent same-account sessions across devices, and website/backend CI. See the current backend foundation, storage, and authentication specifications.
+
 ## Purpose
 
 Turn the existing FitCheck popup-style preview into a testable web product. A potential customer must be able to create a local account, define a real freelancer profile, submit a real vacancy as text or a public URL, receive a real LLM analysis, revisit previous results, and switch the interface between Russian and English.

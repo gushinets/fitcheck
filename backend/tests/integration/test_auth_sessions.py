@@ -53,7 +53,7 @@ def test_resolve_reads_current_verification_revocation_and_expiry(auth_component
         s.execute(update(User).values(email_verified_at=a.now[0]))
     assert a.service.resolve(issued.token, 'web').email_verified
     with pytest.raises(AuthError):
-        a.service.resolve(issued.token, 'extension')
+        a.service.resolve(issued.token, 'invalid')
     a.now[0] += timedelta(days=7)
     with pytest.raises(AuthError):
         a.service.resolve(issued.token, 'web')

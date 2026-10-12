@@ -6,10 +6,6 @@
 /.next/
 /out/
 
-# WXT extension output
-/.wxt/
-/.output/
-
 # Local environment and secrets
 .env*
 !.env.example
@@ -39,8 +35,7 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Packaged extensions and local certificates
-*.zip
+# Local certificates
 *.pem
 
 # Python backend

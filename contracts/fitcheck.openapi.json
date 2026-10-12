@@ -450,129 +450,6 @@
         "title": "ErrorEnvelope",
         "type": "object"
       },
-      "ExtensionAuthorize": {
-        "additionalProperties": false,
-        "properties": {
-          "codeChallenge": {
-            "pattern": "^[A-Za-z0-9_-]{43}$",
-            "title": "Codechallenge",
-            "type": "string"
-          },
-          "codeChallengeMethod": {
-            "const": "S256",
-            "title": "Codechallengemethod",
-            "type": "string"
-          },
-          "redirectUri": {
-            "maxLength": 2000,
-            "minLength": 1,
-            "title": "Redirecturi",
-            "type": "string"
-          },
-          "state": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "State",
-            "type": "string"
-          }
-        },
-        "required": [
-          "redirectUri",
-          "codeChallenge",
-          "codeChallengeMethod",
-          "state"
-        ],
-        "title": "ExtensionAuthorize",
-        "type": "object"
-      },
-      "ExtensionCode": {
-        "additionalProperties": false,
-        "properties": {
-          "code": {
-            "maxLength": 1024,
-            "minLength": 1,
-            "title": "Code",
-            "type": "string"
-          },
-          "expiresIn": {
-            "minimum": 1,
-            "title": "Expiresin",
-            "type": "integer"
-          },
-          "state": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "State",
-            "type": "string"
-          }
-        },
-        "required": [
-          "code",
-          "state",
-          "expiresIn"
-        ],
-        "title": "ExtensionCode",
-        "type": "object"
-      },
-      "ExtensionToken": {
-        "additionalProperties": false,
-        "properties": {
-          "accessToken": {
-            "maxLength": 4096,
-            "minLength": 1,
-            "title": "Accesstoken",
-            "type": "string"
-          },
-          "expiresIn": {
-            "minimum": 1,
-            "title": "Expiresin",
-            "type": "integer"
-          },
-          "tokenType": {
-            "const": "Bearer",
-            "title": "Tokentype",
-            "type": "string"
-          }
-        },
-        "required": [
-          "accessToken",
-          "tokenType",
-          "expiresIn"
-        ],
-        "title": "ExtensionToken",
-        "type": "object"
-      },
-      "ExtensionTokenRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "code": {
-            "maxLength": 1024,
-            "minLength": 1,
-            "title": "Code",
-            "type": "string"
-          },
-          "codeVerifier": {
-            "maxLength": 128,
-            "minLength": 43,
-            "pattern": "^[A-Za-z0-9._~-]+$",
-            "title": "Codeverifier",
-            "type": "string"
-          },
-          "redirectUri": {
-            "maxLength": 2000,
-            "minLength": 1,
-            "title": "Redirecturi",
-            "type": "string"
-          }
-        },
-        "required": [
-          "code",
-          "codeVerifier",
-          "redirectUri"
-        ],
-        "title": "ExtensionTokenRequest",
-        "type": "object"
-      },
       "ExtractionRequest": {
         "discriminator": {
           "mapping": {
@@ -1556,6 +1433,31 @@
         "title": "Preferences",
         "type": "object"
       },
+      "ProfileComparison": {
+        "additionalProperties": false,
+        "properties": {
+          "changedFields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changedfields",
+            "type": "array"
+          },
+          "current": {
+            "$ref": "#/components/schemas/ProfileResource"
+          },
+          "saved": {
+            "$ref": "#/components/schemas/ProfileResource"
+          }
+        },
+        "required": [
+          "saved",
+          "current",
+          "changedFields"
+        ],
+        "title": "ProfileComparison",
+        "type": "object"
+      },
       "ProfileResource": {
         "additionalProperties": false,
         "properties": {
@@ -1580,10 +1482,18 @@
         "additionalProperties": false,
         "properties": {
           "expectedRevision": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Expectedrevision",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "pattern": "^[1-9][0-9]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required. Null creates the first profile; otherwise the current revision must match.",
+            "title": "Expectedrevision"
           },
           "profile": {
             "$ref": "#/components/schemas/FreelancerProfile"
@@ -2048,11 +1958,6 @@
       }
     },
     "securitySchemes": {
-      "extensionBearer": {
-        "description": "Short-lived extension token obtained through browser login and one-time PKCE S256 code; explicit extension redirect allowlist.",
-        "scheme": "bearer",
-        "type": "http"
-      },
       "guestSession": {
         "description": "Server-issued guest session, never a client-supplied guestId; separate dev HTTP cookie.",
         "in": "cookie",
@@ -2275,9 +2180,6 @@
             "webSession": []
           },
           {
-            "extensionBearer": []
-          },
-          {
             "guestSession": []
           }
         ],
@@ -2445,9 +2347,6 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           }
         ],
         "x-fitcheck-cookie-mutation": {
@@ -2618,9 +2517,6 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           }
         ],
         "x-fitcheck-cookie-mutation": {
@@ -2792,9 +2688,6 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           }
         ],
         "x-fitcheck-cookie-mutation": {
@@ -2968,9 +2861,6 @@
             "webSession": []
           },
           {
-            "extensionBearer": []
-          },
-          {
             "guestSession": []
           }
         ],
@@ -3131,494 +3021,6 @@
         "summary": "Bootstrap",
         "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-645"
-      }
-    },
-    "/v1/auth/extension/authorize": {
-      "post": {
-        "operationId": "authorizeExtension",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Origin",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-CSRF-Token",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ExtensionAuthorize"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExtensionCode"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "invalid_request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "unauthenticated"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "not_found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "body_too_large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "unsupported_content_type"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "rate_limited"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "internal_error"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "upstream_failure"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "service_unavailable"
-          },
-          "504": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "timeout"
-          }
-        },
-        "security": [
-          {
-            "webSession": []
-          }
-        ],
-        "summary": "Authorize Extension",
-        "x-fitcheck-cookie-mutation": {
-          "csrfHeader": "X-CSRF-Token",
-          "originRequired": true
-        },
-        "x-fitcheck-implementation": "implemented",
-        "x-fitcheck-owner-task": "ANY-645",
-        "x-fitcheck-pkce": "S256; exact configured extension redirect; one-time code"
-      }
-    },
-    "/v1/auth/extension/revoke": {
-      "post": {
-        "operationId": "revokeExtensionToken",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Origin",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "invalid_request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "unauthenticated"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "not_found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "body_too_large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "unsupported_content_type"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "rate_limited"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "internal_error"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "upstream_failure"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "service_unavailable"
-          },
-          "504": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "timeout"
-          }
-        },
-        "security": [
-          {
-            "extensionBearer": []
-          }
-        ],
-        "summary": "Revoke Extension",
-        "x-fitcheck-implementation": "implemented",
-        "x-fitcheck-owner-task": "ANY-645"
-      }
-    },
-    "/v1/auth/extension/token": {
-      "post": {
-        "operationId": "exchangeExtensionCode",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "Origin",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ExtensionTokenRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExtensionToken"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "invalid_request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "unauthenticated"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "not_found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "body_too_large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "unsupported_content_type"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "rate_limited"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "internal_error"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "upstream_failure"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "service_unavailable"
-          },
-          "504": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "timeout"
-          }
-        },
-        "security": [],
-        "summary": "Extension Token",
-        "x-fitcheck-implementation": "implemented",
-        "x-fitcheck-owner-task": "ANY-645",
-        "x-fitcheck-pkce": "S256; exact configured extension redirect; one-time code"
       }
     },
     "/v1/auth/login": {
@@ -4907,10 +4309,28 @@
     "/v1/draft": {
       "delete": {
         "operationId": "deleteDraft",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required for web cookie sessions.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "204": {
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -5036,21 +4456,18 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           }
         ],
+        "summary": "Delete Draft",
         "x-fitcheck-cookie-mutation": {
           "csrfHeader": "X-CSRF-Token",
           "originRequired": true
         },
-        "x-fitcheck-implementation": "planned",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-646"
       },
       "get": {
         "operationId": "getDraft",
-        "parameters": [],
         "responses": {
           "200": {
             "content": {
@@ -5060,7 +4477,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -5186,22 +4603,46 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           }
         ],
-        "x-fitcheck-implementation": "planned",
+        "summary": "Get Draft",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-646"
       },
       "put": {
         "operationId": "updateDraft",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required for web cookie sessions.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DraftResponse"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DraftResponse"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
               }
             }
           },
@@ -5216,7 +4657,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -5342,16 +4783,14 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           }
         ],
+        "summary": "Update Draft",
         "x-fitcheck-cookie-mutation": {
           "csrfHeader": "X-CSRF-Token",
           "originRequired": true
         },
-        "x-fitcheck-implementation": "planned",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-646"
       }
     },
@@ -5504,9 +4943,6 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           },
           {
             "guestSession": []
@@ -5956,9 +5392,6 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           }
         ],
         "x-fitcheck-cookie-mutation": {
@@ -6152,9 +5585,6 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           }
         ],
         "x-fitcheck-implementation": "planned",
@@ -6322,9 +5752,6 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           }
         ],
         "x-fitcheck-cookie-mutation": {
@@ -6485,9 +5912,6 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           }
         ],
         "x-fitcheck-implementation": "planned",
@@ -6644,9 +6068,6 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           },
           {
             "guestSession": []
@@ -6815,9 +6236,6 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           }
         ],
         "summary": "Delete Me",
@@ -6965,9 +6383,6 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           }
         ],
         "summary": "Me",
@@ -6978,7 +6393,6 @@
     "/v1/preferences": {
       "get": {
         "operationId": "getPreferences",
-        "parameters": [],
         "responses": {
           "200": {
             "content": {
@@ -6988,7 +6402,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -7114,17 +6528,33 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           }
         ],
-        "x-fitcheck-implementation": "planned",
+        "summary": "Get Preferences",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-646"
       },
       "put": {
         "operationId": "updatePreferences",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required for web cookie sessions.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -7144,7 +6574,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -7270,23 +6700,20 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           }
         ],
+        "summary": "Update Preferences",
         "x-fitcheck-cookie-mutation": {
           "csrfHeader": "X-CSRF-Token",
           "originRequired": true
         },
-        "x-fitcheck-implementation": "planned",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-646"
       }
     },
     "/v1/profile": {
       "get": {
         "operationId": "getProfile",
-        "parameters": [],
         "responses": {
           "200": {
             "content": {
@@ -7296,7 +6723,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -7422,17 +6849,33 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           }
         ],
-        "x-fitcheck-implementation": "planned",
+        "summary": "Get Profile",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-646"
       },
       "put": {
         "operationId": "updateProfile",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required for web cookie sessions.",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -7452,7 +6895,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -7578,16 +7021,330 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           }
         ],
+        "summary": "Update Profile",
         "x-fitcheck-cookie-mutation": {
           "csrfHeader": "X-CSRF-Token",
           "originRequired": true
         },
-        "x-fitcheck-implementation": "planned",
+        "x-fitcheck-implementation": "implemented",
+        "x-fitcheck-owner-task": "ANY-646"
+      }
+    },
+    "/v1/profile/revisions/{revision}": {
+      "get": {
+        "operationId": "getProfileRevision",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "revision",
+            "required": true,
+            "schema": {
+              "maxLength": 10,
+              "pattern": "^[1-9][0-9]*$",
+              "title": "Revision",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileResource"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "invalid_request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "body_too_large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "unsupported_content_type"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "rate_limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "internal_error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "upstream_failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "service_unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "timeout"
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          }
+        ],
+        "summary": "Get Revision",
+        "x-fitcheck-implementation": "implemented",
+        "x-fitcheck-owner-task": "ANY-646"
+      }
+    },
+    "/v1/profile/revisions/{revision}/comparison": {
+      "get": {
+        "operationId": "compareProfileRevision",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "revision",
+            "required": true,
+            "schema": {
+              "maxLength": 10,
+              "pattern": "^[1-9][0-9]*$",
+              "title": "Revision",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileComparison"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "invalid_request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "body_too_large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "unsupported_content_type"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "rate_limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "internal_error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "upstream_failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "service_unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "timeout"
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          }
+        ],
+        "summary": "Compare Revision",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-646"
       }
     },
@@ -7730,9 +7487,6 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           },
           {
             "guestSession": []
@@ -7903,9 +7657,6 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "extensionBearer": []
           },
           {
             "guestSession": []

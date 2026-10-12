@@ -5,13 +5,9 @@
   "packageManager": "pnpm@10.17.1",
   "scripts": {
     "dev": "next dev",
-    "dev:extension": "wxt",
-    "build": "npm run build:web && npm run build:extension",
+    "build": "next build",
     "build:web": "next build",
-    "build:extension": "wxt build",
-    "zip:extension": "wxt zip",
     "start": "next start",
-    "postinstall": "wxt prepare",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
@@ -43,7 +39,6 @@
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@wxt-dev/module-react": "^1.2.1",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.0",
     "fake-indexeddb": "^6.2.5",
@@ -53,8 +48,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "5.7.3",
     "vite": "^8.2.2",
-    "vitest": "^4.0.18",
-    "wxt": "^0.21.4"
+    "vitest": "^4.0.18"
   },
   "pnpm": {
     "overrides": {

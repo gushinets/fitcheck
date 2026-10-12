@@ -7,8 +7,6 @@ export default defineConfig([
   ...nextTs,
   globalIgnores([
     ".next/**",
-    ".output/**",
-    ".wxt/**",
     "node_modules/**",
     "next-env.d.ts",
   ]),

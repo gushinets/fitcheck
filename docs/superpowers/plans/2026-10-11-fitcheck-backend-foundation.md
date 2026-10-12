@@ -1,5 +1,7 @@
 # FitCheck Backend Foundation Implementation Plan
 
+> **Scope update — 2026-10-12:** The user chose FitCheck as a website-only product and authorized removal of the extension code, builds, and authentication. This document is a historical implementation record; completed steps, test results, and migration history remain evidence of the work at that time. Extension steps and compatibility requirements are superseded and must not be executed or restored. Future work uses website cookie sessions with web-origin CSRF, website IndexedDB as the legacy import source, independent same-account sessions across devices, and website/backend CI. See the current backend foundation, storage, and authentication specifications.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Завершить ANY-643: запускаемый самостоятельный API FitCheck, проверяемый OpenAPI и клиент без переключения существующего UI.
@@ -19,14 +21,14 @@
 - Ошибки содержат только безопасные code/message/requestId/details; сервер генерирует `X-Request-ID`.
 - CORS разрешает точные настроенные origins; wildcard запрещён. Auth/CSRF описываются в контракте, реализуются в ANY-645.
 - Health возвращает `stage: foundation`; запуск и генерация не требуют БД, provider keys или чтения `.env.local`.
-- WebsiteRepository, ExtensionRuntime, Next.js `/api/*` и действующий Dokploy не переключаются в ANY-643.
+- WebsiteRepository, Next.js `/api/*` и действующий Dokploy не переключаются в ANY-643.
 - До кода прочитать применимые локальные Next.js guides согласно AGENTS.md; использовать isolated workspace по using-git-worktrees при исполнении.
 
 ## Review Focus
 
 - Потоковое тело без Content-Length или с ложным значением: фактический лимит применяется до передачи body handler (Task 2).
 - NaN/Infinity, bool вместо числа, неизвестные поля и null вместо optional: публичные DTO отклоняют их (Task 3).
-- Разрешённый extension origin и чужой origin, в том числе preflight: точное сравнение без wildcard (Task 2).
+- Разрешённый website origin и чужой origin, в том числе preflight: точное сравнение без wildcard (Task 2).
 - Ошибка handler с секретом и клиентский X-Request-ID: наружу выходит безопасная ошибка с новым серверным ID (Task 2).
 - AbortSignal, malformed JSON и ошибочный success payload: клиент сохраняет отмену и выдаёт предсказуемую transport error (Task 4).
 
@@ -37,6 +39,10 @@
 `backend/src/fitcheck_backend/config.py` — настройки; `__main__.py` — CLI; `api/app.py` — сборка приложения; `api/health.py` — health; `api/errors.py` — DTO/handlers ошибок; `api/middleware.py` — request ID и лимит тела. `contracts/domain.py` — текущие domain DTO; `contracts/resources.py` — новые resources; `contracts/jobs.py` — discriminated unions; `contracts/operations.py` — декларативный каталог planned routes; `contracts/openapi.py` — полный экспорт. `backend/scripts/export_openapi.py` — CLI экспорта/check. Каждый пакет получает `__init__.py`.
 
 `contracts/fitcheck.openapi.json` — committed artifact; `lib/backend/generated/schema.ts` — generated artifact; `lib/backend/client.ts` — transport; `scripts/generate-backend-types.mjs` — generation/check. Тесты рядом с TS-клиентом и в `backend/tests/`. `backend/README.md`, `backend/.env.example`, `docs/architecture/adr-001-standalone-backend.md` объясняют запуск, архитектуру и миграцию. `package.json`, `pnpm-lock.yaml`, `.github/workflows/ci.yml`, `.gitignore` изменяются только для инструментов и проверок foundation.
+
+## Historical implementation ledger
+
+Completed implementation steps and verification results below retain their original scope; extension requirements are superseded by the website-only decision above.
 
 ### Task 1: Самостоятельное приложение и настройки
 

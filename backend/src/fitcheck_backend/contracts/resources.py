@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
-from pydantic import Field, RootModel, field_validator
+from pydantic import AfterValidator, Field, RootModel, StringConstraints, field_validator
 from email_validator import validate_email, EmailNotValidError
 from fitcheck_backend.contracts.domain import DTO, FreelancerProfile, Vacancy, FitAnalysis, Identifier, Revision, Locale, Score, Skill, PublicUrl, text
 
@@ -11,9 +11,26 @@ class ProfileResource(DTO):
     profile: FreelancerProfile
 
 
+def valid_profile_revision(value: str) -> str:
+    if int(value) > 2_147_483_647:
+        raise ValueError('Profile revision exceeds the storage counter')
+    return value
+
+
+ProfileRevisionNumber = Annotated[str, StringConstraints(strict=True, max_length=10,
+    pattern=r'^[1-9][0-9]*$'), AfterValidator(valid_profile_revision)]
+
+
 class ProfileUpdate(DTO):
-    expected_revision: Revision
+    expected_revision: ProfileRevisionNumber | None = Field(
+        description='Required. Null creates the first profile; otherwise the current revision must match.')
     profile: FreelancerProfile
+
+
+class ProfileComparison(DTO):
+    saved: ProfileResource
+    current: ProfileResource
+    changed_fields: list[str]
 
 
 class Preferences(DTO):
@@ -182,31 +199,6 @@ class SessionResource(DTO):
 
 class CsrfResource(DTO):
     csrf_token: text(1024)
-
-
-class ExtensionAuthorize(DTO):
-    redirect_uri: PublicUrl
-    code_challenge: Annotated[str, Field(strict=True, pattern=r"^[A-Za-z0-9_-]{43}$")]
-    code_challenge_method: Literal["S256"]
-    state: Annotated[str, Field(strict=True, min_length=1, max_length=200)]
-
-
-class ExtensionCode(DTO):
-    code: text(1024)
-    state: Annotated[str, Field(strict=True, min_length=1, max_length=200)]
-    expires_in: Annotated[int, Field(strict=True, ge=1)]
-
-
-class ExtensionTokenRequest(DTO):
-    code: text(1024)
-    code_verifier: Annotated[str, Field(strict=True, min_length=43, max_length=128, pattern=r"^[A-Za-z0-9._~-]+$")]
-    redirect_uri: PublicUrl
-
-
-class ExtensionToken(DTO):
-    access_token: text(4096)
-    token_type: Literal["Bearer"]
-    expires_in: Annotated[int, Field(strict=True, ge=1)]
 
 
 class GuestSession(DTO):

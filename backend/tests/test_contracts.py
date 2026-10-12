@@ -81,7 +81,7 @@ def test_account_analysis_server_owned_profile():
 def test_profile_revision_required():
     with pytest.raises(ValidationError):
         ProfileUpdate.model_validate({"profile":DATA["profile"]})
-    assert ProfileUpdate.model_validate({"expectedRevision":"r1","profile":DATA["profile"]}).expected_revision == "r1"
+    assert ProfileUpdate.model_validate({"expectedRevision":"1","profile":DATA["profile"]}).expected_revision == "1"
 
 
 def test_legacy_import_only_ignores_income():

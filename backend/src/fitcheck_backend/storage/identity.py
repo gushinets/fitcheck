@@ -48,11 +48,10 @@ class AuthSession(IdentityMixin, CreatedMixin, Base):
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     kind: Mapped[str] = mapped_column(String(10))
     token_digest: Mapped[str] = mapped_column(String(64), unique=True)
-    csrf_digest: Mapped[str | None] = mapped_column(String(64))
+    csrf_digest: Mapped[str] = mapped_column(String(64))
     expires_at: Mapped[datetime] = mapped_column(UTCDateTime)
     revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
-    __table_args__ = (UniqueConstraint('id', 'user_id'), CheckConstraint("kind IN ('web','extension')", name="kind"),
-                      CheckConstraint("(kind='web' AND csrf_digest IS NOT NULL) OR (kind='extension' AND csrf_digest IS NULL)", name="csrf_kind"),
+    __table_args__ = (CheckConstraint("kind = 'web'", name="kind"),
                       Index("ix_auth_sessions_expiry", "expires_at"))
 
 
@@ -63,11 +62,5 @@ class AuthToken(IdentityMixin, CreatedMixin, Base):
     token_digest: Mapped[str] = mapped_column(String(64), unique=True)
     expires_at: Mapped[datetime] = mapped_column(UTCDateTime)
     consumed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
-    code_challenge: Mapped[str | None] = mapped_column(String(43))
-    redirect_uri: Mapped[str | None] = mapped_column(String(2048))
-    issued_session_id: Mapped[UUID | None] = mapped_column()
-    __table_args__ = (CheckConstraint("purpose IN ('verify_email','reset_password','extension_code')", name="purpose"),
-                      ForeignKeyConstraint(['issued_session_id', 'user_id'], ['auth_sessions.id', 'auth_sessions.user_id'], ondelete='CASCADE'),
-                      CheckConstraint("(purpose='extension_code' AND (issued_session_id IS NOT NULL OR consumed_at IS NOT NULL)) OR (purpose!='extension_code' AND issued_session_id IS NULL)", name='session_binding'),
-                      CheckConstraint("(purpose='extension_code' AND code_challenge IS NOT NULL AND redirect_uri IS NOT NULL) OR (purpose!='extension_code' AND code_challenge IS NULL AND redirect_uri IS NULL)", name="pkce_pair"),
+    __table_args__ = (CheckConstraint("purpose IN ('verify_email','reset_password')", name="purpose"),
                       Index("ix_auth_tokens_expiry", "expires_at"))

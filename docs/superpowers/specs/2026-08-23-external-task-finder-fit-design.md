@@ -1,5 +1,7 @@
 # External Task Finder & Fit — Design Specification
 
+> **Scope update — 2026-10-12:** The user chose FitCheck as a website-only product and authorized removal of the extension code, builds, and authentication. This document is a historical implementation record; completed steps, test results, and migration history remain evidence of the work at that time. Extension steps and compatibility requirements are superseded and must not be executed or restored. Future work uses website cookie sessions with web-origin CSRF, website IndexedDB as the legacy import source, independent same-account sessions across devices, and website/backend CI. See the current backend foundation, storage, and authentication specifications.
+
 ## Purpose
 
 Build an installable Chrome Extension that helps non-native English-speaking Upwork freelancers decide in under a minute whether a job is worth spending connects on. The extension reads the current Upwork job page, compares it with a locally stored freelancer profile, and returns a personalized Fit Score, explanation, strengths, risks, and a GO or NO-GO verdict.

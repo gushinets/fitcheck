@@ -55,6 +55,11 @@ class FreelancerProfile(DTO):
         names = {skill.lower() for skill in self.skills}
         if any(key != key.lower() or key not in names for key in self.skill_levels or {}):
             raise ValueError("Skill levels must refer to normalized profile skills")
+        # Keep the first display spelling, with one entry per normalized skill.
+        unique = {}
+        for skill in self.skills:
+            unique.setdefault(skill.lower(), skill)
+        self.skills = list(unique.values())
         return self
 
 

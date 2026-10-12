@@ -1,5 +1,7 @@
 # ANY-644: отдельное хранилище FitCheck
 
+> **Current scope — 2026-10-12:** FitCheck is website-only by explicit user decision. Extension clients, builds, bearer authentication, PKCE, and extension-origin configuration are removed. Earlier implementation plans remain historical records. The user also explicitly authorized migrations from a clean slate: one baseline revision 0001 creates the complete website-only schema, including immutable payload triggers and auth_rate_buckets. Historical 0002/0003 and incremental cleanup revisions are removed from the repository. Bootstrap targets an empty database; existing deployed development databases are not changed by this cleanup. Historical plan and deployment records retain their original revision numbers.
+
 Дата: 2026-10-11. Статус: согласовано пользователем, включая сроки хранения.
 
 ## Цель и границы
@@ -41,8 +43,8 @@ Guest claim требует переноса принадлежащих гост�
 | `owners` | UUID, kind, created_at; unique `(id, kind)` |
 | `users` | owner, normalized email unique, password_hash, email_verified_at, created_at, updated_at; сырой пароль не хранится |
 | `guests` | owner, created_at, expires_at, claimed_by_user_id nullable, claimed_at; поля claim либо оба пустые, либо оба заполнены |
-| `auth_sessions` | user, kind web/extension, token_digest unique, csrf_digest nullable, expires_at, revoked_at; только digest секретов |
-| `auth_tokens` | user, purpose verify_email/reset_password/extension_code, token_digest unique, expires_at, consumed_at; PKCE challenge/redirect_uri для extension code |
+| `auth_sessions` | user, website session only, token_digest unique, csrf_digest required, expires_at, revoked_at; только digest секретов |
+| `auth_tokens` | user, purpose verify_email/reset_password, token_digest unique, expires_at, consumed_at |
 | `profiles` | owner unique, current_revision >= 1; отсутствие профиля означает отсутствие строки, не revision 0 |
 | `profile_revisions` | owner, revision >= 1, profile JSONB, created_at; unique `(owner_id, revision)`, append-only |
 | `preferences` | owner unique, locale ru/en, updated_at |
@@ -56,9 +58,11 @@ Guest claim требует переноса принадлежащих гост�
 | `provider_calls` | owner, job nullable, provider, operation, model, attempt, request_key unique, state started/succeeded/failed/unknown, token counters, cost numeric nullable, currency nullable, safe error code, timestamps |
 | `import_entries` | owner, source local_v1, external_id, content_hash, analysis, created_at; unique owner/source/external_id |
 
-Это минимальный долговечный фундамент критериев ANY-644. Алгоритмы авторизации, резервирования квот, leasing/retry, отправки писем и вызовов provider остаются в своих задачах. Не сохраняются сырой provider request/response, пароли, bearer tokens или содержимое вакансий в техническом ledger.
+Это минимальный долговечный фундамент критериев ANY-644. Алгоритмы авторизации, резервирования квот, leasing/retry, отправки писем и вызовов provider остаются в своих задачах. Не сохраняются сырой provider request/response, пароли, открытые session tokens или содержимое вакансий в техническом ledger.
 
 ## Инварианты и совместимость
+
+Legacy import поддерживает только website IndexedDB. Локальные пароли и сессии не импортируются и не подтверждают серверную identity. После входа серверные данные доступны независимым website cookie-сессиям одного аккаунта на разных устройствах.
 
 Profile update использует optimistic concurrency: ожидаемая revision проверяется атомарно, следующая revision добавляется вместе с изменением current_revision в одной транзакции. FK current profile на существующую revision проверяется на commit. Две записи с одинаковым expectedRevision не могут обе завершиться успешно. Исторические revisions не переписываются.
 
@@ -76,11 +80,11 @@ CHECK constraints ограничивают состояния и связанн�
 
 ## Миграции
 
-Alembic живёт в `backend/migrations`, version table принадлежит только FitCheck. Initial migration создаёт таблицы, constraints, индексы и immutable triggers; модельная metadata согласуется с ней. Runtime не вызывает create_all и не запускает Alembic автоматически.
+Alembic живёт в `backend/migrations`, version table принадлежит только FitCheck. По явному указанию пользователя миграции пересоздаются с чистого листа. Единственная initial revision 0001 создаёт всю финальную website-only схему: таблицы, constraints, индексы, immutable payload triggers и auth_rate_buckets. Старые revisions 0002/0003 и отдельная cleanup revision удаляются из репозитория. Текущая модельная metadata согласуется с baseline 0001. Runtime не вызывает create_all и не запускает Alembic автоматически.
 
 Одна команда migration runner получает DSN из настроек, берёт PostgreSQL advisory lock и выполняет upgrade head. Конкурентный runner ждёт ограниченное время, затем завершается с понятной ошибкой. Lock удерживается тем же соединением до завершения миграции и освобождается даже при ошибке. Миграции transactional; технические ошибки не раскрывают credentials.
 
-Проверяем bootstrap на пустой БД, повторный upgrade head с существующими данными, Alembic drift и rollback initial migration только на одноразовой тестовой БД. Downgrade initial migration уничтожает данные и документируется как тестовый rollback, не production recovery. Будущие миграции обязаны иметь отдельные тесты сохранения данных. Восстановление backup и orchestration деплоя относятся к ANY-654.
+Проверяем bootstrap baseline 0001 на пустой БД, повторный upgrade head с уже созданными website данными, Alembic drift и rollback initial migration только на одноразовой тестовой БД. Baseline не является upgrade старой deployed schema: существующая development БД не изменяется в рамках этого cleanup; deployment/reset/import определяется отдельной задачей. Downgrade initial migration уничтожает данные и документируется как тестовый rollback, не production recovery. Будущие миграции обязаны иметь отдельные тесты сохранения данных. Восстановление backup и orchestration деплоя относятся к ANY-654.
 
 ## Retention и удаление
 
@@ -100,4 +104,4 @@ Alembic живёт в `backend/migrations`, version table принадлежит
 
 ## Последовательность продолжения
 
-После согласования этой спецификации подготовить план реализации с файлами, миграционными инвариантами и командами проверки. План должен определить isolated worktree, отдельные проверяемые этапы и финальный code review. Реализация начинается после согласования плана и способа выполнения.
+Первоначальный storage-план и его результаты сохранены как исторический ledger. Текущая site-only cleanup явно разрешена пользователем; проверка новой baseline 0001 обязана подтвердить полный bootstrap website-only схемы на пустой БД, immutable triggers, auth rate buckets, согласованность metadata и сохранение данных при повторном upgrade head.

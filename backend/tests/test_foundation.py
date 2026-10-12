@@ -41,5 +41,5 @@ def test_explicit_settings_override_environment(monkeypatch):
 
 
 def test_origin_environment_json(monkeypatch):
-    monkeypatch.setenv("FITCHECK_ALLOWED_ORIGINS", '["https://fitcheck.example","chrome-extension://abc"]')
-    assert Settings().allowed_origins == ["https://fitcheck.example", "chrome-extension://abc"]
+    monkeypatch.setenv("FITCHECK_ALLOWED_ORIGINS", '["https://fitcheck.example","http://localhost:3000"]')
+    assert Settings().allowed_origins == ["https://fitcheck.example", "http://localhost:3000"]

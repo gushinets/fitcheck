@@ -7,7 +7,7 @@ import {
 } from "@/lib/skill-suggestions/service"
 import { createSkillSuggestionsHandler } from "./handler"
 
-const allowedOrigin = "chrome-extension://fitcheck-test"
+const allowedOrigin = "https://fitcheck.example.com"
 const validBody = {
   specialization: "Backend Developer",
   locale: "en",

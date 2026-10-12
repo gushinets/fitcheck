@@ -1,16 +1,12 @@
-import hashlib
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 from fitcheck_backend.api.app import create_app
 from fitcheck_backend.api.runtime import AuthRuntime
-from fitcheck_backend.auth.crypto import b64
 from fitcheck_backend.config import Settings
 
 pytestmark=pytest.mark.integration
 WEB='https://web.example.com'
-EXT='chrome-extension://'+'a'*32
-REDIRECT='https://'+'a'*32+'.chromiumapp.org/callback'
 PASSWORD='correct horse battery'
 
 
@@ -18,7 +14,7 @@ PASSWORD='correct horse battery'
 def http_auth(auth_components):
     a=auth_components
     s=Settings(env='production',auth_enabled=True,auth_secret='78'*32,auth_web_base_url=WEB,
-        database_url=a.engine.url.render_as_string(hide_password=False),allowed_origins=[WEB,EXT],auth_extension_redirect_uris=[REDIRECT])
+        database_url=a.engine.url.render_as_string(hide_password=False),allowed_origins=[WEB])
     runtime=AuthRuntime(s,engine=a.engine,mailer=a.mailer,clock=a.clock)
     with TestClient(create_app(s,auth_runtime=runtime),base_url='https://api.example.com') as c:
         yield a,c,runtime
@@ -58,29 +54,13 @@ def test_http_origin_csrf_duplicate_headers_and_mixed_credentials(http_auth):
     assert c.get('/v1/me').status_code==401
 
 
-def test_http_pending_verified_extension_and_deletion(http_auth):
+def test_http_pending_verification_and_deletion(http_auth):
     a,c,runtime=http_auth
     result=register(c)
     h={'Origin':WEB,'X-CSRF-Token':result.json()['csrfToken']}
-    challenge=b64(hashlib.sha256(('v'*43).encode()).digest())
-    body={'redirectUri':REDIRECT,'codeChallenge':challenge,'codeChallengeMethod':'S256','state':' state '}
-    assert c.post('/v1/auth/extension/authorize',headers=h,json=body).status_code==403
     assert c.get('/v1/auth/verify-email',params={'token':a.mailer.messages[-1].token}).status_code==405
     assert c.post('/v1/auth/verify-email',headers=h,json={'token':a.mailer.messages[-1].token}).status_code==204
     assert c.get('/v1/me').json()['emailVerified']
-    authorization=c.post('/v1/auth/extension/authorize',headers=h,json=body).json()
-    assert authorization['state']==' state '
-    code=authorization['code']
-    web_cookie=c.cookies.get('__Host-fitcheck_session')
-    c.cookies.clear()
-    issued=c.post('/v1/auth/extension/token',headers={'Origin':EXT},json={'code':code,'codeVerifier':'v'*43,'redirectUri':REDIRECT})
-    assert issued.status_code==200,issued.text
-    bearer={'Authorization':'Bearer '+issued.json()['accessToken'],'Origin':EXT}
-    assert c.get('/v1/me',headers=bearer).status_code==200
-    assert c.post('/v1/auth/logout',headers=bearer).status_code in {401,403}
-    assert c.post('/v1/auth/extension/revoke',headers=bearer).status_code==204
-    assert c.get('/v1/me',headers=bearer).status_code==401
-    c.cookies.set('__Host-fitcheck_session',web_cookie,domain='api.example.com',path='/')
     assert c.request('DELETE','/v1/me',headers=h,json={'password':'wrong'}).status_code==401
     assert c.request('DELETE','/v1/me',headers=h,json={'password':PASSWORD,'ownerId':'forged'}).status_code==400
     assert c.request('DELETE','/v1/me',headers=h,json={'password':PASSWORD}).status_code==204
@@ -97,7 +77,7 @@ def test_auth_readiness_requires_db_and_schema_head(http_auth):
         assert c.get('/health/ready').status_code==503
         assert c.get('/health/live').status_code==200
     finally:
-        with a.engine.begin() as conn:conn.execute(text("UPDATE alembic_version SET version_num='0003'"))
+        with a.engine.begin() as conn:conn.execute(text("UPDATE alembic_version SET version_num='0001'"))
     a.mailer.enabled=False
     ready=c.get('/health/ready')
     assert ready.status_code==200 and ready.json()['dependencies']['email']=='unconfigured'

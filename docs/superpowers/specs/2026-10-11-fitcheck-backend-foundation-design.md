@@ -1,12 +1,14 @@
 # ANY-643: отдельный backend FitCheck
 
+> **Current scope — 2026-10-12:** FitCheck is website-only by explicit user decision. Extension clients, builds, bearer authentication, PKCE, and extension-origin configuration are removed. Earlier implementation plans remain historical records. The user also explicitly authorized migrations from a clean slate: one baseline revision 0001 creates the complete website-only schema, including immutable payload triggers and auth_rate_buckets. Historical 0002/0003 and incremental cleanup revisions are removed from the repository. Bootstrap targets an empty database; existing deployed development databases are not changed by this cleanup. Historical plan and deployment records retain their original revision numbers.
+
 Дата: 2026-10-11. Статус: одобрено пользователем и реализовано в ветке feat/any-643-backend.
 
 ## Назначение и принятое направление
 
 FitCheck получает собственный backend в текущем репозитории. Пользователь явно исключил подключение к `anytoolai-platform`; этот проект служит архитектурным эталоном. Backend не импортирует его пакеты, не использует его БД, identity, quota или runtime и не требует его запуска.
 
-Цель ANY-643 — создать запускаемый каркас API и единые проверяемые контракты для последующих backend-задач. Это не реализация всех операций, перечисленных в контракте. Существующие web, расширение и Next.js API продолжают работать до интеграции ANY-653.
+Цель ANY-643 — создать запускаемый каркас API и единые проверяемые контракты для последующих backend-задач. Это не реализация всех операций, перечисленных в контракте. Существующие website и Next.js API продолжают работать до интеграции ANY-653.
 
 ## Выбор устройства сервиса
 
@@ -65,7 +67,6 @@ JSON сохраняет camelCase текущего frontend: `experienceYears`, 
 | Регистрация/вход/выход | `POST /v1/auth/register`, `/login`, `/logout` | ANY-645 |
 | Подтверждение/восстановление | `POST /v1/auth/verify-email`, `/password-reset/request`, `/password-reset/confirm` | ANY-645 |
 | Текущий пользователь/удаление | `GET /v1/me`, `DELETE /v1/me` | ANY-645 |
-| Вход расширения | `POST /v1/auth/extension/authorize`, `/token`, `/revoke` | ANY-645 |
 | Профиль | `GET /v1/profile`, `PUT /v1/profile` с revision/expectedRevision | ANY-646 |
 | Настройки | `GET /v1/preferences`, `PUT /v1/preferences` | ANY-646 |
 | Черновик | `GET /v1/draft`, `PUT /v1/draft`, `DELETE /v1/draft` | ANY-646 |
@@ -91,9 +92,7 @@ Jobs имеют `queued`, `running`, `succeeded`, `failed`; успешный ana
 
 Web: серверная cookie-сессия, в production `__Host-fitcheck_session`, Secure, HttpOnly, Path=/ и SameSite=Lax, без Domain. Все изменения с cookie требуют проверенного Origin и CSRF token. HTTPS same-origin proxy сохраняет эти свойства. Local development использует отдельное имя cookie без `__Host-` и допускает HTTP только в dev.
 
-Расширение: вход через браузерный web login и одноразовый code с PKCE S256; redirect разрешается только для настроенного extension ID. `authorize` требует web session, CSRF и явного действия пользователя. `token` проверяет code, verifier и redirect, выдаёт ограниченный по времени bearer token; lifecycle/rotation/revocation реализуются в ANY-645. Chrome storage не получает HttpOnly cookie или provider keys.
-
-CORS: точный список web и extension origins из настроек, без wildcard и разрешения всех `chrome-extension://` origins. Credentials включаются только для cookie-flow; разрешённые методы и заголовки задаются явно. CORS не заменяет проверку identity/ownership. Protected endpoint не принимает guestId или userId как доказательство владения.
+CORS: точный список web origins из настроек, без wildcard. Credentials включаются для cookie-flow; разрешённые методы и заголовки задаются явно. CORS не заменяет проверку Origin, CSRF, identity/ownership. Protected endpoint не принимает guestId или userId как доказательство владения. Account authentication использует только серверную website cookie-сессию.
 
 Guest cookie устанавливается сервером; успешный claim требует одновременно подтверждённую guest session и account session. Численные demo quotas, атомарное admission и rate limits реализуются в ANY-651.
 
@@ -113,12 +112,12 @@ Liveness подтверждает работающий API процесс; readi
 
 API, worker, PostgreSQL и одноразовый migration process размещаются отдельно от Next.js. Dokploy application `fitcheck-dev` и его действующие ключи/домены в ANY-643 не изменяются. Общий proxy route `/backend/*` появляется вместе с подключением реального backend. При переключении существующих Next.js LLM routes их нужно отключить либо обеспечить ту же identity/quota policy, чтобы не сохранить обход новых ограничений.
 
-В ANY-643 создаётся клиент, но текущие WebsiteRepository/ExtensionRuntime остаются на действующих adapters. Offline draft/cache, перенос IndexedDB/chrome.storage, account claim и восстановление данных на другом устройстве выполняются в ANY-652/653. Локальный пароль или email не подтверждают владение серверным аккаунтом.
+В ANY-643 создаётся клиент, но текущий WebsiteRepository остаётся на действующем adapter. Offline draft/cache, перенос website IndexedDB, account claim и доступ к серверным данным через независимые сессии одного аккаунта на разных устройствах выполняются в ANY-652/653. Локальный пароль или email не подтверждают владение серверным аккаунтом.
 
 ## Проверка и завершение ANY-643
 
 Обязательные проверки: settings valid/invalid, startup без БД/LLM credentials, health, CORS для разрешённого/чужого origin, единые безопасные validation/404/405/errors, отсутствие unimplemented routes в live API, полнота planned operations в exported contract, согласованность DTO ограничений с текущими fixtures, TS client cancellation/error parsing и regeneration drift.
 
-CI запускает backend tests и export check, TS generation check, существующие npm test/typecheck/lint, web build через Webpack и extension build. Live provider calls для foundation не требуются. Success ANY-643 не означает завершение ANY-644–654.
+CI запускает backend tests и export check, TS generation check, существующие npm test/typecheck/lint, website build через Webpack. Live provider calls для foundation не требуются. Success ANY-643 не означает завершение ANY-644–654.
 
-Перед реализацией требуется проверка этого документа пользователем, затем отдельный план реализации. Сроки и дополнительные product features документ не добавляет.
+Изначальное согласование и реализация ANY-643 зафиксированы в историческом плане; site-only cleanup уже явно разрешён пользователем. Сроки и дополнительные product features документ не добавляет.

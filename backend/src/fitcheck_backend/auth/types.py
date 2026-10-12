@@ -12,7 +12,7 @@ class Principal:
     user_id: UUID
     owner_id: UUID
     session_id: UUID
-    kind: Literal['web', 'extension']
+    kind: Literal['web']
     email: str = field(repr=False)
     email_verified: bool
 
@@ -22,13 +22,6 @@ class IssuedSession:
     principal: Principal
     token: str = field(repr=False)
     csrf_token: str | None = field(repr=False)
-    expires_at: datetime
-
-
-@dataclass(frozen=True)
-class IssuedCode:
-    value: str = field(repr=False)
-    state: str
     expires_at: datetime
 
 

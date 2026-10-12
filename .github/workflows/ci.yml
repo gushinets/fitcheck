@@ -95,6 +95,3 @@ jobs:
 
       - name: Build web application
         run: pnpm exec next build --webpack
-
-      - name: Build Chrome Extension
-        run: pnpm build:extension

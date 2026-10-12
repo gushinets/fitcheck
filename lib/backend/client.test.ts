@@ -46,11 +46,11 @@ describe("backend transport", () => {
     const observed: { url: string; init?: RequestInit }[] = []
     const transport: typeof fetch = async (url, init) => { observed.push({ url: String(url), init }); return Response.json({ status: "ok" }) }
     const client = createBackendClient({ baseUrl: "https://api.example/v1/", fetch: transport, credentials: "omit" })
-    await client.request("/profile", { method: "PUT", body: { expectedRevision: "r1" }, headers: { Authorization: "Bearer extension", "Idempotency-Key": "id1" }, validate: success })
+    await client.request("/profile", { method: "PUT", body: { expectedRevision: "r1" }, headers: { Authorization: "Bearer test-session", "Idempotency-Key": "id1" }, validate: success })
     expect(observed[0].url).toBe("https://api.example/v1/profile")
     expect(observed[0].init?.credentials).toBe("omit")
     expect(observed[0].init?.body).toBe('{"expectedRevision":"r1"}')
-    expect(new Headers(observed[0].init?.headers).get("Authorization")).toBe("Bearer extension")
+    expect(new Headers(observed[0].init?.headers).get("Authorization")).toBe("Bearer test-session")
     expect(new Headers(observed[0].init?.headers).get("Content-Type")).toBe("application/json")
     await createBackendClient({ baseUrl: "/backend/v1", fetch: transport }).request("profile", { validate: success })
     expect(observed[1].url).toBe("/backend/v1/profile")

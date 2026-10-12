@@ -57,7 +57,7 @@ def test_other_device_verification_requires_login(auth_components):
     device = a.service.login('a@example.com', PASSWORD, '192.0.2.2')
     service = email_service(a)
     with pytest.raises(AuthError):
-        service.verify(replace(device.principal, kind='extension'), token, '192.0.2.2')
+        service.verify(replace(device.principal, kind='invalid'), token, '192.0.2.2')
     service.verify(device.principal, token, '192.0.2.2')
     assert a.service.resolve(device.token, 'web').email_verified
 
@@ -102,13 +102,10 @@ def test_token_purpose_expiry_replay_and_supersession(auth_components):
         service.verify(issued.principal, verify_token, '192.0.2.1')
 
 
-def test_reset_revokes_all_sessions_and_codes_without_login(auth_components):
+def test_reset_revokes_all_website_sessions_without_login(auth_components):
     a = auth_components
     issued = a.service.register('a@example.com', PASSWORD, '192.0.2.1')
     other = a.service.login('a@example.com', PASSWORD, '192.0.2.2')
-    with unit_of_work(a.engine) as s:
-        s.add(AuthSession(user_id=issued.principal.user_id, kind='extension', token_digest='e'*64, expires_at=a.now[0]+timedelta(hours=1)))
-        s.add(AuthToken(user_id=issued.principal.user_id, purpose='extension_code', token_digest='f'*64, code_challenge='a'*43, redirect_uri='https://example.com', issued_session_id=issued.principal.session_id, expires_at=a.now[0]+timedelta(minutes=2)))
     service = email_service(a)
     service.request_reset('a@example.com', '192.0.2.1')
     token = a.mailer.messages[-1].token
@@ -119,6 +116,5 @@ def test_reset_revokes_all_sessions_and_codes_without_login(auth_components):
         with pytest.raises(AuthError): a.service.resolve(raw, 'web')
     with unit_of_work(a.engine) as s:
         assert s.scalar(select(func.count()).select_from(AuthSession).where(AuthSession.revoked_at.is_(None))) == 0
-        assert s.scalar(select(func.count()).select_from(AuthToken).where(AuthToken.purpose=='extension_code', AuthToken.consumed_at.is_(None))) == 0
     with pytest.raises(AuthError): a.service.login('a@example.com', PASSWORD, '192.0.2.1')
     assert a.service.login('a@example.com', 'changed password 123', '192.0.2.1').principal.user_id == issued.principal.user_id

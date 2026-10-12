@@ -9,9 +9,9 @@ ERRORS = {400: "invalid_request", 401: "unauthenticated", 403: "forbidden", 404:
           409: "conflict", 413: "body_too_large", 415: "unsupported_content_type", 429: "rate_limited",
           500: "internal_error", 502: "upstream_failure", 503: "service_unavailable", 504: "timeout"}
 SECURITY = {
-    "public": [], "web": [{"webSession": []}], "extension": [{"extensionBearer": []}],
-    "account": [{"webSession": []}, {"extensionBearer": []}],
-    "identity": [{"webSession": []}, {"extensionBearer": []}, {"guestSession": []}],
+    "public": [], "web": [{"webSession": []}],
+    "account": [{"webSession": []}],
+    "identity": [{"webSession": []}, {"guestSession": []}],
     "claim": [{"webSession": [], "guestSession": []}],
 }
 
@@ -26,8 +26,6 @@ def security_schemes():
                        'description':'Secure HttpOnly SameSite=Lax Path=/, no Domain; separate dev HTTP cookie. Cookie mutations require verified Origin and CSRF.'},
         'guestSession': {'type':'apiKey','in':'cookie','name':'__Host-fitcheck_guest',
                          'description':'Server-issued guest session, never a client-supplied guestId; separate dev HTTP cookie.'},
-        'extensionBearer': {'type':'http','scheme':'bearer',
-                            'description':'Short-lived extension token obtained through browser login and one-time PKCE S256 code; explicit extension redirect allowlist.'},
     }
 
 
@@ -84,10 +82,8 @@ def export_openapi(app: FastAPI) -> dict:
                  "security": SECURITY[operation.access], "responses": responses}
         if operation.request:
             entry["requestBody"] = {"required": True, "content": {"application/json": {"schema": ref(operation.request)}}}
-        if operation.method != "get" and operation.access not in {"public", "extension"}:
+        if operation.method != "get" and operation.access != "public":
             entry["x-fitcheck-cookie-mutation"] = {"originRequired": True, "csrfHeader": "X-CSRF-Token"}
-        if "/auth/extension/" in operation.path:
-            entry["x-fitcheck-pkce"] = "S256; exact configured extension redirect; one-time code"
         if operation.access == "public" and operation.method != "get":
             entry["x-fitcheck-origin-policy"] = "Verify trusted Origin for browser mutations; use anti-CSRF bootstrap for cookie-producing flows"
         document["paths"].setdefault(operation.path, {})[operation.method] = entry

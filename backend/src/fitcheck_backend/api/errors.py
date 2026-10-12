@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 from fitcheck_backend.auth.errors import AuthError
+from fitcheck_backend.profiles.errors import ProfileError
 
 
 class ErrorDetail(BaseModel):
@@ -38,6 +39,10 @@ def error_response(status: int, code: str, message: str, request_id: str,
 
 
 def install_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(ProfileError)
+    async def profile_error(request: Request, exc: ProfileError):
+        return error_response(exc.status, exc.code, exc.code.replace('_', ' ').capitalize(), request.state.request_id)
+
     @app.exception_handler(AuthError)
     async def auth_error(request: Request, exc: AuthError):
         headers = {'Retry-After': str(exc.retry_after)} if exc.retry_after is not None else None

@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { OPTIONS, POST } from "./route"
 
-const allowedOrigin = "chrome-extension://fitcheck-test"
+const allowedOrigin = "https://fitcheck.example.com"
 const validBody = {
   specialization: "Backend Developer",
   locale: "en",

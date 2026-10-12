@@ -10,9 +10,9 @@ from ..auth.rate_limit import AuthRateLimiter
 from ..auth.mail import SMTPMailer
 from ..auth.service import AuthService
 from ..auth.email_service import EmailAuthService
-from ..auth.extension_service import ExtensionAuthService
 from ..auth.access import AccountDeletionService
 from ..auth.errors import AuthError
+from ..profiles.service import ProfileService
 
 
 class AuthRuntime:
@@ -28,8 +28,8 @@ class AuthRuntime:
         self.mailer = mailer if mailer is not None else SMTPMailer(settings)
         self.auth = AuthService(self.engine, self.crypto, passwords, self.limiter, self.mailer, clock)
         self.email = EmailAuthService(self.engine, self.crypto, passwords, self.limiter, self.mailer, clock)
-        self.extension = ExtensionAuthService(self.engine, self.crypto, self.limiter, clock, tuple(settings.auth_extension_redirect_uris))
         self.deletion = AccountDeletionService(self.engine, passwords, self.limiter, clock)
+        self.profiles = ProfileService(self.engine, clock)
 
     def close(self):
         if self._owns_engine:

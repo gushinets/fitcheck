@@ -18,9 +18,9 @@ def test_export_preserves_live_auth_and_planned_roadmap_without_config(tmp_path,
             if path.startswith('/v1/'):
                 assert '422' not in operation['responses']
                 assert doc['paths'][path][method]['x-fitcheck-implementation']=='implemented'
-                assert doc['paths'][path][method]['x-fitcheck-owner-task']=='ANY-645'
+                assert doc['paths'][path][method]['x-fitcheck-owner-task'] in {'ANY-645', 'ANY-646'}
                 assert doc['paths'][path][method]['responses']==operation['responses']
-    assert doc['paths']['/v1/profile']['get']['x-fitcheck-implementation']=='planned'
+    assert doc['paths']['/v1/profile']['get']['x-fitcheck-implementation']=='implemented'
     assert doc['components']['schemas']['RegistrationCredentials']['properties']['password']['minLength']==15
     assert doc['components']['schemas']['LoginCredentials']['properties']['password']['minLength']==1
     output=tmp_path/'schema.json'

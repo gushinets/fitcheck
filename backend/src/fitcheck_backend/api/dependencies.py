@@ -28,22 +28,12 @@ def validate_web_origin(request: Request) -> None:
         raise AuthError('forbidden')
 
 
-def validate_extension_origin(request: Request) -> None:
-    if not _origin(request).startswith('chrome-extension://'):
-        raise AuthError('forbidden')
-
-
 def account_principal(request: Request):
     runtime = required_runtime(request)
     cookie = request.cookies.get(cookie_name(runtime.settings))
     authorizations = request.headers.getlist('authorization')
-    if len(authorizations) > 1 or cookie is not None and authorizations:
-        raise AuthError('forbidden')
     if authorizations:
-        parts = authorizations[0].split(' ')
-        if len(parts) != 2 or parts[0].lower() != 'bearer' or not parts[1]:
-            raise AuthError('unauthenticated')
-        return runtime.auth.resolve(parts[1], 'extension')
+        raise AuthError('forbidden' if cookie is not None else 'unauthenticated')
     if cookie is not None:
         return runtime.auth.resolve(cookie, 'web')
     raise AuthError('unauthenticated')
@@ -52,13 +42,6 @@ def account_principal(request: Request):
 def web_principal(request: Request):
     principal = account_principal(request)
     if principal.kind != 'web':
-        raise AuthError('forbidden')
-    return principal
-
-
-def extension_principal(request: Request):
-    principal = account_principal(request)
-    if principal.kind != 'extension':
         raise AuthError('forbidden')
     return principal
 
@@ -88,8 +71,5 @@ def validate_bootstrap(request: Request) -> None:
 
 
 def validate_account_mutation(request: Request, principal) -> None:
-    if principal.kind == 'web':
-        validate_web_origin(request)
-        validate_session_csrf(request, principal)
-    else:
-        validate_extension_origin(request)
+    validate_web_origin(request)
+    validate_session_csrf(request, principal)

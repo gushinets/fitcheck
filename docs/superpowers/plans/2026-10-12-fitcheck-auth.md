@@ -1,8 +1,10 @@
 # FitCheck Server Authentication Implementation Plan
 
+> **Scope update — 2026-10-12:** The user chose FitCheck as a website-only product and authorized removal of the extension code, builds, and authentication. This document is a historical implementation record; completed steps, test results, and migration history remain evidence of the work at that time. Extension steps and compatibility requirements are superseded and must not be executed or restored. Future work uses website cookie sessions with web-origin CSRF, website IndexedDB as the legacy import source, independent same-account sessions across devices, and website/backend CI. See the current backend foundation, storage, and authentication specifications.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Реализовать ANY-645: серверные аккаунты, web/extension сессии, email verification/reset, проверенное владение данными и удаление аккаунта в отдельном FitCheck backend.
+**Goal:** Реализовать ANY-645: серверные аккаунты, website cookie-сессии, email verification/reset, проверенное владение данными и удаление аккаунта в отдельном FitCheck backend.
 
 **Architecture:** PostgreSQL хранит identity, digests сессий/одноразовых токенов и общие rate limits. Небольшие auth-модули и AuthRepository обслуживают синхронный AuthService; FastAPI dependencies валидируют транспортные credentials, Origin и CSRF. SMTP подключается отдельным adapter, а frontend остаётся на текущих adapters до ANY-653.
 
@@ -16,12 +18,12 @@
 - Registration/reset password: 15–128 code points; login/delete: 1–128, без trim/normalization password.
 - Argon2id: memory_cost=65536 KiB, time_cost=3, parallelism=4, salt_len=16, hash_len=32; максимум две hash/verify операции на процесс вне DB transaction.
 - Random tokens: 32 bytes, base64url без padding, DB только SHA-256 digest. AUTH_SECRET: минимум 32 random bytes encoded hex; HMAC namespace для каждого purpose.
-- TTL: web 7 дней, extension 1 час, bootstrap 15 минут, verify 24 часа, reset 30 минут, extension code 2 минуты; UTC/injected clock.
+- TTL: website 7 дней, bootstrap 15 минут, verify 24 часа, reset 30 минут; UTC/injected clock.
 - Cookie production: __Host-fitcheck_session, Secure, HttpOnly, SameSite=Lax, Path=/, без Domain; dev HTTP cookie fitcheck_session. Auth responses Cache-Control: no-store.
 - Обязательный exact Origin для browser mutations; session CSRF для web; register/login требуют pre-login bootstrap cookie+header. Ни wildcard, ни Referer fallback.
 - SMTP отсутствует: register/resend/reset-request → 503 email_unavailable до создания identity/tokens; остальные auth операции зависят от своих credentials. Только test dependency injection допускает fake mailer.
-- Extension callback exact HTTPS chromiumapp.org URI, S256, state passthrough, code bound to issuing session; mixed cookie/bearer rejected, wrong-kind token rejected.
-- Migration 0003; 0001/0002 immutable. Integration только explicit *_test DSN; никогда production truncate/downgrade/test suite.
+- Website account authentication: server cookie only; exact web Origin и session CSRF для mutations. Bearer credentials и extension callback/code exchange не поддерживаются.
+- По последующему явному указанию пользователя миграции пересоздаются с чистого листа: единая website-only baseline 0001 со всеми immutable triggers и auth_rate_buckets. Bootstrap только пустой БД; existing deployed DB не изменяется. Revisions в историческом ledger ниже отражают прежнюю реализацию, а не текущую цепочку миграций. Integration только explicit *_test DSN; никогда production truncate/downgrade/test suite.
 - Existing public DTO camelCase/error envelope сохранены; новые auth operations implemented, оставшийся roadmap planned. UI/proxy/migration локальных credentials — ANY-653/652.
 - Auth initially disabled; включение требует DB/secret, readiness проверяет DB/head и отдельно обозначает SMTP capability. Merge/push/deploy — по указанию пользователя; предоставление SMTP остаётся его следующим шагом.
 
@@ -32,6 +34,10 @@
 3. Ссылка подтверждения открыта в браузере другого аккаунта: код не подтверждает чужую pre-registered identity, а legit другой device требует login — Task 4.
 4. Caller подделал X-Forwarded-For либо повторил окно rate limit через другой процесс: spoof не меняет peer, DB increment/expiry остаются атомарными — Tasks 2, 6.
 5. OpenAPI экспортирован без DB/auth config: реальные auth routes остаются implemented с owner ANY-645, planned routes не затирают их — Task 6.
+
+## Historical implementation ledger
+
+The workspace, tasks, results, and deployment details below record the completed pre-cleanup implementation. Extension references are superseded by the scope update above; they are not future work.
 
 ## Workspace, baseline и файловая карта
 

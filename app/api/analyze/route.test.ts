@@ -9,7 +9,7 @@ import {
 import { createAnalyzeHandler } from "./handler"
 import { POST } from "./route"
 
-const allowedOrigin = "chrome-extension://fitcheck-test"
+const allowedOrigin = "https://fitcheck.example.com"
 const validBody = {
   profile: defaultProfile,
   job: detectedJob,

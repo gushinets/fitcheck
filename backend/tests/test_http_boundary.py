@@ -14,7 +14,7 @@ class Payload(BaseModel):
 
 @pytest.fixture
 def app():
-    app = create_app(Settings(allowed_origins=["https://web.example", "chrome-extension://abc"]))
+    app = create_app(Settings(allowed_origins=["https://web.example"]))
     @app.post("/test-json")
     async def payload(value: Payload):
         return value.model_dump()
@@ -63,7 +63,7 @@ def test_request_id_cannot_be_spoofed(app):
 
 
 @pytest.mark.parametrize("origin,allowed,credentials", [
-    ("https://web.example", True, True), ("chrome-extension://abc", True, False),
+    ("https://web.example", True, True), ("http://localhost:3000", False, False),
     ("https://web.example.evil", False, False), ("chrome-extension://evil", False, False),
 ])
 def test_cors_exact_origins(app, origin, allowed, credentials):

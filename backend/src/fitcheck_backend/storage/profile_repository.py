@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -12,6 +12,19 @@ from .payloads import encode_profile, decode_profile
 
 class ProfileRevisionConflict(RuntimeError):
     pass
+
+
+def get_profile(session: Session, owner_id: UUID, revision: int | None = None) -> ProfileResource | None:
+    statement = select(ProfileRevision).where(ProfileRevision.owner_id == owner_id)
+    if revision is None:
+        statement = statement.join(Profile, (Profile.owner_id == ProfileRevision.owner_id)
+            & (Profile.current_revision == ProfileRevision.revision))
+    else:
+        statement = statement.where(ProfileRevision.revision == revision)
+    value = session.scalar(statement)
+    if value is None:
+        return None
+    return ProfileResource(revision=str(value.revision), profile=decode_profile(value.profile))
 
 
 def create_profile(session: Session, owner_id: UUID, profile: FreelancerProfile) -> ProfileResource:
@@ -28,6 +41,17 @@ def update_profile(session: Session, owner_id: UUID, expected_revision: int, pro
     if type(expected_revision) is not int or expected_revision < 1:
         raise ProfileRevisionConflict("Invalid expected profile revision")
     payload = encode_profile(profile)
+    # Lock before the no-op check so a concurrent change cannot succeed between
+    # comparing the payload and returning the supposedly current revision.
+    current = session.scalar(select(Profile).where(Profile.owner_id == owner_id)
+        .with_for_update().execution_options(populate_existing=True))
+    if current is None or current.current_revision != expected_revision:
+        raise ProfileRevisionConflict('Profile revision changed')
+    saved = get_profile(session, owner_id, expected_revision)
+    if saved.profile.model_dump(mode='json', by_alias=True) == payload:
+        return saved
+    if expected_revision == 2_147_483_647:
+        raise ProfileRevisionConflict('Profile revision counter exhausted')
     new_revision = expected_revision + 1
     changed = session.execute(update(Profile).where(Profile.owner_id==owner_id, Profile.current_revision==expected_revision).values(current_revision=new_revision)).rowcount
     if not changed:

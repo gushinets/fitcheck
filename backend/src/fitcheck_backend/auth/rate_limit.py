@@ -16,7 +16,6 @@ POLICIES = {
     'reset_request': [('email', 3, 3600), ('ip', 20, 3600)],
     'verify_confirm': [('ip', 30, 900)],
     'reset_confirm': [('ip', 30, 900)],
-    'extension_exchange': [('ip', 30, 900)],
     'bootstrap': [('ip', 60, 900)],
     'delete': [('user', 5, 900)],
 }

@@ -81,6 +81,5 @@ class EmailAuthService:
             self._check_token(value, user.id)
             value.consumed_at = self.clock()
             repo.invalidate_tokens(user.id, 'reset_password', self.clock())
-            repo.invalidate_tokens(user.id, 'extension_code', self.clock())
             user.password_hash, user.updated_at = encoded, self.clock()
             repo.revoke_sessions(user.id, self.clock())

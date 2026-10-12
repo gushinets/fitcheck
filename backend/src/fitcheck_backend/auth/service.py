@@ -124,8 +124,8 @@ class AuthService:
                 raise AuthError('unauthenticated')
             return IssuedSession(principal_for(user, value), token, csrf, value.expires_at)
 
-    def resolve(self, token, kind):
-        if TOKEN_PATTERN.fullmatch(token) is None:
+    def resolve(self, token, kind='web'):
+        if kind != 'web' or TOKEN_PATTERN.fullmatch(token) is None:
             raise AuthError('unauthenticated')
         with auth_transaction(self.engine) as repo:
             value = repo.session_by_digest(self.crypto.digest(token), kind, self.clock())

@@ -13,8 +13,9 @@ from fitcheck_backend.contracts.openapi import export_openapi
 EXPECTED = {
     '/v1/auth/register': {'post'}, '/v1/auth/login': {'post'}, '/v1/auth/logout': {'post'},
     '/v1/auth/verify-email': {'post'}, '/v1/auth/password-reset/request': {'post'}, '/v1/auth/password-reset/confirm': {'post'},
-    '/v1/me': {'get','delete'}, '/v1/auth/extension/authorize': {'post'}, '/v1/auth/extension/token': {'post'}, '/v1/auth/extension/revoke': {'post'},
+    '/v1/me': {'get','delete'},
     '/v1/profile': {'get','put'}, '/v1/preferences': {'get','put'}, '/v1/draft': {'get','put','delete'},
+    '/v1/profile/revisions/{revision}': {'get'}, '/v1/profile/revisions/{revision}/comparison': {'get'},
     '/v1/extractions': {'post'}, '/v1/skill-suggestion-jobs': {'post'}, '/v1/analysis-jobs': {'post'}, '/v1/jobs/{jobId}': {'get'},
     '/v1/analyses/{analysisId}': {'get'}, '/v1/history': {'get','delete'}, '/v1/analyses/{analysisId}/feedback': {'put'},
     '/v1/analyses/{analysisId}/application-status': {'put'}, '/v1/analyses/{analysisId}/reanalyses': {'post'},
@@ -31,7 +32,7 @@ def test_complete_valid_contract_and_live_route_separation():
         assert set(document['paths'][path]) == methods
         for method in methods:
             operation = document['paths'][path][method]
-            implemented = operation['x-fitcheck-owner-task'] == 'ANY-645'
+            implemented = operation['x-fitcheck-owner-task'] in {'ANY-645', 'ANY-646'}
             assert operation['x-fitcheck-implementation'] == ('implemented' if implemented else 'planned')
             assert operation['x-fitcheck-owner-task'].startswith('ANY-')
             ids.append(operation['operationId'])
@@ -40,7 +41,7 @@ def test_complete_valid_contract_and_live_route_separation():
             response = getattr(TestClient(app), method)(path.replace('{jobId}', 'j').replace('{analysisId}', 'a').replace('{importId}', 'i'))
             assert response.status_code == (503 if implemented else 404)
     assert len(ids) == len(set(ids))
-    assert set(app.openapi()['paths']) == {'/health/live','/health/ready'} | {p for p in document['paths'] if p.startswith('/v1/auth/') or p == '/v1/me'}
+    assert set(app.openapi()['paths']) == {'/health/live','/health/ready'} | {p for p, methods in document['paths'].items() if any(m['x-fitcheck-owner-task'] in {'ANY-645', 'ANY-646'} for m in methods.values())}
     for path in ['/health/live','/health/ready']:
         assert document['paths'][path]['get']['x-fitcheck-implementation'] == 'implemented'
         assert document['paths'][path]['get']['responses'] == app.openapi()['paths'][path]['get']['responses']
@@ -50,11 +51,8 @@ def test_complete_valid_contract_and_live_route_separation():
 def test_security_idempotency_and_pagination():
     document = export_openapi(create_app(Settings()))
     profile = document['paths']['/v1/profile']['put']
-    assert profile['security'] == [{'webSession': []}, {'extensionBearer': []}]
+    assert profile['security'] == [{'webSession': []}]
     assert profile['x-fitcheck-cookie-mutation'] == {'originRequired': True, 'csrfHeader': 'X-CSRF-Token'}
-    authorize = document['paths']['/v1/auth/extension/authorize']['post']
-    assert authorize['security'] == [{'webSession': []}]
-    assert authorize['x-fitcheck-pkce'] == 'S256; exact configured extension redirect; one-time code'
     claim = document['paths']['/v1/guest-claims']['post']
     assert claim['security'] == [{'webSession': [], 'guestSession': []}]
     for path in ['/v1/analysis-jobs','/v1/skill-suggestion-jobs','/v1/import-jobs','/v1/guest-claims','/v1/analyses/{analysisId}/reanalyses']:

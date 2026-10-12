@@ -16,8 +16,8 @@ def test_settings_hide_secrets():
 @pytest.mark.parametrize('values', [
     {'smtp_host': 'smtp.example'}, {'smtp_security': 'plaintext'},
     {'env': 'production', 'auth_web_base_url': 'http://example.com'},
-    {'trusted_proxy_ips': ['*']}, {'auth_extension_redirect_uris': ['https://*.chromiumapp.org/callback']},
-    {'auth_extension_redirect_uris': ['https://abc.chromiumapp.org/callback?next=evil']},
+    {'trusted_proxy_ips': ['*']}, {'allowed_origins': ['https://*.example.com']},
+    {'allowed_origins': ['https://example.com/callback?next=evil']},
     {'smtp_from': 'sender@example.com\r\nBcc: x@example.com'},
 ])
 def test_unsafe_configuration_rejected(values):

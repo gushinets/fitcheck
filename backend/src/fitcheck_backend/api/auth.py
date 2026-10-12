@@ -3,21 +3,19 @@ from fastapi.responses import JSONResponse, Response
 from ..contracts import resources as r
 from ..contracts.openapi import ERRORS, SECURITY
 from .errors import ErrorEnvelope
-from .dependencies import required_runtime, account_principal, web_principal, extension_principal, client_ip, validate_web_origin, validate_extension_origin, validate_bootstrap, validate_account_mutation
+from .dependencies import required_runtime, account_principal, web_principal, client_ip, validate_web_origin, validate_bootstrap, validate_account_mutation
 from ..auth.crypto import cookie_name, cookie_options
 
 router = APIRouter(dependencies=[Depends(required_runtime)], responses={status: {'model': ErrorEnvelope, 'description': code} for status, code in ERRORS.items()})
 
 
-def metadata(access, *, csrf=False, origin=False, pkce=False):
+def metadata(access, *, csrf=False, origin=False):
     value = {'x-fitcheck-owner-task': 'ANY-645', 'x-fitcheck-implementation': 'implemented', 'security': SECURITY[access]}
     if origin:
         value['parameters'] = [{'name':'Origin','in':'header','required':True,'schema':{'type':'string'}}]
     if csrf:
         value.setdefault('parameters', []).append({'name':'X-CSRF-Token','in':'header','required':access!='account','schema':{'type':'string'}})
         value['x-fitcheck-cookie-mutation'] = {'originRequired': True, 'csrfHeader': 'X-CSRF-Token'}
-    if pkce:
-        value['x-fitcheck-pkce'] = 'S256; exact configured extension redirect; one-time code'
     return value
 
 
@@ -106,29 +104,6 @@ def request_reset(body: r.EmailRequest, request: Request):
 def confirm_reset(body: r.PasswordResetConfirm, request: Request):
     validate_web_origin(request)
     required_runtime(request).email.confirm_reset(body.token, body.password, client_ip(request))
-    return Response(status_code=204)
-
-
-@router.post('/v1/auth/extension/authorize', response_model=r.ExtensionCode, operation_id='authorizeExtension', openapi_extra=metadata('web', csrf=True, origin=True, pkce=True))
-def authorize_extension(body: r.ExtensionAuthorize, request: Request, principal=Depends(web_principal)):
-    validate_account_mutation(request, principal)
-    runtime = required_runtime(request)
-    issued = runtime.extension.authorize(principal, body.redirect_uri, body.code_challenge, body.state)
-    return r.ExtensionCode(code=issued.value, state=issued.state, expiresIn=max(1,int((issued.expires_at-runtime.clock()).total_seconds())))
-
-
-@router.post('/v1/auth/extension/token', response_model=r.ExtensionToken, operation_id='exchangeExtensionCode', openapi_extra=metadata('public', origin=True, pkce=True))
-def extension_token(body: r.ExtensionTokenRequest, request: Request):
-    validate_extension_origin(request)
-    runtime = required_runtime(request)
-    issued = runtime.extension.exchange(body.code, body.code_verifier, body.redirect_uri, client_ip(request))
-    return r.ExtensionToken(accessToken=issued.token, tokenType='Bearer', expiresIn=max(1,int((issued.expires_at-runtime.clock()).total_seconds())))
-
-
-@router.post('/v1/auth/extension/revoke', status_code=204, operation_id='revokeExtensionToken', openapi_extra=metadata('extension', origin=True))
-def revoke_extension(request: Request, principal=Depends(extension_principal)):
-    validate_extension_origin(request)
-    required_runtime(request).extension.revoke(principal)
     return Response(status_code=204)
 
 
