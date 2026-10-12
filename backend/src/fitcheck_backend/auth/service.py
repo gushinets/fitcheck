@@ -22,6 +22,8 @@ def auth_transaction(engine):
 
 
 def principal_for(user, session) -> Principal:
+    if user is None:
+        raise AuthError('unauthenticated')
     return Principal(user.id, user.owner_id, session.id, session.kind, user.normalized_email, user.email_verified_at is not None)
 
 
