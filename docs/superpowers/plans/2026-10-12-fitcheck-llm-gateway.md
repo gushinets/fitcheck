@@ -1,6 +1,6 @@
 # FitCheck LLM Gateway Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Перенести Fit-анализ и подсказки навыков в проверяемый server-owned gateway с учётом каждого физического вызова.
 
@@ -125,7 +125,7 @@
 - [x] Document policy, exact retry/deadline limits, ledger unknown usage semantics, configuration, migration ordering and deferred job/UI routes. Generate OpenAPI and TS from Python DTOs; verify planned endpoints remain planned. Review the dependency lock and configuration for secret/content telemetry.
 - [x] Run `uv run --locked pytest -m 'integration or not integration' -q` with disposable PG; migration bootstrap/re-upgrade/drift; `uv run --locked python scripts/export_openapi.py --check`; root `node scripts/generate-backend-types.mjs --check`, `npm test`, `npm run typecheck`, `npm run lint`, website build in CI. Expected: no failed tests/checks; canary clearly reports skipped unless enabled.
 - [x] Obtain independent final review of domain parity, retries/accounting, cancellation, owner boundaries, old JSON compatibility and dependency adapters; fix confirmed findings and rerun affected plus full checks. Mark plan tasks with evidence, not merely implementation status.
-- [ ] Commit final implementation/docs and push `dev` following existing user-authorized workflow. Apply additive migration 0002 before restarting dev API; verify migration head/readiness/unchanged auth/extraction. No reset or live LLM call merely to declare deployment complete. Record actual commit/check results and mark ANY-648 Done only after requirements and verification pass.
+- [x] Commit final implementation/docs and push `dev` following existing user-authorized workflow. Apply additive migration 0002 before restarting dev API; verify migration head/readiness/unchanged auth/extraction. No reset or live LLM call merely to declare deployment complete. Record actual commit/check results and mark ANY-648 Done only after requirements and verification pass.
 
 ## Self-review
 
