@@ -51,11 +51,18 @@ class ProviderCall(IdentityMixin, CreatedMixin, Base):
     currency: Mapped[str | None] = mapped_column(String(3))
     error_code: Mapped[str | None] = mapped_column(String(120))
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    prompt_version: Mapped[str | None] = mapped_column(String(120))
+    schema_version: Mapped[str | None] = mapped_column(String(120))
+    policy_version: Mapped[str | None] = mapped_column(String(120))
+    semantic_attempt: Mapped[int | None] = mapped_column(Integer)
+    transport_attempt: Mapped[int | None] = mapped_column(Integer)
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
     __table_args__ = (
         ForeignKeyConstraint(["job_id", "owner_id"], ["jobs.id", "jobs.owner_id"], deferrable=True, initially="IMMEDIATE"),
         CheckConstraint("job_id IS NULL OR owner_id IS NOT NULL", name="job_owner"),
         CheckConstraint("owner_id IS NOT NULL OR (job_id IS NULL AND request_key IS NULL)", name="anonymous"),
         CheckConstraint("attempt >= 1 AND state IN ('started','succeeded','failed','unknown')", name="state"),
+        CheckConstraint("semantic_attempt >= 1 AND transport_attempt >= 1 AND latency_ms >= 0", name="attempt_metadata"),
         CheckConstraint("input_tokens >= 0 AND output_tokens >= 0 AND cost >= 0", name="usage"),
         CheckConstraint("(cost IS NULL) = (currency IS NULL) AND (currency IS NULL OR currency IN ('USD','EUR','RUB'))", name="currency"),
         Index("ix_provider_calls_owner_job", "owner_id", "job_id", "created_at"),
