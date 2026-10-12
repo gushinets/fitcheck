@@ -314,28 +314,20 @@
         "title": "ApplicationStatusUpdate",
         "type": "object"
       },
-      "Credentials": {
+      "CsrfResource": {
         "additionalProperties": false,
         "properties": {
-          "email": {
-            "maxLength": 254,
+          "csrfToken": {
+            "maxLength": 1024,
             "minLength": 1,
-            "title": "Email",
+            "title": "Csrftoken",
             "type": "string"
-          },
-          "password": {
-            "maxLength": 128,
-            "minLength": 8,
-            "title": "Password",
-            "type": "string",
-            "writeOnly": true
           }
         },
         "required": [
-          "email",
-          "password"
+          "csrfToken"
         ],
-        "title": "Credentials",
+        "title": "CsrfResource",
         "type": "object"
       },
       "DraftResource": {
@@ -969,11 +961,41 @@
         "title": "GuestSession",
         "type": "object"
       },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
       "HealthResponse": {
         "properties": {
+          "dependencies": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dependencies"
+          },
           "stage": {
-            "const": "foundation",
             "default": "foundation",
+            "enum": [
+              "foundation",
+              "auth_storage"
+            ],
             "title": "Stage",
             "type": "string"
           },
@@ -1451,12 +1473,53 @@
         "title": "LegacyProfile",
         "type": "object"
       },
+      "LoginCredentials": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "minLength": 1,
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginCredentials",
+        "type": "object"
+      },
+      "PasswordConfirmation": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "title": "PasswordConfirmation",
+        "type": "object"
+      },
       "PasswordResetConfirm": {
         "additionalProperties": false,
         "properties": {
           "password": {
             "maxLength": 128,
-            "minLength": 8,
+            "minLength": 15,
             "title": "Password",
             "type": "string",
             "writeOnly": true
@@ -1559,6 +1622,30 @@
           "resetsAt"
         ],
         "title": "QuotaResource",
+        "type": "object"
+      },
+      "RegistrationCredentials": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "minLength": 1,
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 15,
+            "title": "Password",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "RegistrationCredentials",
         "type": "object"
       },
       "SessionResource": {
@@ -1918,6 +2005,46 @@
         ],
         "title": "Vacancy",
         "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -1979,6 +2106,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Database or migration state unavailable"
           }
         },
         "summary": "Ready",
@@ -2845,10 +2982,178 @@
         "x-fitcheck-owner-task": "ANY-649"
       }
     },
+    "/v1/auth/csrf": {
+      "get": {
+        "operationId": "getAuthCsrf",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CsrfResource"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "invalid_request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "body_too_large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "unsupported_content_type"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "rate_limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "internal_error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "upstream_failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "service_unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "timeout"
+          }
+        },
+        "security": [],
+        "summary": "Bootstrap",
+        "x-fitcheck-implementation": "implemented",
+        "x-fitcheck-owner-task": "ANY-645"
+      }
+    },
     "/v1/auth/extension/authorize": {
       "post": {
         "operationId": "authorizeExtension",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -2868,7 +3173,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -2996,11 +3301,12 @@
             "webSession": []
           }
         ],
+        "summary": "Authorize Extension",
         "x-fitcheck-cookie-mutation": {
           "csrfHeader": "X-CSRF-Token",
           "originRequired": true
         },
-        "x-fitcheck-implementation": "planned",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-645",
         "x-fitcheck-pkce": "S256; exact configured extension redirect; one-time code"
       }
@@ -3008,10 +3314,19 @@
     "/v1/auth/extension/revoke": {
       "post": {
         "operationId": "revokeExtensionToken",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "204": {
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -3139,15 +3454,24 @@
             "extensionBearer": []
           }
         ],
-        "x-fitcheck-implementation": "planned",
-        "x-fitcheck-owner-task": "ANY-645",
-        "x-fitcheck-pkce": "S256; exact configured extension redirect; one-time code"
+        "summary": "Revoke Extension",
+        "x-fitcheck-implementation": "implemented",
+        "x-fitcheck-owner-task": "ANY-645"
       }
     },
     "/v1/auth/extension/token": {
       "post": {
         "operationId": "exchangeExtensionCode",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -3167,7 +3491,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -3291,8 +3615,8 @@
           }
         },
         "security": [],
-        "x-fitcheck-implementation": "planned",
-        "x-fitcheck-origin-policy": "Verify trusted Origin for browser mutations; use anti-CSRF bootstrap for cookie-producing flows",
+        "summary": "Extension Token",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-645",
         "x-fitcheck-pkce": "S256; exact configured extension redirect; one-time code"
       }
@@ -3300,12 +3624,29 @@
     "/v1/auth/login": {
       "post": {
         "operationId": "login",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Credentials"
+                "$ref": "#/components/schemas/LoginCredentials"
               }
             }
           },
@@ -3320,7 +3661,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -3444,18 +3785,39 @@
           }
         },
         "security": [],
-        "x-fitcheck-implementation": "planned",
-        "x-fitcheck-origin-policy": "Verify trusted Origin for browser mutations; use anti-CSRF bootstrap for cookie-producing flows",
+        "summary": "Login",
+        "x-fitcheck-cookie-mutation": {
+          "csrfHeader": "X-CSRF-Token",
+          "originRequired": true
+        },
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-645"
       }
     },
     "/v1/auth/logout": {
       "post": {
         "operationId": "logout",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "204": {
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -3583,18 +3945,28 @@
             "webSession": []
           }
         ],
+        "summary": "Logout",
         "x-fitcheck-cookie-mutation": {
           "csrfHeader": "X-CSRF-Token",
           "originRequired": true
         },
-        "x-fitcheck-implementation": "planned",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-645"
       }
     },
     "/v1/auth/password-reset/confirm": {
       "post": {
         "operationId": "confirmPasswordReset",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -3607,7 +3979,7 @@
         },
         "responses": {
           "204": {
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -3731,15 +4103,24 @@
           }
         },
         "security": [],
-        "x-fitcheck-implementation": "planned",
-        "x-fitcheck-origin-policy": "Verify trusted Origin for browser mutations; use anti-CSRF bootstrap for cookie-producing flows",
+        "summary": "Confirm Reset",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-645"
       }
     },
     "/v1/auth/password-reset/request": {
       "post": {
         "operationId": "requestPasswordReset",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -3752,7 +4133,7 @@
         },
         "responses": {
           "204": {
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -3876,20 +4257,37 @@
           }
         },
         "security": [],
-        "x-fitcheck-implementation": "planned",
-        "x-fitcheck-origin-policy": "Verify trusted Origin for browser mutations; use anti-CSRF bootstrap for cookie-producing flows",
+        "summary": "Request Reset",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-645"
       }
     },
     "/v1/auth/register": {
       "post": {
         "operationId": "register",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Credentials"
+                "$ref": "#/components/schemas/RegistrationCredentials"
               }
             }
           },
@@ -3904,7 +4302,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -4028,15 +4426,181 @@
           }
         },
         "security": [],
-        "x-fitcheck-implementation": "planned",
-        "x-fitcheck-origin-policy": "Verify trusted Origin for browser mutations; use anti-CSRF bootstrap for cookie-producing flows",
+        "summary": "Register",
+        "x-fitcheck-cookie-mutation": {
+          "csrfHeader": "X-CSRF-Token",
+          "originRequired": true
+        },
+        "x-fitcheck-implementation": "implemented",
+        "x-fitcheck-owner-task": "ANY-645"
+      }
+    },
+    "/v1/auth/session": {
+      "get": {
+        "operationId": "getAuthSession",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResource"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "invalid_request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "body_too_large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "unsupported_content_type"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "rate_limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "internal_error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "upstream_failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "service_unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "timeout"
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          }
+        ],
+        "summary": "Session",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-645"
       }
     },
     "/v1/auth/verify-email": {
       "post": {
         "operationId": "verifyEmail",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -4049,7 +4613,169 @@
         },
         "responses": {
           "204": {
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "invalid_request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "body_too_large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "unsupported_content_type"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "rate_limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "internal_error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "upstream_failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "service_unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "timeout"
+          }
+        },
+        "security": [
+          {
+            "webSession": []
+          }
+        ],
+        "summary": "Verify Email",
+        "x-fitcheck-cookie-mutation": {
+          "csrfHeader": "X-CSRF-Token",
+          "originRequired": true
+        },
+        "x-fitcheck-implementation": "implemented",
+        "x-fitcheck-owner-task": "ANY-645"
+      }
+    },
+    "/v1/auth/verify-email/request": {
+      "post": {
+        "operationId": "requestEmailVerification",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -4173,8 +4899,8 @@
           }
         },
         "security": [],
-        "x-fitcheck-implementation": "planned",
-        "x-fitcheck-origin-policy": "Verify trusted Origin for browser mutations; use anti-CSRF bootstrap for cookie-producing flows",
+        "summary": "Request Verification",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-645"
       }
     },
@@ -5933,10 +6659,37 @@
     "/v1/me": {
       "delete": {
         "operationId": "deleteMe",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordConfirmation"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "204": {
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -6067,16 +6820,16 @@
             "extensionBearer": []
           }
         ],
+        "summary": "Delete Me",
         "x-fitcheck-cookie-mutation": {
           "csrfHeader": "X-CSRF-Token",
           "originRequired": true
         },
-        "x-fitcheck-implementation": "planned",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-645"
       },
       "get": {
         "operationId": "getMe",
-        "parameters": [],
         "responses": {
           "200": {
             "content": {
@@ -6086,7 +6839,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -6217,7 +6970,8 @@
             "extensionBearer": []
           }
         ],
-        "x-fitcheck-implementation": "planned",
+        "summary": "Me",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-645"
       }
     },

@@ -18,14 +18,17 @@ class OperationSpec:
 
 
 PLANNED_OPERATIONS = [
-    OperationSpec("post", "/v1/auth/register", "register", "ANY-645", r.SessionResource, r.Credentials, 201, "public"),
-    OperationSpec("post", "/v1/auth/login", "login", "ANY-645", r.SessionResource, r.Credentials, access="public"),
+    OperationSpec("get", "/v1/auth/csrf", "getAuthCsrf", "ANY-645", r.CsrfResource, access="public"),
+    OperationSpec("get", "/v1/auth/session", "getAuthSession", "ANY-645", r.SessionResource, access="web"),
+    OperationSpec("post", "/v1/auth/verify-email/request", "requestEmailVerification", "ANY-645", request=r.EmailRequest, status=204, access="public"),
+    OperationSpec("post", "/v1/auth/register", "register", "ANY-645", r.SessionResource, r.RegistrationCredentials, 201, "public"),
+    OperationSpec("post", "/v1/auth/login", "login", "ANY-645", r.SessionResource, r.LoginCredentials, access="public"),
     OperationSpec("post", "/v1/auth/logout", "logout", "ANY-645", status=204, access="web"),
-    OperationSpec("post", "/v1/auth/verify-email", "verifyEmail", "ANY-645", request=r.TokenRequest, status=204, access="public"),
+    OperationSpec("post", "/v1/auth/verify-email", "verifyEmail", "ANY-645", request=r.TokenRequest, status=204, access="web"),
     OperationSpec("post", "/v1/auth/password-reset/request", "requestPasswordReset", "ANY-645", request=r.EmailRequest, status=204, access="public"),
     OperationSpec("post", "/v1/auth/password-reset/confirm", "confirmPasswordReset", "ANY-645", request=r.PasswordResetConfirm, status=204, access="public"),
     OperationSpec("get", "/v1/me", "getMe", "ANY-645", r.UserResource),
-    OperationSpec("delete", "/v1/me", "deleteMe", "ANY-645", status=204),
+    OperationSpec("delete", "/v1/me", "deleteMe", "ANY-645", request=r.PasswordConfirmation, status=204),
     OperationSpec("post", "/v1/auth/extension/authorize", "authorizeExtension", "ANY-645", r.ExtensionCode, r.ExtensionAuthorize, access="web"),
     OperationSpec("post", "/v1/auth/extension/token", "exchangeExtensionCode", "ANY-645", r.ExtensionToken, r.ExtensionTokenRequest, access="public"),
     OperationSpec("post", "/v1/auth/extension/revoke", "revokeExtensionToken", "ANY-645", status=204, access="extension"),

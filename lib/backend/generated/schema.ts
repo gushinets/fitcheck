@@ -114,6 +114,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/csrf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bootstrap */
+        get: operations["getAuthCsrf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/extension/authorize": {
         parameters: {
             query?: never;
@@ -123,6 +140,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Authorize Extension */
         post: operations["authorizeExtension"];
         delete?: never;
         options?: never;
@@ -139,6 +157,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Revoke Extension */
         post: operations["revokeExtensionToken"];
         delete?: never;
         options?: never;
@@ -155,6 +174,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Extension Token */
         post: operations["exchangeExtensionCode"];
         delete?: never;
         options?: never;
@@ -171,6 +191,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Login */
         post: operations["login"];
         delete?: never;
         options?: never;
@@ -187,6 +208,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Logout */
         post: operations["logout"];
         delete?: never;
         options?: never;
@@ -203,6 +225,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Confirm Reset */
         post: operations["confirmPasswordReset"];
         delete?: never;
         options?: never;
@@ -219,6 +242,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Request Reset */
         post: operations["requestPasswordReset"];
         delete?: never;
         options?: never;
@@ -235,7 +259,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Register */
         post: operations["register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Session */
+        get: operations["getAuthSession"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -251,7 +293,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Verify Email */
         post: operations["verifyEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/verify-email/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request Verification */
+        post: operations["requestEmailVerification"];
         delete?: never;
         options?: never;
         head?: never;
@@ -393,9 +453,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Me */
         get: operations["getMe"];
         put?: never;
         post?: never;
+        /** Delete Me */
         delete: operations["deleteMe"];
         options?: never;
         head?: never;
@@ -597,12 +659,10 @@ export interface components {
              */
             applicationStatus: "not_applied" | "applied" | "replied" | "interview" | "rejected" | "hired";
         };
-        /** Credentials */
-        Credentials: {
-            /** Email */
-            email: string;
-            /** Password */
-            password: string;
+        /** CsrfResource */
+        CsrfResource: {
+            /** Csrftoken */
+            csrfToken: string;
         };
         /** DraftResource */
         DraftResource: {
@@ -814,12 +874,16 @@ export interface components {
         };
         /** HealthResponse */
         HealthResponse: {
+            /** Dependencies */
+            dependencies?: {
+                [key: string]: string;
+            } | null;
             /**
              * Stage
              * @default foundation
-             * @constant
+             * @enum {string}
              */
-            stage: "foundation";
+            stage: "foundation" | "auth_storage";
             /**
              * Status
              * @default ok
@@ -835,6 +899,11 @@ export interface components {
             items: components["schemas"]["AnalysisResource"][];
             /** Nextcursor */
             nextCursor: string | null;
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
         };
         /** ImportFailed */
         ImportFailed: {
@@ -973,6 +1042,18 @@ export interface components {
             /** Workformats */
             workFormats: ("remote" | "office" | "hybrid")[];
         };
+        /** LoginCredentials */
+        LoginCredentials: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+        };
+        /** PasswordConfirmation */
+        PasswordConfirmation: {
+            /** Password */
+            password: string;
+        };
         /** PasswordResetConfirm */
         PasswordResetConfirm: {
             /** Password */
@@ -1006,6 +1087,13 @@ export interface components {
             remaining: number;
             /** Resetsat */
             resetsAt: string | null;
+        };
+        /** RegistrationCredentials */
+        RegistrationCredentials: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
         };
         /** SessionResource */
         SessionResource: {
@@ -1143,6 +1231,19 @@ export interface components {
             /** Url */
             url?: string;
         };
+        /** ValidationError */
+        ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -1188,6 +1289,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+            /** @description Database or migration state unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -1858,10 +1968,143 @@ export interface operations {
             };
         };
     };
+    getAuthCsrf: {
+        parameters: {
+            query?: never;
+            header: {
+                Origin: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CsrfResource"];
+                };
+            };
+            /** @description invalid_request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description body_too_large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unsupported_content_type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate_limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal_error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description upstream_failure */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description service_unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description timeout */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     authorizeExtension: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                Origin: string;
+                "X-CSRF-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1871,7 +2114,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1993,13 +2236,15 @@ export interface operations {
     revokeExtensionToken: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                Origin: string;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -2119,7 +2364,9 @@ export interface operations {
     exchangeExtensionCode: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                Origin: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2129,7 +2376,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2251,17 +2498,20 @@ export interface operations {
     login: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                Origin: string;
+                "X-CSRF-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["Credentials"];
+                "application/json": components["schemas"]["LoginCredentials"];
             };
         };
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2383,13 +2633,16 @@ export interface operations {
     logout: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                Origin: string;
+                "X-CSRF-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -2509,7 +2762,9 @@ export interface operations {
     confirmPasswordReset: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                Origin: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2519,7 +2774,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -2639,7 +2894,9 @@ export interface operations {
     requestPasswordReset: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                Origin: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2649,7 +2906,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -2769,18 +3026,149 @@ export interface operations {
     register: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                Origin: string;
+                "X-CSRF-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["Credentials"];
+                "application/json": components["schemas"]["RegistrationCredentials"];
             };
         };
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionResource"];
+                };
+            };
+            /** @description invalid_request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description body_too_large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unsupported_content_type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate_limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal_error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description upstream_failure */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description service_unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description timeout */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getAuthSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2901,7 +3289,10 @@ export interface operations {
     verifyEmail: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                Origin: string;
+                "X-CSRF-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2911,7 +3302,139 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid_request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description body_too_large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description unsupported_content_type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description rate_limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description internal_error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description upstream_failure */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description service_unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description timeout */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    requestEmailVerification: {
+        parameters: {
+            query?: never;
+            header: {
+                Origin: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -4468,7 +4991,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4590,13 +5113,20 @@ export interface operations {
     deleteMe: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                Origin: string;
+                "X-CSRF-Token"?: string;
+            };
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordConfirmation"];
+            };
+        };
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;

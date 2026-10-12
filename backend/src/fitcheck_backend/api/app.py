@@ -1,14 +1,40 @@
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 from fitcheck_backend.config import Settings
 from fitcheck_backend.api.health import router
 from fitcheck_backend.api.errors import install_error_handlers
 from fitcheck_backend.api.middleware import RequestBoundaryMiddleware
+from fitcheck_backend.api.auth import router as auth_router
+from fitcheck_backend.api.runtime import AuthRuntime
+from fitcheck_backend.contracts.openapi import security_schemes
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
-    app = FastAPI(title="FitCheck API", version="0.1.0", redirect_slashes=False)
-    app.state.settings = settings if settings is not None else Settings()
+def create_app(settings: Settings | None = None, *, auth_runtime: AuthRuntime | None = None) -> FastAPI:
+    configuration = settings if settings is not None else Settings()
+    @asynccontextmanager
+    async def lifespan(app):
+        runtime = auth_runtime if auth_runtime is not None else (AuthRuntime(configuration) if configuration.auth_enabled else None)
+        app.state.auth_runtime = runtime
+        try:
+            yield
+        finally:
+            if runtime is not None:
+                runtime.close()
+            app.state.auth_runtime = None
+    app = FastAPI(title="FitCheck API", version="0.1.0", redirect_slashes=False, lifespan=lifespan)
+    app.state.settings = configuration
+    app.state.auth_runtime = auth_runtime
     install_error_handlers(app)
     app.add_middleware(RequestBoundaryMiddleware, max_body_bytes=app.state.settings.api_body_max_bytes, allowed_origins=app.state.settings.allowed_origins)
     app.include_router(router)
+    app.include_router(auth_router)
+    original_openapi = app.openapi
+    def documented_openapi():
+        doc = original_openapi()
+        doc.setdefault('components', {})['securitySchemes'] = security_schemes()
+        for item in doc['paths'].values():
+            for operation in item.values():
+                operation['responses'].pop('422', None)
+        return doc
+    app.openapi = documented_openapi
     return app

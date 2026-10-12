@@ -3,6 +3,7 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
+from fitcheck_backend.auth.errors import AuthError
 
 
 class ErrorDetail(BaseModel):
@@ -37,6 +38,11 @@ def error_response(status: int, code: str, message: str, request_id: str,
 
 
 def install_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(AuthError)
+    async def auth_error(request: Request, exc: AuthError):
+        headers = {'Retry-After': str(exc.retry_after)} if exc.retry_after is not None else None
+        return error_response(exc.status, exc.code, exc.code.replace('_', ' ').capitalize(), request.state.request_id, headers=headers)
+
     @app.exception_handler(RequestValidationError)
     async def invalid(request: Request, exc: RequestValidationError):
         details = [ErrorDetail(location=list(item["loc"]), code=item["type"]) for item in exc.errors()]

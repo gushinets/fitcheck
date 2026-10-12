@@ -36,6 +36,8 @@ class RequestBoundaryMiddleware:
                 status = message["status"]
                 output = MutableHeaders(scope=message)
                 output["X-Request-ID"] = request_id
+                if scope['path'].startswith('/v1/auth/') or scope['path'] == '/v1/me':
+                    output['Cache-Control'] = 'no-store'
                 output.add_vary_header("Origin")
                 if allowed:
                     output["Access-Control-Allow-Origin"] = origin

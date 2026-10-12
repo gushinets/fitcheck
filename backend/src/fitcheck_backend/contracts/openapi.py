@@ -20,6 +20,17 @@ def ref(model):
     return {"$ref": f"#/components/schemas/{model.__name__}"}
 
 
+def security_schemes():
+    return {
+        'webSession': {'type':'apiKey','in':'cookie','name':'__Host-fitcheck_session',
+                       'description':'Secure HttpOnly SameSite=Lax Path=/, no Domain; separate dev HTTP cookie. Cookie mutations require verified Origin and CSRF.'},
+        'guestSession': {'type':'apiKey','in':'cookie','name':'__Host-fitcheck_guest',
+                         'description':'Server-issued guest session, never a client-supplied guestId; separate dev HTTP cookie.'},
+        'extensionBearer': {'type':'http','scheme':'bearer',
+                            'description':'Short-lived extension token obtained through browser login and one-time PKCE S256 code; explicit extension redirect allowlist.'},
+    }
+
+
 def _omit_absent_defaults(value):
     if isinstance(value, dict):
         # Optional non-nullable fields omit the value rather than promise a null default.
@@ -41,20 +52,15 @@ def export_openapi(app: FastAPI) -> dict:
                                   ref_template="#/components/schemas/{model}")
     document.setdefault("components", {}).setdefault("schemas", {}).update(schema.get("$defs", {}))
     _omit_absent_defaults(document["components"]["schemas"])
-    document["components"]["securitySchemes"] = {
-        "webSession": {"type": "apiKey", "in": "cookie", "name": "__Host-fitcheck_session",
-                       "description": "Secure HttpOnly SameSite=Lax Path=/, no Domain; separate dev HTTP cookie. Cookie mutations require verified Origin and CSRF."},
-        "guestSession": {"type": "apiKey", "in": "cookie", "name": "__Host-fitcheck_guest",
-                         "description": "Server-issued guest session, never a client-supplied guestId; separate dev HTTP cookie."},
-        "extensionBearer": {"type": "http", "scheme": "bearer",
-                            "description": "Short-lived extension token obtained through browser login and one-time PKCE S256 code; explicit extension redirect allowlist."},
-    }
+    document["components"]["securitySchemes"] = security_schemes()
     document["x-fitcheck-legacy-error-status"] = LEGACY_ERROR_STATUS
     for item in document["paths"].values():
         for operation in item.values():
             operation["x-fitcheck-implementation"] = "implemented"
-            operation["x-fitcheck-owner-task"] = "ANY-643"
+            operation.setdefault("x-fitcheck-owner-task", "ANY-643")
     for operation in PLANNED_OPERATIONS:
+        if operation.method in document['paths'].get(operation.path, {}):
+            continue
         parameters = [{"name": name, "in": "path", "required": True,
                        "schema": {"type": "string", "minLength": 1, "maxLength": 200}}
                       for name in re.findall(r"\{(\w+)\}", operation.path)]

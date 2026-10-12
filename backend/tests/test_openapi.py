@@ -31,15 +31,16 @@ def test_complete_valid_contract_and_live_route_separation():
         assert set(document['paths'][path]) == methods
         for method in methods:
             operation = document['paths'][path][method]
-            assert operation['x-fitcheck-implementation'] == 'planned'
+            implemented = operation['x-fitcheck-owner-task'] == 'ANY-645'
+            assert operation['x-fitcheck-implementation'] == ('implemented' if implemented else 'planned')
             assert operation['x-fitcheck-owner-task'].startswith('ANY-')
             ids.append(operation['operationId'])
             for status in ['400','401','403','404','409','413','415','429','500','502','503','504']:
                 assert operation['responses'][status]['content']['application/json']['schema']['$ref'].endswith('/ErrorEnvelope')
             response = getattr(TestClient(app), method)(path.replace('{jobId}', 'j').replace('{analysisId}', 'a').replace('{importId}', 'i'))
-            assert response.status_code == 404
+            assert response.status_code == (503 if implemented else 404)
     assert len(ids) == len(set(ids))
-    assert set(app.openapi()['paths']) == {'/health/live','/health/ready'}
+    assert set(app.openapi()['paths']) == {'/health/live','/health/ready'} | {p for p in document['paths'] if p.startswith('/v1/auth/') or p == '/v1/me'}
     for path in ['/health/live','/health/ready']:
         assert document['paths'][path]['get']['x-fitcheck-implementation'] == 'implemented'
         assert document['paths'][path]['get']['responses'] == app.openapi()['paths'][path]['get']['responses']

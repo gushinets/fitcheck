@@ -180,6 +180,10 @@ class SessionResource(DTO):
     csrf_token: text(1024)
 
 
+class CsrfResource(DTO):
+    csrf_token: text(1024)
+
+
 class ExtensionAuthorize(DTO):
     redirect_uri: PublicUrl
     code_challenge: Annotated[str, Field(strict=True, pattern=r"^[A-Za-z0-9_-]{43}$")]
