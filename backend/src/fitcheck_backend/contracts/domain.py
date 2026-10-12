@@ -121,3 +121,5 @@ class FitAnalysis(DTO):
     strength_evidence: Annotated[list[StrengthEvidence], Field(max_length=3)] = None
     risks: Annotated[list[text(240)], Field(max_length=3)]
     breakdown: FitBreakdown
+    verdict_threshold: Score = None
+    fit_condition: text(300) | None = Field(default=None, exclude_if=lambda value: value is None)
