@@ -6,6 +6,7 @@ from fitcheck_backend.api.errors import install_error_handlers
 from fitcheck_backend.api.middleware import RequestBoundaryMiddleware
 from fitcheck_backend.api.auth import router as auth_router
 from fitcheck_backend.api.profiles import router as profiles_router
+from fitcheck_backend.api.extraction import router as extraction_router
 from fitcheck_backend.api.runtime import AuthRuntime
 from fitcheck_backend.contracts.openapi import security_schemes
 
@@ -30,6 +31,7 @@ def create_app(settings: Settings | None = None, *, auth_runtime: AuthRuntime | 
     app.include_router(router)
     app.include_router(auth_router)
     app.include_router(profiles_router)
+    app.include_router(extraction_router)
     original_openapi = app.openapi
     def documented_openapi():
         doc = original_openapi()

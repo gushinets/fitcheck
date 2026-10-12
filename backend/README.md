@@ -16,7 +16,7 @@ Settings use the FITCHECK_ prefix (see `.env.example`). Environment is dev/test/
 uv run pytest -q
 ```
 
-Storage and migrations are implemented in ANY-644, server authentication in ANY-645, and profile/preferences/draft API in ANY-646. Remaining tasks: extraction ANY-647, provider gateway ANY-648, durable jobs ANY-649, history ANY-650, guest quotas ANY-651, local import ANY-652, UI integration ANY-653 and production operations ANY-654. Current Next.js APIs and website remain active until integration.
+Storage and migrations are implemented in ANY-644, server authentication in ANY-645, profile/preferences/draft API in ANY-646 and vacancy extraction in ANY-647. Remaining tasks: provider gateway ANY-648, durable jobs ANY-649, history ANY-650, guest quotas ANY-651, local import ANY-652, UI integration ANY-653 and production operations ANY-654. Current Next.js APIs and website remain active until integration.
 
 The HTTP boundary generates X-Request-ID; client-supplied IDs are ignored. Errors are `{error:{code,message,requestId,details}}`; details contain field locations/codes only. Validation errors use 400, 404/405 share the envelope, unexpected exceptions use a safe 500. Actual body bytes are limited even without/trusting Content-Length; mutation bodies must use application/json. Logs contain request ID/method/path/status only; uvicorn access logging is disabled to avoid query logging.
 
@@ -30,7 +30,7 @@ uv run python scripts/export_openapi.py
 uv run python scripts/export_openapi.py --check
 ```
 
-Committed `../contracts/fitcheck.openapi.json` is the full roadmap contract. Live `/openapi.json` contains implemented health, account/auth, profile, preferences and draft routes; disabled auth returns 503. Remaining full-export business routes are annotated `x-fitcheck-implementation: planned` and `x-fitcheck-owner-task`; they return 404 in the current runtime. Export requires no environment/DB/provider setup. DTOs use camelCase, reject unknown new-request fields, and omit missing optional values (explicit null for clearable resources and initial expectedRevision). Legacy import accepts and discards desiredMonthlyIncome and never accepts local passwords/tokens.
+Committed `../contracts/fitcheck.openapi.json` is the full roadmap contract. Live `/openapi.json` contains implemented health, account/auth, profile, preferences, draft and extraction routes; disabled auth returns 503. Remaining full-export business routes are annotated `x-fitcheck-implementation: planned` and `x-fitcheck-owner-task`; they return 404 in the current runtime. Export requires no environment/DB/provider setup. DTOs use camelCase, reject unknown new-request fields, and omit missing optional values (explicit null for clearable resources and initial expectedRevision). Legacy import accepts and discards desiredMonthlyIncome and never accepts local passwords/tokens.
 
 Cookie mutations require verified Origin and X-CSRF-Token. Idempotency-Key is required by contracts for job starts, reanalysis, guest claim and import. Identity, ownership, quota and atomic admission enforcement belong to the annotated implementing tasks.
 
@@ -70,6 +70,35 @@ devices. Analysis snapshots already contain profileRevision and the used profile
 updating the profile preserves that historical revision. ANY-649/650 will connect
 analysis execution/history to these revisions; ANY-652/653 handle local import and
 UI adapters. The website-only release uses the fresh initial migration described below.
+
+## Vacancy extraction (ANY-647)
+
+`POST /v1/extractions` accepts `{"type":"url","url":"https://example.com/job"}` or
+`{"type":"text","text":"Title\nDescription…"}` and returns `{vacancy}` with a new UUID.
+It requires a verified web account, trusted Origin and X-CSRF-Token. Guest admission
+is deferred to ANY-651; switching the website to this API belongs to ANY-653.
+The returned vacancy is editable and does not overwrite a saved draft. After review,
+save it explicitly with `PUT /v1/draft` or pass it to the future analysis API.
+
+The parser removes HTML navigation/scripts, uses JobPosting JSON-LD and visible
+Freelancer project content, and extracts skills and hourly/fixed budgets in USD,
+EUR and RUB. Monthly/annual salaries are not treated as hourly rates. Explicit
+competition data uses optional `proposalCount`, `averageBid`, `averageBidCurrency`;
+unknown values remain absent (null input is accepted and omitted on output).
+`provenance` maps extracted fields to `json_ld`, `html` or `text`.
+Existing draft/snapshot JSON storage accepts these fields without a migration.
+
+URL fetching permits only HTTP(S) public addresses, validates every resolved address
+and redirect, and pins connections to the checked IP while verifying HTTPS against
+the original hostname. It forwards no account cookies or credentials. Limits are
+2,000 URL characters, three redirects, eight seconds total, 64 KiB response headers,
+and 1 MB body (3 MB for exact Freelancer project URLs). Failed fetches consume the
+same quota: 30 requests per account/minute and 120 per IP/15 minutes, persisted in
+PostgreSQL. A rejection returns 429 with Retry-After.
+Safe structured errors suggest manual input when a page is blocked, unsupported,
+too large, unavailable, or contains insufficient vacancy text. Text must have at
+least a two-character title and a 30-character description; request limits are
+documented in OpenAPI. No LLM or provider credentials are needed.
 
 ## Verification and rollout
 

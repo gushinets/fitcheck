@@ -295,6 +295,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Extract Vacancy */
         post: operations["extractVacancy"];
         delete?: never;
         options?: never;
@@ -1156,6 +1157,16 @@ export interface components {
         /** Vacancy */
         Vacancy: {
             /**
+             * Averagebid
+             * @default null
+             */
+            averageBid: number | null;
+            /**
+             * Averagebidcurrency
+             * @default null
+             */
+            averageBidCurrency: ("USD" | "EUR" | "RUB") | null;
+            /**
              * Budgetcurrency
              * @enum {string}
              */
@@ -1180,6 +1191,15 @@ export interface components {
             id: string;
             /** Postedago */
             postedAgo?: string;
+            /**
+             * Proposalcount
+             * @default null
+             */
+            proposalCount: number | null;
+            /** Provenance */
+            provenance?: {
+                [key: string]: "json_ld" | "html" | "text";
+            };
             /** Skills */
             skills: string[];
             /** Title */
@@ -3507,7 +3527,10 @@ export interface operations {
     extractVacancy: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                Origin: string;
+                "X-CSRF-Token": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3517,7 +3540,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;

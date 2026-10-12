@@ -18,6 +18,7 @@ POLICIES = {
     'reset_confirm': [('ip', 30, 900)],
     'bootstrap': [('ip', 60, 900)],
     'delete': [('user', 5, 900)],
+    'extraction': [('user', 30, 60), ('ip', 120, 900)],
 }
 
 

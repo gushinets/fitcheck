@@ -36,6 +36,10 @@ Identifier = text(200)
 Score = Annotated[StrictInt, Field(ge=0, le=100)]
 Revision = text(200)
 PublicUrl = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=2000)]
+ProvenanceField = Literal['url', 'title', 'description', 'skills', 'hourlyRateMin',
+    'hourlyRateMax', 'fixedBudget', 'fixedBudgetMax', 'budgetCurrency',
+    'proposalCount', 'averageBid', 'averageBidCurrency']
+ProvenanceSource = Literal['json_ld', 'html', 'text']
 
 
 class FreelancerProfile(DTO):
@@ -78,6 +82,11 @@ class Vacancy(DTO):
     posted_ago: text(100) = None
     client_rating: number(5) = None
     client_spend: number(10_000_000_000) = None
+    proposal_count: Annotated[StrictInt, Field(ge=0, le=10_000_000)] | None = Field(
+        default=None, exclude_if=lambda value: value is None)
+    average_bid: number(100_000_000) | None = Field(default=None, exclude_if=lambda value: value is None)
+    average_bid_currency: Currency | None = Field(default=None, exclude_if=lambda value: value is None)
+    provenance: dict[ProvenanceField, ProvenanceSource] = None
 
     @field_validator("url")
     @classmethod

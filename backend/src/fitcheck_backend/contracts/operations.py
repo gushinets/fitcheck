@@ -38,7 +38,7 @@ PLANNED_OPERATIONS = [
     OperationSpec("get", "/v1/draft", "getDraft", "ANY-646", r.DraftResponse),
     OperationSpec("put", "/v1/draft", "updateDraft", "ANY-646", r.DraftResponse, r.DraftResponse),
     OperationSpec("delete", "/v1/draft", "deleteDraft", "ANY-646", status=204),
-    OperationSpec("post", "/v1/extractions", "extractVacancy", "ANY-647", r.ExtractionResponse, r.ExtractionRequest, access="identity"),
+    OperationSpec("post", "/v1/extractions", "extractVacancy", "ANY-647", r.ExtractionResponse, r.ExtractionRequest),
     OperationSpec("post", "/v1/skill-suggestion-jobs", "startSkillSuggestions", "ANY-648/649", j.JobReference, r.SkillSuggestionStart, 202, "identity", True),
     OperationSpec("post", "/v1/analysis-jobs", "startAnalysis", "ANY-649", j.JobReference, r.AnalysisStart, 202, "identity", True),
     OperationSpec("get", "/v1/jobs/{jobId}", "getJob", "ANY-649", j.JobState, access="identity"),

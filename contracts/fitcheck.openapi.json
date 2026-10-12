@@ -1815,6 +1815,37 @@
       "Vacancy": {
         "additionalProperties": false,
         "properties": {
+          "averageBid": {
+            "anyOf": [
+              {
+                "maximum": 100000000,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Averagebid"
+          },
+          "averageBidCurrency": {
+            "anyOf": [
+              {
+                "enum": [
+                  "USD",
+                  "EUR",
+                  "RUB"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Averagebidcurrency"
+          },
           "budgetCurrency": {
             "enum": [
               "USD",
@@ -1883,6 +1914,48 @@
             "minLength": 1,
             "title": "Postedago",
             "type": "string"
+          },
+          "proposalCount": {
+            "anyOf": [
+              {
+                "maximum": 10000000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Proposalcount"
+          },
+          "provenance": {
+            "additionalProperties": {
+              "enum": [
+                "json_ld",
+                "html",
+                "text"
+              ],
+              "type": "string"
+            },
+            "propertyNames": {
+              "enum": [
+                "url",
+                "title",
+                "description",
+                "skills",
+                "hourlyRateMin",
+                "hourlyRateMax",
+                "fixedBudget",
+                "fixedBudgetMax",
+                "budgetCurrency",
+                "proposalCount",
+                "averageBid",
+                "averageBidCurrency"
+              ]
+            },
+            "title": "Provenance",
+            "type": "object"
           },
           "skills": {
             "items": {
@@ -4797,7 +4870,24 @@
     "/v1/extractions": {
       "post": {
         "operationId": "extractVacancy",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -4817,7 +4907,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -4943,16 +5033,14 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "guestSession": []
           }
         ],
+        "summary": "Extract Vacancy",
         "x-fitcheck-cookie-mutation": {
           "csrfHeader": "X-CSRF-Token",
           "originRequired": true
         },
-        "x-fitcheck-implementation": "planned",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-647"
       }
     },

@@ -32,7 +32,7 @@ def test_complete_valid_contract_and_live_route_separation():
         assert set(document['paths'][path]) == methods
         for method in methods:
             operation = document['paths'][path][method]
-            implemented = operation['x-fitcheck-owner-task'] in {'ANY-645', 'ANY-646'}
+            implemented = operation['x-fitcheck-owner-task'] in {'ANY-645', 'ANY-646', 'ANY-647'}
             assert operation['x-fitcheck-implementation'] == ('implemented' if implemented else 'planned')
             assert operation['x-fitcheck-owner-task'].startswith('ANY-')
             ids.append(operation['operationId'])
@@ -41,7 +41,7 @@ def test_complete_valid_contract_and_live_route_separation():
             response = getattr(TestClient(app), method)(path.replace('{jobId}', 'j').replace('{analysisId}', 'a').replace('{importId}', 'i'))
             assert response.status_code == (503 if implemented else 404)
     assert len(ids) == len(set(ids))
-    assert set(app.openapi()['paths']) == {'/health/live','/health/ready'} | {p for p, methods in document['paths'].items() if any(m['x-fitcheck-owner-task'] in {'ANY-645', 'ANY-646'} for m in methods.values())}
+    assert set(app.openapi()['paths']) == {'/health/live','/health/ready'} | {p for p, methods in document['paths'].items() if any(m['x-fitcheck-owner-task'] in {'ANY-645', 'ANY-646', 'ANY-647'} for m in methods.values())}
     for path in ['/health/live','/health/ready']:
         assert document['paths'][path]['get']['x-fitcheck-implementation'] == 'implemented'
         assert document['paths'][path]['get']['responses'] == app.openapi()['paths'][path]['get']['responses']
@@ -53,6 +53,9 @@ def test_security_idempotency_and_pagination():
     profile = document['paths']['/v1/profile']['put']
     assert profile['security'] == [{'webSession': []}]
     assert profile['x-fitcheck-cookie-mutation'] == {'originRequired': True, 'csrfHeader': 'X-CSRF-Token'}
+    extraction = document['paths']['/v1/extractions']['post']
+    assert extraction['security'] == [{'webSession': []}]
+    assert extraction['x-fitcheck-cookie-mutation'] == profile['x-fitcheck-cookie-mutation']
     claim = document['paths']['/v1/guest-claims']['post']
     assert claim['security'] == [{'webSession': [], 'guestSession': []}]
     for path in ['/v1/analysis-jobs','/v1/skill-suggestion-jobs','/v1/import-jobs','/v1/guest-claims','/v1/analyses/{analysisId}/reanalyses']:

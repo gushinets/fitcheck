@@ -13,6 +13,7 @@ from ..auth.email_service import EmailAuthService
 from ..auth.access import AccountDeletionService
 from ..auth.errors import AuthError
 from ..profiles.service import ProfileService
+from ..extraction.service import ExtractionService
 
 
 class AuthRuntime:
@@ -30,6 +31,7 @@ class AuthRuntime:
         self.email = EmailAuthService(self.engine, self.crypto, passwords, self.limiter, self.mailer, clock)
         self.deletion = AccountDeletionService(self.engine, passwords, self.limiter, clock)
         self.profiles = ProfileService(self.engine, clock)
+        self.extraction = ExtractionService(self.limiter)
 
     def close(self):
         if self._owns_engine:
