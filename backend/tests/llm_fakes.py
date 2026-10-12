@@ -22,6 +22,8 @@ class Ledger:
 class Adapter:
     def __init__(self, values):
         self.values, self.calls = iter(values), []
+    def available(self):
+        return True
     async def complete(self, **kwargs):
         self.calls.append(kwargs)
         value = next(self.values)
@@ -50,5 +52,4 @@ def reply():
 async def complete(gateway, context):
     return await gateway.complete(context=context,messages=[{'role':'user','content':'data'}],
         semantic_attempt=1,operation='analysis.generate',max_tokens=1200)
-
 

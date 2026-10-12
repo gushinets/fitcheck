@@ -49,6 +49,9 @@ class LiteLlmAdapter:
         self._closed = True
         await self.handler.close()
 
+    def available(self) -> bool:
+        return bool(self._api_key) and not self._closed
+
     async def complete(self, *, messages: list[dict], policy: ProviderPolicy,
             max_tokens: int, timeout: float) -> ProviderReply:
         if not self._api_key or self._closed:

@@ -16,6 +16,7 @@ class ProviderPolicy:
     attempt_seconds: float = 45
     max_tokens: int = 1200
     audit_max_tokens: int = 1000
+    audit_schema_version: str = 'fitcheck.grounding.v1'
 
 
 def analysis_policy() -> ProviderPolicy:

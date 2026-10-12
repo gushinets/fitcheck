@@ -24,9 +24,14 @@ class ProviderGateway:
     def reject(self, result: GatewayReply):
         self._finish(result, 'failed', 'invalid_output')
 
+    def ensure_available(self):
+        if not self.adapter.available():
+            raise LlmError('service_unavailable')
+
     async def complete(self, *, context: OperationContext, messages: list[dict],
             semantic_attempt: int, operation: str, max_tokens: int) -> GatewayReply:
         policy = context.policy
+        self.ensure_available()
         version = {'analysis.generate':PROMPT_VERSION, 'analysis.audit':AUDIT_PROMPT_VERSION,
             'skill_suggestions':SKILLS_PROMPT_VERSION}.get(operation)
         if version is None or not 1 <= semantic_attempt <= policy.semantic_attempts:
@@ -36,7 +41,9 @@ class ProviderGateway:
             try:
                 call_id = self.ledger.start(ProviderAttempt(context.owner_id, context.job_id,
                     context.operation_id, physical, semantic_attempt, transport_attempt,
-                    operation, policy.provider, policy.model, version, policy.schema_version, policy.policy_version))
+                    operation, policy.provider, policy.model, version,
+                    policy.audit_schema_version if operation=='analysis.audit' else policy.schema_version,
+                    policy.policy_version))
             except Exception:
                 raise LlmError('service_unavailable') from None
             started = self.clock()
