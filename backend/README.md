@@ -40,7 +40,7 @@ From the repository root, `pnpm backend:types` regenerates TypeScript and `pnpm 
 
 CI runs backend pytest and OpenAPI drift with Python 3.12/uv 0.12.7, plus generated TypeScript drift and the existing frontend test/typecheck/lint/Webpack/extension builds. For a fresh Node install run `pnpm install --frozen-lockfile` (postinstall prepares WXT types); `pnpm exec next typegen` generates Next route declarations when needed.
 
-Storage implementation does not provision a production database or expose business auth/LLM routes. No Dokploy routing/secrets/applications change here. At ANY-653 the web proxy `/backend/*` and extension origin/identity configuration connect implemented API operations; old LLM routes must enforce the same policies or be disabled. At ANY-654 deploy API/worker/PostgreSQL and a single migration process, extend readiness to real dependencies and verify backup/restore.
+Storage implementation does not expose business auth/LLM routes. A persistent development database was provisioned separately at the user's request on 2026-10-12; see the deployment record below. At ANY-653 the web proxy `/backend/*` and extension origin/identity configuration connect implemented API operations; old LLM routes must enforce the same policies or be disabled. ANY-654 still covers production operations, worker deployment, automated migration ordering, readiness for real dependencies and backup/restore validation.
 
 ## Container deployment
 
@@ -52,6 +52,19 @@ docker run --rm -p 8000:8000 fitcheck-api
 ```
 
 The image installs locked production dependencies, runs as UID 10001, binds port 8000 and checks /health/ready. Build context is backend/; dotenv, local environments and test files are excluded. Dokploy uses repository fitcheck, branch dev, build path /, Dockerfile backend/Dockerfile and context backend. API is a separate application in FitCheck development, with its own domain and exact allowed web origin. It remains a foundation service: business routes and UI integration are later tasks.
+
+### Persistent development database
+
+On 2026-10-12, Dokploy's FitCheck `development` environment received the separate `fitcheck-postgres-dev` service (`postgres:17`). Its internal service name is `fitcheck-postgres-dev-87obt4`; the named volume `fitcheck-postgres-dev-87obt4-data` mounts at `/var/lib/postgresql/data`. No external PostgreSQL port is published. Database `fitcheck` and its credentials belong exclusively to FitCheck. `FITCHECK_DATABASE_URL` is saved in the API application's secret environment; existing API settings were preserved. Never commit or print this value.
+
+The API was redeployed with the database configuration. Explicit `upgrade` and `check` ran inside the deployed API container, using its installed virtual environment:
+
+```sh
+/app/.venv/bin/python -m fitcheck_backend.storage.migrate upgrade
+/app/.venv/bin/python -m fitcheck_backend.storage.migrate check
+```
+
+The system `python` in a container shell does not contain the application dependencies; use the absolute virtual-environment path above. Revision `0002`, 17 application tables plus `alembic_version`, and five application triggers were verified through the API container's database connection. A temporary-table write/read probe passed. After reloading PostgreSQL, the same revision, tables and triggers remained present and the schema check passed again. `/health/live` and `/health/ready` remain foundation checks and do not prove database connectivity; run the migration/schema checks separately. Business routes, client integration, scheduled retention and production backup/restore remain their roadmap tasks.
 
 ## PostgreSQL storage and migrations
 

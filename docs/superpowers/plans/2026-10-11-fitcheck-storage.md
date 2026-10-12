@@ -176,3 +176,11 @@ Compose service `postgres` использует `postgres:17`, database/user/pas
 Отложенных замечаний review нет. Бизнес-сервисы и orchestration перечислены выше как границы ANY-644, а не незавершённые исправления этой задачи.
 
 Final implementation fix commit: `363a517`. ANY-644 отмечена Done, Nikita / Cycle 9 сохранены. Интеграция в dev, push и production deploy ожидают выбора пользователя; рабочее дерево сохраняется до интеграции. Тестовый PostgreSQL остановлен после проверки.
+
+## Последующая интеграция и серверное хранение
+
+По указанию пользователя 2026-10-11 ветка слита fast-forward в `dev`, commit `7ac1f7c` отправлен в GitHub через существующий SSH-доступ. HTTPS OAuth push отклонён из-за отсутствия workflow scope; SSH push успешен. На результате слияния прошли 152 теста, generated TypeScript check и typecheck. Dokploy deployment `bKYUZ0mdeEuK3H1Z6bx0R` завершён `done`; оба публичных health endpoints проверены. Временное рабочее дерево и слитая локальная ветка удалены.
+
+По дополнительному указанию пользователя 2026-10-12 создана постоянная PostgreSQL 17 исключительно для FitCheck в среде Dokploy `development`: `fitcheck-postgres-dev`, service `fitcheck-postgres-dev-87obt4`, volume `fitcheck-postgres-dev-87obt4-data` → `/var/lib/postgresql/data`. Внешний порт не опубликован. API получил внутренний `FITCHECK_DATABASE_URL` с сохранением прочих настроек; credentials находятся в Dokploy, не в репозитории. API deployment `L_j_GLhb54a2OawmUkE-v` завершён `done` на коде `7ac1f7c`.
+
+В установленном окружении API выполнены `/app/.venv/bin/python -m fitcheck_backend.storage.migrate upgrade` и `check`; exit 0, drift отсутствует. Отдельное подключение через storage factory подтвердило ревизию `0002`, 18 таблиц включая `alembic_version`, 5 прикладных триггеров, временная write/read-проверка успешна. После reload PostgreSQL повторный schema check и проверка ревизии/таблиц/триггеров прошли: `AFTER_RESTART_OK 0002 18 5`. Не запускались integration tests и downgrade на постоянной БД. HTTP бизнес-сервисы, UI integration, readiness с проверкой БД, scheduled retention и backup/restore остаются отдельными задачами roadmap.
