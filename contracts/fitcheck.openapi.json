@@ -564,6 +564,20 @@
           "breakdown": {
             "$ref": "#/components/schemas/FitBreakdown"
           },
+          "fitCondition": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fitcondition"
+          },
           "label": {
             "maxLength": 80,
             "minLength": 1,
@@ -617,6 +631,12 @@
             "minLength": 1,
             "title": "Summary",
             "type": "string"
+          },
+          "verdictThreshold": {
+            "maximum": 100,
+            "minimum": 0,
+            "title": "Verdictthreshold",
+            "type": "integer"
           }
         },
         "required": [

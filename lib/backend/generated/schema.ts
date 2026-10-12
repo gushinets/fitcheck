@@ -731,6 +731,11 @@ export interface components {
         /** FitAnalysis */
         FitAnalysis: {
             breakdown: components["schemas"]["FitBreakdown"];
+            /**
+             * Fitcondition
+             * @default null
+             */
+            fitCondition: string | null;
             /** Label */
             label: string;
             /** Risks */
@@ -748,6 +753,8 @@ export interface components {
             strengths: string[];
             /** Summary */
             summary: string;
+            /** Verdictthreshold */
+            verdictThreshold?: number;
         };
         /** FitBreakdown */
         FitBreakdown: {

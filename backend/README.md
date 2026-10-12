@@ -16,7 +16,7 @@ Settings use the FITCHECK_ prefix (see `.env.example`). Environment is dev/test/
 uv run pytest -q
 ```
 
-Storage and migrations are implemented in ANY-644, server authentication in ANY-645, profile/preferences/draft API in ANY-646 and vacancy extraction in ANY-647. Remaining tasks: provider gateway ANY-648, durable jobs ANY-649, history ANY-650, guest quotas ANY-651, local import ANY-652, UI integration ANY-653 and production operations ANY-654. Current Next.js APIs and website remain active until integration.
+Storage and migrations are implemented in ANY-644, server authentication in ANY-645, profile/preferences/draft API in ANY-646, vacancy extraction in ANY-647 and the LLM gateway/services in ANY-648. Remaining tasks: durable jobs ANY-649, history ANY-650, guest quotas ANY-651, local import ANY-652, UI integration ANY-653 and production operations ANY-654. Current Next.js APIs and website remain active until integration.
 
 The HTTP boundary generates X-Request-ID; client-supplied IDs are ignored. Errors are `{error:{code,message,requestId,details}}`; details contain field locations/codes only. Validation errors use 400, 404/405 share the envelope, unexpected exceptions use a safe 500. Actual body bytes are limited even without/trusting Content-Length; mutation bodies must use application/json. Logs contain request ID/method/path/status only; uvicorn access logging is disabled to avoid query logging.
 
@@ -99,6 +99,66 @@ Safe structured errors suggest manual input when a page is blocked, unsupported,
 too large, unavailable, or contains insufficient vacancy text. Text must have at
 least a two-character title and a 30-character description; request limits are
 documented in OpenAPI. No LLM or provider credentials are needed.
+
+## LLM gateway and application services (ANY-648)
+
+`fitcheck_backend.llm.runtime.LlmRuntime(settings, engine)` owns a cached LiteLLM
+adapter/gateway and PydanticAI structured executors. Use it as an async context
+manager or call `aclose()` at shutdown; the injected PostgreSQL engine remains
+owned by the caller. Only `llm/litellm_adapter.py` imports provider SDKs; only
+`llm/structured.py` imports PydanticAI. No separate gateway/proxy service is needed.
+
+`runtime.analysis.analyze(owner_id=..., profile_revision=..., vacancy=..., locale=...,
+job_id=None)` reads the immutable revision and last ten owner-scoped calibration
+entries, then returns `{analysis, snapshot}` as an internal typed result.
+`runtime.suggestions.suggest(owner_id=..., specialization=..., locale=..., job_id=None)`
+returns up to ten unique skills. An optional job must belong to the owner and have
+the matching job type. Neither service publishes an analysis nor changes job state;
+ANY-649 will call them from its durable worker. Public job routes remain planned.
+
+`FITCHECK_DEEPSEEK_API_KEY` is optional for API startup and required for provider
+calls. Missing key returns safe `service_unavailable` before DB/provider work.
+Provider/model/prompts are server-owned: initial policy uses DeepSeek
+`deepseek-v4-flash`, thinking disabled, JSON-object output, temperature zero.
+PydanticAI owns schema prompting/validation; the gateway owns HTTP and ledger.
+No request DTO accepts provider/model/system prompt or client calibration memory.
+
+Each structured operation has at most two semantic attempts, each with at most
+two transport attempts. Analysis generation plus grounding audit share an eight-call
+hard cap and 120-second total deadline; suggestions have four calls and 60 seconds.
+Context reads count toward the deadline. Individual calls are at most 45 seconds;
+backoff/Retry-After must fit the remaining time. Output caps are 1200 tokens for
+generation, 1000 for audit and 500 for suggestions. SDK retries/fallback are disabled;
+a per-attempt HTTP-send guard also blocks SDK-internal extra sends. Clients verify
+TLS, permit only the fixed provider destination and do not follow redirects.
+
+Basic skills are not professional strengths. The model selects unique allowed
+strength IDs; the server renders text and provenance. Currency comparisons retain
+unknown/mismatched currency and minimum-only hourly budget semantics. Fixed budgets
+are not compared to hourly rates without effort estimates. Narrative audit checks
+profile/task grounding before success. The server returns `verdictThreshold: 70`
+and computes GO only at score ≥ 70. Legacy results may omit this new field.
+Nullable `fitCondition` is a forward contract for ANY-576 and is not generated here;
+competition evidence is preserved in vacancy snapshots, with scoring deferred to ANY-575.
+
+Additive migration `0002` extends `provider_calls` with prompt/schema/policy versions,
+semantic/transport indices and latency_ms. Apply it before restarting the upgraded
+API/worker; existing initial `0001` and payloads remain valid. Generation and audit
+record their respective schema versions. Start rows are separately committed before
+network I/O; final metrics survive operation failures and do not hold a DB connection
+during requests. Ledger failures stop the operation. Validation failures retain usage
+while marking the call failed; a failure to finish a row leaves `started` for future
+reconciliation. Unknown tokens/cost remain null. Costs use available SDK pricing
+metadata and are estimates; no raw requests/responses, secrets or personal content
+are persisted in ledger or SDK telemetry.
+
+Deterministic mock/HTTP-transport tests use the real PydanticAI/LiteLLM adapters.
+Optional paid canary, from `backend/`, requires an explicitly supplied key and opt-in:
+`FITCHECK_RUN_LLM_CANARY=1 uv run --locked pytest tests/analysis/test_live_canary.py -q`.
+It uses only anonymized fixtures and in-process metrics; PostgreSQL accounting is
+tested separately on disposable PG. Without opt-in/key it is reported as skipped.
+Library behavior references: [PydanticAI output](https://pydantic.dev/docs/ai/core-concepts/output/),
+[LiteLLM SDK](https://docs.litellm.ai/docs/python_sdk).
 
 ## Verification and rollout
 
