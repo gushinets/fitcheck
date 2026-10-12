@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 from pydantic import Field, RootModel, field_validator
+from email_validator import validate_email, EmailNotValidError
 from fitcheck_backend.contracts.domain import DTO, FreelancerProfile, Vacancy, FitAnalysis, Identifier, Revision, Locale, Score, Skill, PublicUrl, text
 
 
@@ -118,20 +119,46 @@ class ExtractionResponse(DTO):
     vacancy: Vacancy
 
 
-class Credentials(DTO):
+def normalize_email(value: str) -> str:
+    value = value.strip().lower()
+    if len(value) > 254 or any(ord(c) < 32 for c in value):
+        raise ValueError('Invalid email address')
+    try:
+        validate_email(value, check_deliverability=False)
+    except EmailNotValidError:
+        raise ValueError('Invalid email address') from None
+    return value
+
+
+class LoginCredentials(DTO):
     email: text(254)
-    password: Annotated[str, Field(strict=True, min_length=8, max_length=128, json_schema_extra={"writeOnly": True})]
+    password: Annotated[str, Field(strict=True, min_length=1, max_length=128, json_schema_extra={"writeOnly": True})]
 
     @field_validator("email")
     @classmethod
     def valid_email(cls, value):
-        if value.count("@") != 1 or not all(value.split("@")) or any(c.isspace() for c in value):
-            raise ValueError("Expected email address")
-        return value
+        return normalize_email(value)
+
+
+class RegistrationCredentials(LoginCredentials):
+    password: Annotated[str, Field(strict=True, min_length=15, max_length=128, json_schema_extra={"writeOnly": True})]
+
+
+class Credentials(RegistrationCredentials):
+    """Legacy planned-contract alias; operations switch to distinct DTOs at HTTP integration."""
+
+
+class PasswordConfirmation(DTO):
+    password: Annotated[str, Field(strict=True, min_length=1, max_length=128, json_schema_extra={"writeOnly": True})]
 
 
 class EmailRequest(DTO):
     email: text(254)
+
+    @field_validator('email')
+    @classmethod
+    def valid_email(cls, value):
+        return normalize_email(value)
 
 
 class TokenRequest(DTO):
@@ -139,7 +166,7 @@ class TokenRequest(DTO):
 
 
 class PasswordResetConfirm(TokenRequest):
-    password: Annotated[str, Field(strict=True, min_length=8, max_length=128, json_schema_extra={"writeOnly": True})]
+    password: Annotated[str, Field(strict=True, min_length=15, max_length=128, json_schema_extra={"writeOnly": True})]
 
 
 class UserResource(DTO):
