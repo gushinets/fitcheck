@@ -54,3 +54,52 @@ def test_real_sdk_success_usage_and_close():
         assert adapter.client.is_closed
     asyncio.run(run())
     assert len(requests)==1
+
+
+@pytest.mark.parametrize('status',[429,503])
+def test_real_sdk_preserves_retry_after_at_http_boundary(status):
+    from fitcheck_backend.llm.litellm_adapter import LiteLlmAdapter
+    from fitcheck_backend.llm.policy import analysis_policy
+    from fitcheck_backend.llm.errors import ProviderFailure
+    def handler(request):
+        return httpx.Response(status,headers={'Retry-After':'3'},json={'error':{'message':'retry later'}})
+    async def run():
+        adapter=LiteLlmAdapter('test-key',transport=httpx.MockTransport(handler))
+        try:
+            with pytest.raises(ProviderFailure) as result:
+                await adapter.complete(messages=[{'role':'user','content':'hello'}],policy=analysis_policy(),max_tokens=1200,timeout=2)
+            assert result.value.retry_after==3 and result.value.retryable
+        finally: await adapter.aclose()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('deadline,want_calls,want_delay',[(60,2,[3]),(1,1,[])])
+def test_real_sdk_gateway_respects_wait_and_remaining_deadline(deadline,want_calls,want_delay):
+    from dataclasses import replace
+    from llm_fakes import components,complete
+    from fitcheck_backend.llm.litellm_adapter import LiteLlmAdapter
+    from fitcheck_backend.llm.policy import analysis_policy
+    from fitcheck_backend.llm.errors import LlmError
+    requests,delays,now=[],[],[0.0]
+    def handler(request):
+        requests.append(request)
+        if len(requests)==1:
+            return httpx.Response(429,headers={'Retry-After':'3'},json={'error':{'message':'retry later'}})
+        return httpx.Response(200,json={'id':'test','object':'chat.completion','created':1,'model':'deepseek-v4-flash',
+            'choices':[{'index':0,'message':{'role':'assistant','content':'{}'},'finish_reason':'stop'}],
+            'usage':{'prompt_tokens':2,'completion_tokens':1,'total_tokens':3}})
+    async def sleep(delay): delays.append(delay);now[0]+=delay
+    gateway,context,ledger,_=components([],policy=replace(analysis_policy(),deadline_seconds=deadline),clock=lambda:now[0],sleeper=sleep)
+    async def run():
+        adapter=LiteLlmAdapter('test-key',transport=httpx.MockTransport(handler))
+        gateway.adapter=adapter
+        try:
+            if deadline==1:
+                with pytest.raises(LlmError) as result: await complete(gateway,context)
+                assert result.value.code=='rate_limit'
+            else:
+                result=await complete(gateway,context)
+                assert result.reply.content=='{}'
+        finally: await adapter.aclose()
+    asyncio.run(run())
+    assert len(requests)==len(ledger.rows)==want_calls and delays==want_delay

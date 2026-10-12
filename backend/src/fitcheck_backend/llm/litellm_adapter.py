@@ -4,6 +4,8 @@ import math
 import os
 from contextvars import ContextVar
 from decimal import Decimal, InvalidOperation
+from datetime import datetime, UTC
+from email.utils import parsedate_to_datetime
 
 import httpx
 
@@ -32,8 +34,9 @@ class LiteLlmAdapter:
     def __init__(self, api_key: str | None, *, transport: httpx.AsyncBaseTransport | None = None):
         self._api_key = api_key
         self._sends = ContextVar('fitcheck_provider_sends', default=None)
+        self._retry_after = ContextVar('fitcheck_provider_retry_after', default=None)
         self.handler = AsyncHTTPHandler(transport=transport or httpx.AsyncHTTPTransport(retries=0),
-            follow_redirects=False, event_hooks={'request':[self._guard_send]})
+            follow_redirects=False, event_hooks={'request':[self._guard_send], 'response':[self._capture_response]})
         self.client = self.handler.client
         self._closed = False
 
@@ -44,6 +47,25 @@ class LiteLlmAdapter:
         if request.url.scheme != 'https' or request.url.host != 'api.deepseek.com':
             raise RuntimeError('Provider destination blocked')
         self._sends.set(sends + 1)
+
+    async def _capture_response(self, response):
+        # LiteLLM can discard headers while mapping provider exceptions.
+        # Capture only the retry delay, separately for each concurrent request.
+        raw = response.headers.get('retry-after')
+        if raw is None:
+            return
+        try:
+            value = float(raw)
+        except (ValueError,TypeError):
+            try:
+                date = parsedate_to_datetime(raw)
+                if date.tzinfo is None:
+                    return
+                value = max(0, (date-datetime.now(UTC)).total_seconds())
+            except (ValueError,TypeError,OverflowError):
+                return
+        if math.isfinite(value) and value >= 0:
+            self._retry_after.set(value)
 
     async def aclose(self):
         self._closed = True
@@ -57,6 +79,7 @@ class LiteLlmAdapter:
         if not self._api_key or self._closed:
             raise LlmError('service_unavailable')
         token = self._sends.set(0)
+        retry_token = self._retry_after.set(None)
         try:
             response = await litellm.acompletion(model=policy.gateway_model, api_key=self._api_key,
                 api_base='https://api.deepseek.com', messages=messages, temperature=0,
@@ -84,9 +107,9 @@ class LiteLlmAdapter:
             raise
         except Exception as exc:
             status = getattr(exc, 'status_code', None)
-            retry_after = None
+            retry_after = self._retry_after.get()
             headers = getattr(exc, 'headers', None)
-            if headers:
+            if headers and retry_after is None:
                 try:
                     value = float(headers.get('retry-after', 'nan'))
                     if math.isfinite(value) and value >= 0:
@@ -96,8 +119,9 @@ class LiteLlmAdapter:
             if status == 429:
                 raise ProviderFailure('rate_limit', retryable=True, retry_after=retry_after) from None
             if status == 408 or isinstance(exc, (litellm.Timeout, httpx.TimeoutException, TimeoutError)):
-                raise ProviderFailure('timeout', retryable=True) from None
+                raise ProviderFailure('timeout', retryable=True, retry_after=retry_after) from None
             retryable = isinstance(exc, litellm.APIConnectionError) or type(status) is int and status >= 500
-            raise ProviderFailure('upstream', retryable=retryable) from None
+            raise ProviderFailure('upstream', retryable=retryable, retry_after=retry_after) from None
         finally:
             self._sends.reset(token)
+            self._retry_after.reset(retry_token)
