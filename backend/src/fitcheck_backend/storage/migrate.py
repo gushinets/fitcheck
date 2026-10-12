@@ -6,6 +6,7 @@ import time
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
@@ -19,7 +20,7 @@ class MigrationLockTimeout(RuntimeError):
     pass
 
 
-def migration_config(connection: Connection) -> Config:
+def migration_config(connection: Connection | None = None) -> Config:
     packaged = Path(__file__).parents[1] / "_migrations"
     source = Path(__file__).parents[3]
     directory = packaged if packaged.is_dir() else source / "migrations"
@@ -27,6 +28,10 @@ def migration_config(connection: Connection) -> Config:
     config.set_main_option("script_location", str(directory).replace("%", "%%"))
     config.attributes["connection"] = connection
     return config
+
+
+def schema_head() -> str:
+    return ScriptDirectory.from_config(migration_config()).get_current_head()
 
 
 @contextmanager

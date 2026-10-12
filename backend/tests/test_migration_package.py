@@ -25,7 +25,7 @@ def test_installed_package_has_migrations(tmp_path):
     requirements = tmp_path/"requirements.txt"
     requirements.write_text(exported.stdout)
     run([uv, "pip", "install", "--python", python, "-r", str(requirements), str(next((tmp_path/"dist").glob("*.whl")))])
-    run([python, "-c", "from pathlib import Path; import fitcheck_backend; from alembic.config import Config; from alembic.script import ScriptDirectory; p=Path(fitcheck_backend.__file__).parent/'_migrations'; assert (p/'env.py').is_file(); c=Config(str(p/'alembic.ini')); c.set_main_option('script_location',str(p)); assert ScriptDirectory.from_config(c).get_current_head()=='0002'"], cwd=tmp_path)
+    run([python, "-c", "from pathlib import Path; import fitcheck_backend; from alembic.config import Config; from alembic.script import ScriptDirectory; p=Path(fitcheck_backend.__file__).parent/'_migrations'; assert (p/'env.py').is_file(); c=Config(str(p/'alembic.ini')); c.set_main_option('script_location',str(p)); assert ScriptDirectory.from_config(c).get_current_head()=='0003'"], cwd=tmp_path)
     result = subprocess.run([python, "-m", "fitcheck_backend.storage.migrate", "upgrade"], cwd=tmp_path, env=env, capture_output=True, text=True)
     assert result.returncode==1
     assert "FITCHECK_DATABASE_URL is required" in result.stderr

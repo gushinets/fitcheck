@@ -3,7 +3,7 @@ from sqlalchemy import ForeignKeyConstraint, create_mock_engine
 
 def test_metadata_contains_all_storage_tables():
     from fitcheck_backend.storage.models import Base
-    assert set(Base.metadata.tables) == {"owners", "users", "guests", "auth_sessions", "auth_tokens", "profiles", "profile_revisions", "preferences", "drafts", "vacancies", "jobs", "analyses", "analysis_annotations", "quota_buckets", "quota_reservations", "provider_calls", "import_entries"}
+    assert set(Base.metadata.tables) == {"owners", "users", "guests", "auth_sessions", "auth_tokens", "auth_rate_buckets", "profiles", "profile_revisions", "preferences", "drafts", "vacancies", "jobs", "analyses", "analysis_annotations", "quota_buckets", "quota_reservations", "provider_calls", "import_entries"}
     statements = []
     engine = create_mock_engine("postgresql+psycopg://", lambda sql, *args, **kwargs: statements.append(str(sql.compile(dialect=engine.dialect))))
     Base.metadata.create_all(engine)

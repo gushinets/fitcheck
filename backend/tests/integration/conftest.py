@@ -33,7 +33,7 @@ def clean_storage(request):
         return
     engine = request.getfixturevalue("engine")
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE owners, provider_calls CASCADE"))
+        conn.execute(text("TRUNCATE owners, provider_calls, auth_rate_buckets CASCADE"))
 
 
 @pytest.fixture
