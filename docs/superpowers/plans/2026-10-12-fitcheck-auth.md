@@ -160,3 +160,7 @@ Final review: fresh independent reviewer /root/auth_review (gpt-6-astra), b67ba8
 - Final: Ruling: resource and guest HTTP routers remain their existing backend tasks — shared verified identity and owner filtering are tested against storage graphs; no successful stub endpoints — cost if wrong: future routes must wire these guards correctly or account isolation can fail.
 
 Handoff: ANY-645 is Done; Nikita and Cycle9 preserved. Runtime fix commit c989567. Branch remains local feat/any-645-auth, integration choice pending; no production deployment. Test PostgreSQL stopped with volume preserved. Only this plan’s ignored scratch directory is removed after the committed handoff record; worktree and other plans remain.
+
+## Authorized merge and deployment
+
+User subsequently authorized merge/deploy. Merged and pushed dev ed98ac4; merged verification backend214/frontend316 passed (3 optional live skipped). Migration0003 applied and checked on persistent PostgreSQL, auth enabled with a private random secret, Dokploy deployment4B1SxOth4fLgO3KDPJjeJ done. Public readiness reports database ready/email unconfigured; Origin/CSRF and safe SMTP503 checks pass. Details: docs/deployments/2026-10-12-any-645-auth.md. Feature branch/worktree removed; test PostgreSQL stopped with volume retained. SMTP/UI integration remains pending.
