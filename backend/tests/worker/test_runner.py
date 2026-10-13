@@ -120,3 +120,89 @@ def test_blocked_db_call_does_not_block_heartbeat_event_loop():
         await asyncio.gather(complete(gateway,context),release())
         assert observed == [True]
     asyncio.run(run())
+
+
+@pytest.mark.parametrize('failed_execution',[False,True])
+def test_inflight_failed_heartbeat_prevents_terminal_publication(failed_execution):
+    async def run():
+        from fitcheck_backend.llm.errors import LlmError
+        entered,released,finished = Event(),Event(),Event()
+        q,pub = Queue(),Publication()
+        def heartbeat(lease):
+            entered.set()
+            assert released.wait(1)
+            finished.set()
+            raise RuntimeError('database heartbeat failed')
+        q.heartbeat = heartbeat
+        class Executor:
+            async def execute(self,lease):
+                while not entered.is_set(): await asyncio.sleep(0)
+                if failed_execution: raise LlmError('timeout')
+                return ['React']
+        value = runner(q,Executor(),pub)
+        task = asyncio.create_task(value.process(job()))
+        while not entered.is_set(): await asyncio.sleep(0)
+        # Let the execution task finish while DB heartbeat is still pending.
+        for _ in range(20): await asyncio.sleep(0)
+        released.set()
+        await asyncio.wait_for(task,1)
+        assert finished.is_set()
+        assert pub.results == [] and pub.failures == []
+    asyncio.run(run())
+
+
+def test_cancellation_during_ledger_admission_finalizes_without_http():
+    from llm_fakes import components,reply,complete
+    async def run():
+        gateway,context,ledger,adapter = components([reply()])
+        entered,released,settled = Event(),Event(),Event()
+        original = ledger.start
+        def start(attempt):
+            entered.set()
+            assert released.wait(1)
+            call_id = original(attempt)
+            settled.set()
+            return call_id
+        ledger.start = start
+        task = asyncio.create_task(complete(gateway,context))
+        while not entered.is_set(): await asyncio.sleep(0)
+        task.cancel()
+        released.set()
+        with pytest.raises(asyncio.CancelledError): await task
+        # Barrier ensures the physical ledger thread finished before assertions.
+        assert await asyncio.to_thread(settled.wait,1)
+        assert len(ledger.rows) == 1
+        assert [r['state'] for r in ledger.rows.values()] == ['unknown']
+        assert adapter.calls == []
+    asyncio.run(run())
+
+
+def test_deadline_during_ledger_admission_settles_before_job_failure():
+    from llm_fakes import components,reply,complete
+    from fitcheck_backend.llm.errors import LlmError
+    async def run():
+        gateway,context,ledger,adapter = components([reply()])
+        entered,released = Event(),Event()
+        original = ledger.start
+        def start(attempt):
+            entered.set()
+            assert released.wait(1)
+            return original(attempt)
+        ledger.start = start
+        class Executor:
+            task = None
+            async def execute(self,lease):
+                self.task = asyncio.current_task()
+                try:
+                    async with asyncio.timeout(0.05): await complete(gateway,context)
+                except TimeoutError: raise LlmError('timeout') from None
+        executor,pub = Executor(),Publication()
+        value = runner(Queue(),executor,pub)
+        task = asyncio.create_task(value.process(job()))
+        while not entered.is_set() or not executor.task.cancelling(): await asyncio.sleep(0)
+        released.set()
+        await asyncio.wait_for(task,1)
+        assert [r['state'] for r in ledger.rows.values()] == ['unknown']
+        assert [error.code for error in pub.failures] == ['timeout']
+        assert adapter.calls == []
+    asyncio.run(run())

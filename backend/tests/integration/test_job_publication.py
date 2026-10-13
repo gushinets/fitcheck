@@ -124,3 +124,19 @@ def test_foreign_owner_get_is_not_found(engine,auth_components):
     lease,_ = prepared(engine,auth_components)
     with pytest.raises(JobError) as exc: JobStatusReader(engine).get(owner_id=uuid4(),job_id=lease.job_id)
     assert exc.value.code == 'not_found'
+
+
+def test_failure_publication_reconciles_stranded_started_call(engine,auth_components):
+    from fitcheck_backend.storage.models import ProviderCall
+    from fitcheck_backend.api.errors import ErrorBody
+    lease,_ = prepared(engine,auth_components)
+    with unit_of_work(engine) as s:
+        call = ProviderCall(owner_id=lease.owner_id,job_id=lease.job_id,execution_token=lease.execution_token,
+            provider='deepseek',model='test',operation='analysis.generate',attempt=1,state='started')
+        s.add(call); s.flush(); call_id = call.id
+    assert publication(engine).fail(lease,ErrorBody(code='timeout',message='Timeout',requestId=str(lease.job_id)))
+    with unit_of_work(engine) as s:
+        assert s.get(Job,lease.job_id).status == 'failed'
+        row = s.get(ProviderCall,call_id)
+        assert row.state == 'unknown' and row.error_code == 'execution_failed'
+        assert row.finished_at is not None and row.cost is None

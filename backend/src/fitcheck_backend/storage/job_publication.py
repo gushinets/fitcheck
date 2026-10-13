@@ -1,8 +1,9 @@
 from pydantic import TypeAdapter
+from sqlalchemy import update
 from ..contracts.domain import Skill
 from ..contracts.resources import AnalysisSnapshot
 from ..jobs.envelope import decode_envelope, AnalysisEnvelope
-from .models import VacancyRecord, AnalysisRecord, AnalysisAnnotation
+from .models import VacancyRecord, AnalysisRecord, AnalysisAnnotation, ProviderCall
 from .payloads import encode_analysis, encode_snapshot
 from .job_queue import job_transaction, fenced_job, db_now
 
@@ -73,6 +74,9 @@ class JobPublication:
             with job_transaction(self.engine) as s:
                 job = fenced_job(s, lease)
                 if job is None: return False
+                s.execute(update(ProviderCall).where(ProviderCall.job_id == job.id,
+                    ProviderCall.execution_token == lease.execution_token,ProviderCall.state == 'started')
+                    .values(state='unknown',error_code='execution_failed',finished_at=db_now(s)))
                 _finish(s, job, status='failed', error=error.model_dump(mode='json'))
                 return True
         except _LostLease:

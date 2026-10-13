@@ -16,15 +16,19 @@ class WorkerRunner:
     def request_shutdown(self):
         self.stopping.set()
 
-    async def _heartbeat(self,lease):
+    async def _heartbeat(self,lease,stop):
         while True:
-            await asyncio.sleep(self.settings.heartbeat_seconds)
+            try:
+                await asyncio.wait_for(stop.wait(),timeout=self.settings.heartbeat_seconds)
+                return True
+            except TimeoutError:
+                pass
             try:
                 if not await asyncio.to_thread(self.queue.heartbeat,lease):
-                    self.health.clear(); return
+                    self.health.clear(); return False
                 self.health.mark()
             except Exception:
-                self.health.clear(); return
+                self.health.clear(); return False
 
     async def _drain(self):
         await self.stopping.wait()
@@ -32,12 +36,18 @@ class WorkerRunner:
 
     async def process(self,lease):
         execution = asyncio.create_task(self.executor.execute(lease))
-        heartbeat = asyncio.create_task(self._heartbeat(lease))
+        stop_heartbeat = asyncio.Event()
+        heartbeat = asyncio.create_task(self._heartbeat(lease,stop_heartbeat))
         drain = asyncio.create_task(self._drain())
         try:
             done,_ = await asyncio.wait([execution,heartbeat,drain],return_when=asyncio.FIRST_COMPLETED)
             if heartbeat in done or drain in done:
                 execution.cancel()
+                return
+            # Resolve any DB heartbeat already in flight, then stop scheduling
+            # heartbeats before terminal publication. Failure is fail-closed.
+            stop_heartbeat.set()
+            if not await heartbeat or drain.done():
                 return
             try:
                 result = execution.result()
@@ -48,7 +58,6 @@ class WorkerRunner:
                 error = ErrorBody(code='service_unavailable',message='Service unavailable',requestId=str(lease.job_id))
                 await asyncio.to_thread(self.publication.fail,lease,error)
             else:
-                if heartbeat.done() or drain.done(): return
                 if lease.type == 'analysis':
                     await asyncio.to_thread(self.publication.succeed_analysis,lease,result)
                 else:

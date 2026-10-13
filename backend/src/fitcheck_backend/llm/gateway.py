@@ -41,12 +41,25 @@ class ProviderGateway:
             raise LlmError('invalid_output')
         for transport_attempt in range(1, policy.transport_attempts + 1):
             physical, remaining = context.budget.admit()
+            admission = asyncio.create_task(asyncio.to_thread(self.ledger.start,ProviderAttempt(
+                context.owner_id,context.job_id,context.operation_id,physical,semantic_attempt,transport_attempt,
+                operation,policy.provider,policy.model,version,
+                policy.audit_schema_version if operation=='analysis.audit' else policy.schema_version,
+                policy.policy_version,execution_token=context.execution_token)))
             try:
-                call_id = await asyncio.to_thread(self.ledger.start,ProviderAttempt(context.owner_id, context.job_id,
-                    context.operation_id, physical, semantic_attempt, transport_attempt,
-                    operation, policy.provider, policy.model, version,
-                    policy.audit_schema_version if operation=='analysis.audit' else policy.schema_version,
-                    policy.policy_version, execution_token=context.execution_token))
+                call_id = await asyncio.shield(admission)
+            except asyncio.CancelledError:
+                # The DB thread cannot be cancelled. Retain its eventual ID and
+                # settle the committed row before letting a job become terminal.
+                try:
+                    call_id = await asyncio.shield(admission)
+                    await asyncio.shield(asyncio.to_thread(self._finish,
+                        GatewayReply(ProviderReply('',None,None,None,None),call_id,0),'unknown','cancelled'))
+                except Exception:
+                    # Fenced failure publication also reconciles started rows
+                    # if a database outage prevents this immediate settlement.
+                    pass
+                raise
             except Exception:
                 raise LlmError('service_unavailable') from None
             started = self.clock()
