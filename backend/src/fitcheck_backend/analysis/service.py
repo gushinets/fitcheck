@@ -41,9 +41,14 @@ class AnalysisService:
             except (ValidationError,ValueError):
                 raise ValueError('Invalid stored calibration context') from None
         value = AnalysisInput(profile.profile,vacancy,locale,memory)
-        analysis = await self.executor.run(context,value)
         snapshot = AnalysisSnapshot.model_validate(dict(profileRevision=profile.revision,
             profile=profile.profile.model_dump(mode='json',by_alias=True),
             vacancy=vacancy.model_dump(mode='json',by_alias=True),locale=locale,
             promptVersion=PROMPT_VERSION,schemaVersion=self.policy.schema_version,policyVersion=self.policy.policy_version))
-        return AnalysisResult(analysis,snapshot)
+        return await self.analyze_prepared(context=context, value=value, snapshot=snapshot)
+
+    async def analyze_prepared(self, *, context, value: AnalysisInput, snapshot: AnalysisSnapshot) -> AnalysisResult:
+        self.executor.gateway.ensure_available()
+        context.budget.remaining()
+        analysis = await self.executor.run(context, value)
+        return AnalysisResult(analysis, snapshot)
