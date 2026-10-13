@@ -1,0 +1,58 @@
+from uuid import UUID
+from typing import Annotated
+from fastapi import APIRouter,Depends,Header,Request,Path
+from ..contracts.jobs import JobAdmissionResource,JobState
+from ..contracts.resources import AnalysisStart,AccountAnalysisStart,SkillSuggestionStart
+from ..contracts.openapi import ERRORS,SECURITY
+from ..jobs.errors import JobError
+from .errors import ErrorEnvelope
+from .dependencies import required_runtime,verified_principal,validate_account_mutation,client_ip
+
+router = APIRouter(dependencies=[Depends(required_runtime)],
+    responses={status:{'model':ErrorEnvelope,'description':code} for status,code in ERRORS.items()})
+
+
+def metadata(mutation=False):
+    value = {'x-fitcheck-owner-task':'ANY-649','x-fitcheck-implementation':'implemented','security':SECURITY['account']}
+    if mutation:
+        value['x-fitcheck-cookie-mutation'] = {'originRequired':True,'csrfHeader':'X-CSRF-Token'}
+        value['parameters'] = [{'name':'Origin','in':'header','required':True,'schema':{'type':'string'}},
+            {'name':'X-CSRF-Token','in':'header','required':False,'schema':{'type':'string'}}]
+    return value
+
+
+def mutation(request: Request,principal=Depends(verified_principal)):
+    validate_account_mutation(request,principal)
+    if not request.app.state.settings.jobs_enabled: raise JobError('service_unavailable')
+    return principal
+
+
+def idempotency(request: Request,
+        documented: Annotated[str,Header(alias='Idempotency-Key',min_length=1,max_length=200)]):
+    values = request.headers.getlist('idempotency-key')
+    if len(values) != 1 or not 1 <= len(values[0]) <= 200: raise JobError('invalid_request')
+    return values[0]
+
+
+def admitted(value):
+    return JobAdmissionResource(jobId=str(value.job_id),type=value.type,status=value.status)
+
+
+@router.post('/v1/analysis-jobs',status_code=202,response_model=JobAdmissionResource,
+    operation_id='startAnalysis',openapi_extra=metadata(True))
+def start_analysis(request: Request,body: AnalysisStart,principal=Depends(mutation),key=Depends(idempotency)):
+    if not isinstance(body.root,AccountAnalysisStart): raise JobError('forbidden')
+    return admitted(required_runtime(request).jobs.start_analysis(owner_id=principal.owner_id,
+        request=body.root,idempotency_key=key,client_ip=client_ip(request)))
+
+
+@router.post('/v1/skill-suggestion-jobs',status_code=202,response_model=JobAdmissionResource,
+    operation_id='startSkillSuggestions',openapi_extra=metadata(True))
+def start_suggestions(request: Request,body: SkillSuggestionStart,principal=Depends(mutation),key=Depends(idempotency)):
+    return admitted(required_runtime(request).jobs.start_suggestions(owner_id=principal.owner_id,
+        request=body,idempotency_key=key,client_ip=client_ip(request)))
+
+
+@router.get('/v1/jobs/{jobId}',response_model=JobState,operation_id='getJob',openapi_extra=metadata())
+def get_job(request: Request,job_id: Annotated[UUID,Path(alias='jobId')],principal=Depends(verified_principal)):
+    return required_runtime(request).job_status.get(owner_id=principal.owner_id,job_id=job_id)

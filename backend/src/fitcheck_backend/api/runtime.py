@@ -14,6 +14,8 @@ from ..auth.access import AccountDeletionService
 from ..auth.errors import AuthError
 from ..profiles.service import ProfileService
 from ..extraction.service import ExtractionService
+from ..jobs.admission import JobAdmission
+from ..jobs.status import JobStatusReader
 
 
 class AuthRuntime:
@@ -32,6 +34,8 @@ class AuthRuntime:
         self.deletion = AccountDeletionService(self.engine, passwords, self.limiter, clock)
         self.profiles = ProfileService(self.engine, clock)
         self.extraction = ExtractionService(self.limiter)
+        self.jobs = JobAdmission(self.engine,self.limiter)
+        self.job_status = JobStatusReader(self.engine)
 
     def close(self):
         if self._owns_engine:

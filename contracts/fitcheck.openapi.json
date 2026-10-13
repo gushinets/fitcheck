@@ -272,6 +272,9 @@
             "title": "Jobid",
             "type": "string"
           },
+          "result": {
+            "$ref": "#/components/schemas/AnalysisResource"
+          },
           "status": {
             "const": "succeeded",
             "title": "Status",
@@ -287,7 +290,8 @@
           "jobId",
           "type",
           "status",
-          "analysisId"
+          "analysisId",
+          "result"
         ],
         "title": "AnalysisSucceeded",
         "type": "object"
@@ -1080,6 +1084,42 @@
           "importedCount"
         ],
         "title": "ImportSucceeded",
+        "type": "object"
+      },
+      "JobAdmissionResource": {
+        "additionalProperties": false,
+        "properties": {
+          "jobId": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Jobid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "analysis",
+              "skill_suggestions"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "jobId",
+          "type",
+          "status"
+        ],
+        "title": "JobAdmissionResource",
         "type": "object"
       },
       "JobReference": {
@@ -2796,13 +2836,29 @@
         "operationId": "startAnalysis",
         "parameters": [
           {
-            "description": "Identity-scoped atomic admission; same key/body replays, different body conflicts (409).",
             "in": "header",
             "name": "Idempotency-Key",
             "required": true,
             "schema": {
               "maxLength": 200,
               "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
               "type": "string"
             }
           }
@@ -2822,11 +2878,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/JobReference"
+                  "$ref": "#/components/schemas/JobAdmissionResource"
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -2952,16 +3008,14 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "guestSession": []
           }
         ],
+        "summary": "Start Analysis",
         "x-fitcheck-cookie-mutation": {
           "csrfHeader": "X-CSRF-Token",
           "originRequired": true
         },
-        "x-fitcheck-implementation": "planned",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-649"
       }
     },
@@ -6035,8 +6089,8 @@
             "name": "jobId",
             "required": true,
             "schema": {
-              "maxLength": 200,
-              "minLength": 1,
+              "format": "uuid",
+              "title": "Jobid",
               "type": "string"
             }
           }
@@ -6050,7 +6104,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -6176,12 +6230,10 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "guestSession": []
           }
         ],
-        "x-fitcheck-implementation": "planned",
+        "summary": "Get Job",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-649"
       }
     },
@@ -7609,13 +7661,29 @@
         "operationId": "startSkillSuggestions",
         "parameters": [
           {
-            "description": "Identity-scoped atomic admission; same key/body replays, different body conflicts (409).",
             "in": "header",
             "name": "Idempotency-Key",
             "required": true,
             "schema": {
               "maxLength": 200,
               "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
               "type": "string"
             }
           }
@@ -7635,11 +7703,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/JobReference"
+                  "$ref": "#/components/schemas/JobAdmissionResource"
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -7765,17 +7833,15 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "guestSession": []
           }
         ],
+        "summary": "Start Suggestions",
         "x-fitcheck-cookie-mutation": {
           "csrfHeader": "X-CSRF-Token",
           "originRequired": true
         },
-        "x-fitcheck-implementation": "planned",
-        "x-fitcheck-owner-task": "ANY-648/649"
+        "x-fitcheck-implementation": "implemented",
+        "x-fitcheck-owner-task": "ANY-649"
       }
     }
   },

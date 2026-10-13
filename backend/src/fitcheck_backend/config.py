@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     log_level: Literal["debug", "info", "warning", "error", "critical"] = "info"
     api_body_max_bytes: int = Field(default=1_048_576, ge=1, le=16_777_216)
     auth_enabled: bool = False
+    jobs_enabled: bool = False
     auth_secret: SecretStr | None = None
     auth_web_base_url: str | None = None
     trusted_proxy_ips: list[str] = Field(default_factory=list)

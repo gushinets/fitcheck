@@ -107,6 +107,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Start Analysis */
         post: operations["startAnalysis"];
         delete?: never;
         options?: never;
@@ -390,6 +391,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get Job */
         get: operations["getJob"];
         put?: never;
         post?: never;
@@ -512,6 +514,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Start Suggestions */
         post: operations["startSkillSuggestions"];
         delete?: never;
         options?: never;
@@ -631,6 +634,7 @@ export interface components {
             analysisId: string;
             /** Jobid */
             jobId: string;
+            result: components["schemas"]["AnalysisResource"];
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -908,6 +912,21 @@ export interface components {
              * @enum {string}
              */
             status: "succeeded";
+        };
+        /** JobAdmissionResource */
+        JobAdmissionResource: {
+            /** Jobid */
+            jobId: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed";
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "analysis" | "skill_suggestions";
         };
         /** JobReference */
         JobReference: {
@@ -1820,8 +1839,9 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Identity-scoped atomic admission; same key/body replays, different body conflicts (409). */
                 "Idempotency-Key": string;
+                Origin: string;
+                "X-CSRF-Token"?: string;
             };
             path?: never;
             cookie?: never;
@@ -1832,13 +1852,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JobReference"];
+                    "application/json": components["schemas"]["JobAdmissionResource"];
                 };
             };
             /** @description invalid_request */
@@ -4460,7 +4480,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5760,8 +5780,9 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Identity-scoped atomic admission; same key/body replays, different body conflicts (409). */
                 "Idempotency-Key": string;
+                Origin: string;
+                "X-CSRF-Token"?: string;
             };
             path?: never;
             cookie?: never;
@@ -5772,13 +5793,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JobReference"];
+                    "application/json": components["schemas"]["JobAdmissionResource"];
                 };
             };
             /** @description invalid_request */
