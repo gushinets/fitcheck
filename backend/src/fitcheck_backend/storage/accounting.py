@@ -57,6 +57,7 @@ class ProviderCall(IdentityMixin, CreatedMixin, Base):
     semantic_attempt: Mapped[int | None] = mapped_column(Integer)
     transport_attempt: Mapped[int | None] = mapped_column(Integer)
     latency_ms: Mapped[int | None] = mapped_column(Integer)
+    execution_token: Mapped[UUID | None]
     __table_args__ = (
         ForeignKeyConstraint(["job_id", "owner_id"], ["jobs.id", "jobs.owner_id"], deferrable=True, initially="IMMEDIATE"),
         CheckConstraint("job_id IS NULL OR owner_id IS NOT NULL", name="job_owner"),
@@ -66,4 +67,5 @@ class ProviderCall(IdentityMixin, CreatedMixin, Base):
         CheckConstraint("input_tokens >= 0 AND output_tokens >= 0 AND cost >= 0", name="usage"),
         CheckConstraint("(cost IS NULL) = (currency IS NULL) AND (currency IS NULL OR currency IN ('USD','EUR','RUB'))", name="currency"),
         Index("ix_provider_calls_owner_job", "owner_id", "job_id", "created_at"),
+        Index("ix_provider_calls_execution", "job_id", "execution_token", "state"),
     )

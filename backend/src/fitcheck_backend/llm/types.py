@@ -32,6 +32,7 @@ class OperationContext:
     operation_id: UUID
     policy: ProviderPolicy
     budget: CallBudget
+    execution_token: UUID | None = None
 
 
 @dataclass(frozen=True)

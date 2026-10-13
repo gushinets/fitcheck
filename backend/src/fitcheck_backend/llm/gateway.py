@@ -43,7 +43,7 @@ class ProviderGateway:
                     context.operation_id, physical, semantic_attempt, transport_attempt,
                     operation, policy.provider, policy.model, version,
                     policy.audit_schema_version if operation=='analysis.audit' else policy.schema_version,
-                    policy.policy_version))
+                    policy.policy_version, execution_token=context.execution_token))
             except Exception:
                 raise LlmError('service_unavailable') from None
             started = self.clock()

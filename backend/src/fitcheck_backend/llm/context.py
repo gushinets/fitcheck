@@ -15,6 +15,7 @@ def verify_owner_job(session: Session, owner_id: UUID, job_id: UUID | None, job_
             raise ValueError('Invalid job ownership or type')
 
 
-def operation_context(owner_id: UUID, job_id: UUID | None, policy: ProviderPolicy) -> OperationContext:
+def operation_context(owner_id: UUID, job_id: UUID | None, policy: ProviderPolicy,
+        execution_token: UUID | None = None) -> OperationContext:
     return OperationContext(owner_id, job_id, uuid4(), policy,
-        CallBudget(policy.max_calls, time.monotonic()+policy.deadline_seconds, time.monotonic))
+        CallBudget(policy.max_calls, time.monotonic()+policy.deadline_seconds, time.monotonic), execution_token)
