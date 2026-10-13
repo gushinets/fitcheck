@@ -18,6 +18,14 @@ class OwnerUnavailable(RuntimeError):
     pass
 
 
+def request_digest(job_type: str, request_payload: dict) -> str:
+    dto_types = {'analysis': AnalysisStart, 'skill_suggestions': SkillSuggestionStart, 'import': LegacyImportRequest}
+    if job_type not in dto_types:
+        raise ValueError('Unsupported job type')
+    payload = dto_types[job_type].model_validate(request_payload).model_dump(mode='json', by_alias=True)
+    return canonical_hash({'type': job_type, 'input': payload})
+
+
 def get_or_create_job(session: Session, owner_id: UUID, job_type: Literal["analysis", "skill_suggestions", "import"], idempotency_key: str, input_payload: dict) -> Job:
     if not isinstance(idempotency_key, str) or not 1 <= len(idempotency_key) <= 200:
         raise ValueError("Invalid idempotency key")
@@ -36,7 +44,7 @@ def get_or_create_job(session: Session, owner_id: UUID, job_type: Literal["analy
             raise OwnerUnavailable("Guest session has already been claimed")
     if job_type == "analysis" and payload["mode"] != ("guest" if owner.kind == "guest" else "account"):
         raise OwnerUnavailable("Analysis mode does not match owner")
-    digest = canonical_hash({"type": job_type, "input": payload})
+    digest = request_digest(job_type, payload)
     inserted = session.scalar(insert(Job).values(owner_id=owner_id, type=job_type, input=payload, idempotency_key=idempotency_key, request_hash=digest).on_conflict_do_nothing(index_elements=[Job.owner_id, Job.type, Job.idempotency_key]).returning(Job.id))
     job = session.get(Job, inserted) if inserted is not None else session.scalar(select(Job).where(Job.owner_id==owner_id, Job.type==job_type, Job.idempotency_key==idempotency_key))
     if job.request_hash != digest:
