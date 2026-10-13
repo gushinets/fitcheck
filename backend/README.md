@@ -194,8 +194,9 @@ The system `python` in a container shell does not contain the application depend
 
 Current migrations start from a single website-only `0001` baseline. It creates all
 18 application tables, authentication rate buckets, constraints/indexes and the
-five payload/ledger triggers. Historical `0002`/`0003` revisions are removed at the
-user's request. Run it on an empty database; this revision number must not be stamped
+five payload/ledger triggers. The pre-baseline migration chain was removed at the
+user's request. Current additive revisions are `0002` (provider metadata) and
+`0003` (worker execution token), with current head `0003`. Run the baseline on an empty database; its revision number must not be stamped
 over an existing schema. Existing development databases from the earlier chain
 need an explicitly authorized schema reset. Deployment history below/above records
 the earlier rollout and does not describe the new baseline.
@@ -245,7 +246,64 @@ Absolute TTL: web 7 days, verify 24 hours, reset 30 minutes, bootstrap 15 minute
 
 Unit/integration tests and container smoke use disposable PostgreSQL only. SMTP-adapter tests replace the external SMTP transport, preserving TLS/message/error behavior; real sending requires credentials supplied later. Website auth code in this branch are not a claim that production auth or UI integration has been deployed. Production backups/restore and automated deployment ordering remain ANY-654.
 
-## Retention contract
+## Durable jobs and worker (ANY-649)
+
+Verified accounts can POST `/v1/analysis-jobs` or `/v1/skill-suggestion-jobs`
+with Origin, session CSRF and an `Idempotency-Key` (1–200 characters). Responses
+are 202 `{jobId,type,status}`. Same owner/type/key and normalized request replays
+the original job, including its current terminal status; changed request returns
+409. Explicit new analysis means a new key. GET `/v1/jobs/{jobId}` returns an
+owner-scoped state, embedded immutable analysis result on success, or skills.
+Foreign/missing jobs return 404. Guest admission and website integration remain
+ANY-651/653. API admission/read never waits for or calls a model.
+
+`FITCHECK_JOBS_ENABLED=false` is the safe default. Disable admission during
+maintenance; existing GET stays available. Enable only after the separate worker
+is healthy. When enabled with an unavailable worker, jobs persist queued.
+Admission allows at most two queued/running account jobs across both types;
+new requests are limited to 10/user/minute and 60/IP/15 minutes. Duplicates do
+not reserve another active slot or consume another rate token.
+
+Run migrations separately before API/worker rollout, then start the worker from
+`backend/` with the same database and a worker-only `FITCHECK_DEEPSEEK_API_KEY`:
+
+```sh
+uv run --locked python -m fitcheck_backend.storage.migrate upgrade
+uv run --locked python -m fitcheck_backend.worker
+# Alternatively, with complete backend/.env:
+docker compose -f compose.worker.yaml up -d --build
+```
+
+Container deployments use `backend/Dockerfile.worker` with context `backend/`.
+Worker starts only with a provider key and matching schema; no public worker HTTP
+port is needed. It processes one job at a time; multiple processes may scale the
+same queue. Defaults: poll 1s, lease 150s, heartbeat 20s, drain 130s. Environment
+variables `FITCHECK_WORKER_POLL_INTERVAL`, `LEASE_SECONDS`, `HEARTBEAT_SECONDS`
+and `DRAIN_SECONDS` use that common prefix. Set container stop grace to 140s.
+`python -m fitcheck_backend.worker.health` checks a fresh live-process marker;
+busy jobs refresh it after successful database heartbeat. DB operations have
+5s statement/connection/pool timeouts; queue/publication locks have 3s timeout.
+
+Claim uses PostgreSQL SKIP LOCKED. Each execution has a unique lease token;
+expired or replaced tokens cannot heartbeat or publish. Result and succeeded
+status commit atomically; provider ledger commits independently. Profile,
+calibration, edited vacancy and versions are frozen at admission. Unsupported
+versions/legacy bare-input jobs fail safely before provider HTTP.
+
+Process loss recovers once (at most two executions). Final ordinary provider
+errors fail the job; gateway already bounds its physical/semantic retries.
+A crash after a paid response but before result commit may cause another paid
+call on recovery. There is no exactly-once provider guarantee. Separate operation
+UUIDs/execution tokens preserve repeat costs; unknown usage/cost remains null.
+Recovery marks stranded started calls unknown/process_lost and preserves already
+recorded successful usage. A late response cannot reverse that reconciliation.
+
+Rollback: disable new admission, drain/stop worker, keep GET and the additive
+schema/data. Do not downgrade populated provider token columns or reset a DB.
+Paid canary requires explicit opt-in; unit/integration tests use fake provider
+responses and disposable PostgreSQL, including claim/publish/recovery races.
+
+## Retention policy
 
 | Data | Retention |
 | --- | --- |

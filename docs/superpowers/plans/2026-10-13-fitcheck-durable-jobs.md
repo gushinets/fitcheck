@@ -1,6 +1,6 @@
 # FitCheck Durable Jobs Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Реализовать durable account analysis/suggestion jobs, owner-scoped получение результата и отдельный worker с ограниченным recovery.
 
@@ -59,11 +59,11 @@ All source paths above are relative to `backend/src/fitcheck_backend/` unless pr
 - Add optional `execution_token: UUID | None = None` to OperationContext and ProviderAttempt. ProviderCall nullable UUID execution_token plus `(job_id, execution_token, state)` reconciliation index.
 - `ProviderLedger.start(attempt)` with execution_token checks current running/unexpired job token under row lock before inserting the call; tokenless internal legacy callers retain their ownership checks. `ProviderLedger.finish(...)` locks the row and preserves a reconciled unknown/process_lost state. Existing succeeded→failed domain-rejection behavior remains supported.
 
-- [ ] Write tests `test_envelope_rejects_unknown_version`, `test_envelope_copies_inputs`, `test_legacy_payload_fails_before_http`: assert unsupported/extra server fields fail validation, copy unchanged after caller mutation, no fake HTTP calls. Add PG `test_late_finish_preserves_process_lost` asserting state unknown and original nullable usage after late finish; `test_execution_token_is_nullable_for_old_calls`.
-- [ ] Run `cd backend && uv run --locked pytest tests/jobs/test_envelope.py -q` and PG integration file with test DSN; observe missing implementation failures.
-- [ ] Implement the DTOs/version registry and token propagation, then additive migration 0003. Keep 0001/0002 unchanged; preserve legacy ledger and SDK retry tests.
-- [ ] Run new tests plus `tests/llm`, `tests/integration/test_provider_execution.py`, `tests/integration/test_migrations.py` with explicit integration marker/DSN; assert pass and upgrade 0002→0003 retains rows.
-- [ ] Commit `feat: freeze job inputs and attribute provider calls to executions`.
+- [x] Write tests `test_envelope_rejects_unknown_version`, `test_envelope_copies_inputs`, `test_legacy_payload_fails_before_http`: assert unsupported/extra server fields fail validation, copy unchanged after caller mutation, no fake HTTP calls. Add PG `test_late_finish_preserves_process_lost` asserting state unknown and original nullable usage after late finish; `test_execution_token_is_nullable_for_old_calls`.
+- [x] Run `cd backend && uv run --locked pytest tests/jobs/test_envelope.py -q` and PG integration file with test DSN; observe missing implementation failures.
+- [x] Implement the DTOs/version registry and token propagation, then additive migration 0003. Keep 0001/0002 unchanged; preserve legacy ledger and SDK retry tests.
+- [x] Run new tests plus `tests/llm`, `tests/integration/test_provider_execution.py`, `tests/integration/test_migrations.py` with explicit integration marker/DSN; assert pass and upgrade 0002→0003 retains rows.
+- [x] Commit `feat: freeze job inputs and attribute provider calls to executions`.
 
 ### Task 2: Atomic idempotent account admission
 
@@ -75,11 +75,11 @@ All source paths above are relative to `backend/src/fitcheck_backend/` unless pr
 - Same `.start_suggestions(..., request: SkillSuggestionStart, ...) -> AdmissionResult`.
 - Internal `request_digest(job_type: str, request_payload: dict) -> str`; existing `get_or_create_job(...)` callers for import remain valid.
 
-- [ ] Write PG tests `test_same_key_concurrent_admission_creates_one_job` (barrier, same IDs, one envelope), `test_changed_input_same_key_conflicts`, `test_new_key_creates_new_job`, `test_duplicate_ignores_changed_profile_memory_policy` (unchanged envelope, no extra quota/rate charge), `test_two_active_jobs_cap_is_atomic` (parallel third request rejected), `test_foreign_revision_rejected`, `test_admission_rollback_has_no_job`.
-- [ ] Run `uv run --locked pytest -m integration tests/integration/test_job_admission.py -q`; observe red.
-- [ ] Implement owner FOR UPDATE transaction; find/hash-check duplicate first; enforce supported account identity, limit and existing user/IP rate limiter for new requests. Add `jobs` rate policy: user 10 per 60 seconds, IP 60 per 900 seconds. Read requested revision and calibration in same transaction; freeze policies and insert job. Make limiter transaction boundary explicit: rate consumption may precede a failed create, but cannot create job on rollback; duplicates bypass new-request consumption.
-- [ ] Run admission tests and existing job/ownership/profile integration tests; assert repeated request hash depends on client DTO only and active cap sums both types.
-- [ ] Commit `feat: admit immutable account jobs with idempotency and limits`.
+- [x] Write PG tests `test_same_key_concurrent_admission_creates_one_job` (barrier, same IDs, one envelope), `test_changed_input_same_key_conflicts`, `test_new_key_creates_new_job`, `test_duplicate_ignores_changed_profile_memory_policy` (unchanged envelope, no extra quota/rate charge), `test_two_active_jobs_cap_is_atomic` (parallel third request rejected), `test_foreign_revision_rejected`, `test_admission_rollback_has_no_job`.
+- [x] Run `uv run --locked pytest -m integration tests/integration/test_job_admission.py -q`; observe red.
+- [x] Implement owner FOR UPDATE transaction; find/hash-check duplicate first; enforce supported account identity, limit and existing user/IP rate limiter for new requests. Add `jobs` rate policy: user 10 per 60 seconds, IP 60 per 900 seconds. Read requested revision and calibration in same transaction; freeze policies and insert job. Make limiter transaction boundary explicit: rate consumption may precede a failed create, but cannot create job on rollback; duplicates bypass new-request consumption.
+- [x] Run admission tests and existing job/ownership/profile integration tests; assert repeated request hash depends on client DTO only and active cap sums both types.
+- [x] Commit `feat: admit immutable account jobs with idempotency and limits`.
 
 ### Task 3: Queue claim, heartbeat and bounded recovery
 
@@ -92,11 +92,11 @@ All source paths above are relative to `backend/src/fitcheck_backend/` unless pr
 - `.heartbeat(lease: JobLease) -> bool`: only matching unexpired lease may extend.
 - `.recover_expired(*, limit: int = 100) -> int`: bounded locked sweep, mark old started ledger rows unknown/process_lost; requeue if attempts < 2, otherwise terminal fail. Called every polling cycle, not just idle.
 
-- [ ] Write `test_two_workers_claim_one_execution`, `test_locked_candidate_is_skipped`, `test_heartbeat_cannot_resurrect_expired_lease`, `test_stale_token_cannot_heartbeat`, `test_recovery_requeues_once_then_fails`, `test_recovery_preserves_succeeded_provider_usage`, `test_recovery_scopes_started_calls_to_old_token`, `test_import_jobs_are_not_claimed`. Assert attempts 1 then 2; recovery after second loss has no third execution; compare DB time rather than Python clock.
-- [ ] Run `uv run --locked pytest -m integration tests/integration/test_job_queue.py -q`; observe red.
-- [ ] Implement claims/recovery with statement_timeout=5000ms and lock_timeout=3000ms per transaction; configure connection/pool timeout 5 seconds for job storage adapters. Recovery and claim may be separate short transactions; each independently protects row state. Enforce deterministic ordering and no starvation of expired jobs while queued work remains.
-- [ ] Run queue tests with two real PG connections and barriers. Verify only one job token wins, expired heartbeat returns false, unknown ledger is durable and late finish from Task 1 cannot reverse it.
-- [ ] Commit `feat: lease PostgreSQL jobs and recover expired executions`.
+- [x] Write `test_two_workers_claim_one_execution`, `test_locked_candidate_is_skipped`, `test_heartbeat_cannot_resurrect_expired_lease`, `test_stale_token_cannot_heartbeat`, `test_recovery_requeues_once_then_fails`, `test_recovery_preserves_succeeded_provider_usage`, `test_recovery_scopes_started_calls_to_old_token`, `test_import_jobs_are_not_claimed`. Assert attempts 1 then 2; recovery after second loss has no third execution; compare DB time rather than Python clock.
+- [x] Run `uv run --locked pytest -m integration tests/integration/test_job_queue.py -q`; observe red.
+- [x] Implement claims/recovery with statement_timeout=5000ms and lock_timeout=3000ms per transaction; configure connection/pool timeout 5 seconds for job storage adapters. Recovery and claim may be separate short transactions; each independently protects row state. Enforce deterministic ordering and no starvation of expired jobs while queued work remains.
+- [x] Run queue tests with two real PG connections and barriers. Verify only one job token wins, expired heartbeat returns false, unknown ledger is durable and late finish from Task 1 cannot reverse it.
+- [x] Commit `feat: lease PostgreSQL jobs and recover expired executions`.
 
 ### Task 4: Execute frozen jobs through the existing LLM runtime
 
@@ -107,11 +107,11 @@ All source paths above are relative to `backend/src/fitcheck_backend/` unless pr
 - `AnalysisService.analyze_prepared(*, context: OperationContext, value: AnalysisInput, snapshot: AnalysisSnapshot) -> AnalysisResult` async; no profile/calibration reread.
 - Existing `.analyze(...)` assembles prepared inputs and delegates, preserving current callers/tests.
 
-- [ ] Write `test_execution_uses_admitted_memory_profile_and_versions`, `test_unsupported_version_spends_zero_calls`, `test_legacy_bare_job_input_spends_zero_calls`, `test_execution_deadline_is_shared_by_generation_and_audit`, `test_suggestions_use_frozen_request`; PG test asserts connection pool checked-out count zero during paused provider HTTP. Two recovery executions use distinct operation UUIDs but same frozen profile/memory.
-- [ ] Run the execution files, observe red.
-- [ ] Implement adapter around cached existing executors. Resolve stored versions against server registry; unsupported combinations fail safely. Start shared budget before context preparation; never refresh memory/profile at runtime. Preserve gateway physical/semantic retry limits.
-- [ ] Run execution, analysis and suggestions suites; assert unchanged direct-service results and no direct SDK imports outside approved boundaries.
-- [ ] Commit `feat: execute frozen job snapshots through the LLM gateway`.
+- [x] Write `test_execution_uses_admitted_memory_profile_and_versions`, `test_unsupported_version_spends_zero_calls`, `test_legacy_bare_job_input_spends_zero_calls`, `test_execution_deadline_is_shared_by_generation_and_audit`, `test_suggestions_use_frozen_request`; PG test asserts connection pool checked-out count zero during paused provider HTTP. Two recovery executions use distinct operation UUIDs but same frozen profile/memory.
+- [x] Run the execution files, observe red.
+- [x] Implement adapter around cached existing executors. Resolve stored versions against server registry; unsupported combinations fail safely. Start shared budget before context preparation; never refresh memory/profile at runtime. Preserve gateway physical/semantic retry limits.
+- [x] Run execution, analysis and suggestions suites; assert unchanged direct-service results and no direct SDK imports outside approved boundaries.
+- [x] Commit `feat: execute frozen job snapshots through the LLM gateway`.
 
 ### Task 5: Fenced atomic publication and consistent result reads
 
@@ -123,11 +123,11 @@ All source paths above are relative to `backend/src/fitcheck_backend/` unless pr
 - `JobStatusReader(engine).get(*, owner_id: UUID, job_id: UUID) -> JobState`; absent/foreign/unsupported type raises safe not_found JobError.
 - AnalysisSucceeded adds required `result: AnalysisResource`; new `JobAdmissionResource` has job_id, supported type and four-state status.
 
-- [ ] Write PG `test_analysis_and_terminal_state_commit_atomically`, `test_publication_rollback_leaves_no_vacancy_or_analysis`, `test_stale_success_and_failure_cannot_publish`, `test_lease_expiring_while_waiting_for_lock_cannot_publish`, `test_two_publishers_create_one_analysis`, `test_owner_deleted_during_execution_has_no_partial_result`, `test_read_success_has_matching_snapshot`, `test_foreign_owner_get_is_not_found`. Contract tests assert success embeds result and failed excludes snapshot/input.
-- [ ] Run new tests, observe red.
-- [ ] Implement row lock then fresh DB-time fence; insert same-owner immutable vacancy/analysis plus terminal update in one transaction; suggestions output follows existing CHECK. Reader joins owner-scoped result/annotation under one consistent statement/read snapshot. Keep analysis output null and clear leases on all terminal paths.
-- [ ] Run publication/status and existing constraints/ownership tests; assert no succeeded analysis job without stored result and no payload mutation on retry.
-- [ ] Commit `feat: publish job results atomically with lease fencing`.
+- [x] Write PG `test_analysis_and_terminal_state_commit_atomically`, `test_publication_rollback_leaves_no_vacancy_or_analysis`, `test_stale_success_and_failure_cannot_publish`, `test_lease_expiring_while_waiting_for_lock_cannot_publish`, `test_two_publishers_create_one_analysis`, `test_owner_deleted_during_execution_has_no_partial_result`, `test_read_success_has_matching_snapshot`, `test_foreign_owner_get_is_not_found`. Contract tests assert success embeds result and failed excludes snapshot/input.
+- [x] Run new tests, observe red.
+- [x] Implement row lock then fresh DB-time fence; insert same-owner immutable vacancy/analysis plus terminal update in one transaction; suggestions output follows existing CHECK. Reader joins owner-scoped result/annotation under one consistent statement/read snapshot. Keep analysis output null and clear leases on all terminal paths.
+- [x] Run publication/status and existing constraints/ownership tests; assert no succeeded analysis job without stored result and no payload mutation on retry.
+- [x] Commit `feat: publish job results atomically with lease fencing`.
 
 ### Task 6: Separate worker lifecycle, async heartbeat and health
 
@@ -140,12 +140,12 @@ All source paths above are relative to `backend/src/fitcheck_backend/` unless pr
 - `WorkerRuntime(settings)` owns engine/LlmRuntime, validates schema/key at startup, closes resources on exit.
 - `python -m fitcheck_backend.worker` entrypoint; `python -m fitcheck_backend.worker.health` returns exit 0 only for fresh healthy local marker. Marker contains no secrets, has atomic writes and per-process boot identity.
 
-- [ ] Write runner tests using events: `test_heartbeat_runs_during_slow_provider`, `test_blocked_db_call_does_not_block_heartbeat_event_loop`, `test_failed_heartbeat_cancels_execution_and_never_publishes`, `test_shutdown_stops_claim_and_drains_current_job`, `test_drain_timeout_leaves_recoverable_job`, `test_recovery_runs_under_continuous_backlog`. Assert defaults exactly 1/150/20/130 and reject NaN/inf/invalid relationships. Health tests cover stale marker, process restart and failed startup.
-- [ ] Run `uv run --locked pytest tests/worker -q`, observe red.
-- [ ] Implement sequential jobs with concurrent heartbeat; safe error mapping, no raw payload logs. On fence/heartbeat loss cancel HTTP best effort and refuse publication; DB transaction timeouts bound adapter work even after asyncio cancellation. SIGTERM drains within 130 seconds; compose stop_grace_period=140s. Worker health updates during busy work; startup requires provider key and schema head. Worker image shares lockfile/package build, runs nonroot and health command rather than API HTTP check.
-- [ ] Add PG crash tests after claim, after fake provider success and before publication. Restart yields one recovery, separate operation IDs, preserved first cost plus second cost, one published analysis; second crash yields failed with no third HTTP execution.
-- [ ] Run worker and crash suites, build worker image and check missing-key startup fails safely; health command gives correct status without network provider calls.
-- [ ] Commit `feat: run durable jobs in a separate healthy worker process`.
+- [x] Write runner tests using events: `test_heartbeat_runs_during_slow_provider`, `test_blocked_db_call_does_not_block_heartbeat_event_loop`, `test_failed_heartbeat_cancels_execution_and_never_publishes`, `test_shutdown_stops_claim_and_drains_current_job`, `test_drain_timeout_leaves_recoverable_job`, `test_recovery_runs_under_continuous_backlog`. Assert defaults exactly 1/150/20/130 and reject NaN/inf/invalid relationships. Health tests cover stale marker, process restart and failed startup.
+- [x] Run `uv run --locked pytest tests/worker -q`, observe red.
+- [x] Implement sequential jobs with concurrent heartbeat; safe error mapping, no raw payload logs. On fence/heartbeat loss cancel HTTP best effort and refuse publication; DB transaction timeouts bound adapter work even after asyncio cancellation. SIGTERM drains within 130 seconds; compose stop_grace_period=140s. Worker health updates during busy work; startup requires provider key and schema head. Worker image shares lockfile/package build, runs nonroot and health command rather than API HTTP check.
+- [x] Add PG crash tests after claim, after fake provider success and before publication. Restart yields one recovery, separate operation IDs, preserved first cost plus second cost, one published analysis; second crash yields failed with no third HTTP execution.
+- [x] Run worker and crash suites, build worker image and check missing-key startup fails safely; health command gives correct status without network provider calls.
+- [x] Commit `feat: run durable jobs in a separate healthy worker process`.
 
 ### Task 7: Account job routes and contract export
 
@@ -153,12 +153,12 @@ All source paths above are relative to `backend/src/fitcheck_backend/` unless pr
 
 **Interfaces:** AuthRuntime exposes `.jobs` JobAdmission and `.job_status` JobStatusReader; Settings.jobs_enabled=False. Routers implement the three spec endpoints using existing verified_principal/CSRF dependencies and safe errors. API never constructs LlmRuntime to admit/read jobs.
 
-- [ ] Read installed Next.js route-handler/type guidance and existing profile/extraction router patterns before code changes.
-- [ ] Write HTTP tests `test_admission_returns_202_reference_and_status`, `test_duplicate_returns_terminal_status`, `test_invalid_or_duplicate_idempotency_headers_rejected`, `test_guest_and_unverified_account_rejected`, `test_csrf_required`, `test_foreign_and_malformed_job_ids_do_not_leak`, `test_disabled_admission_preserves_existing_get`, `test_api_jobs_work_without_provider_key`, `test_job_get_contains_committed_result`. Assert no provider HTTP in POST or GET.
-- [ ] Run HTTP tests, observe red.
-- [ ] Wire verified-account endpoints and feature flag; duplicate header checks use getlist, not collapsed values. Implement malformed IDs as safe validation failures and foreign IDs as 404. Return stored current status on duplicate. Update operation implementations and admission/result DTO references while leaving history/import/guest routes planned.
-- [ ] Export `cd backend && uv run --locked python scripts/export_openapi.py`; run root `pnpm backend:types`, then both drift checks. Run HTTP/openapi suites, frontend typecheck and contract tests.
-- [ ] Commit `feat: expose account job admission and owner-scoped results`.
+- [x] Read installed Next.js route-handler/type guidance and existing profile/extraction router patterns before code changes.
+- [x] Write HTTP tests `test_admission_returns_202_reference_and_status`, `test_duplicate_returns_terminal_status`, `test_invalid_or_duplicate_idempotency_headers_rejected`, `test_guest_and_unverified_account_rejected`, `test_csrf_required`, `test_foreign_and_malformed_job_ids_do_not_leak`, `test_disabled_admission_preserves_existing_get`, `test_api_jobs_work_without_provider_key`, `test_job_get_contains_committed_result`. Assert no provider HTTP in POST or GET.
+- [x] Run HTTP tests, observe red.
+- [x] Wire verified-account endpoints and feature flag; duplicate header checks use getlist, not collapsed values. Implement malformed IDs as safe validation failures and foreign IDs as 404. Return stored current status on duplicate. Update operation implementations and admission/result DTO references while leaving history/import/guest routes planned.
+- [x] Export `cd backend && uv run --locked python scripts/export_openapi.py`; run root `pnpm backend:types`, then both drift checks. Run HTTP/openapi suites, frontend typecheck and contract tests.
+- [x] Commit `feat: expose account job admission and owner-scoped results`.
 
 ### Task 8: Whole-system verification, review and dev rollout
 
