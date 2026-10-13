@@ -52,9 +52,14 @@ def test_job_state_types(kind,status):
     value = {"jobId":"job-1","type":kind,"status":status}
     if status == "succeeded":
         value.update({"analysisId":"analysis-1"} if kind == "analysis" else {"skills":["React"]})
+        if kind == 'analysis':
+            value['result'] = dict(analysisId='analysis-1',createdAt='2026-01-01T00:00:00Z',
+                analysis=DATA['analysis'],applicationStatus='not_applied',snapshot=dict(profileRevision='1',
+                    profile=DATA['profile'],vacancy=DATA['vacancy'],locale='en',promptVersion='prompt.v1',
+                    schemaVersion='fitcheck.analysis.v1',policyVersion='policy.v1'))
     if status == "failed":
         value["error"] = {"code":"timeout","message":"Timed out","requestId":"req-1","details":[]}
-    assert JobState.model_validate(value).model_dump(by_alias=True, exclude_none=True) == value
+    assert JobState.model_validate(value).model_dump(mode='json', by_alias=True, exclude_none=True) == value
 
 
 @pytest.mark.parametrize("extra", [{"skills":["React"]},{"analysisId":"a","skills":["React"]},{"analysisId":"a","userId":"u"}])

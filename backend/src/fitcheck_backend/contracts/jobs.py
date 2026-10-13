@@ -2,10 +2,16 @@ from typing import Annotated, Literal
 from pydantic import Field, RootModel
 from fitcheck_backend.api.errors import ErrorBody
 from fitcheck_backend.contracts.domain import DTO, Identifier, Skill
+from fitcheck_backend.contracts.resources import AnalysisResource
 
 
 class JobReference(DTO):
     job_id: Identifier
+
+
+class JobAdmissionResource(JobReference):
+    type: Literal['analysis', 'skill_suggestions']
+    status: Literal['queued', 'running', 'succeeded', 'failed']
 
 
 class AnalysisQueued(JobReference):
@@ -22,6 +28,7 @@ class AnalysisSucceeded(JobReference):
     type: Literal["analysis"]
     status: Literal["succeeded"]
     analysis_id: Identifier
+    result: AnalysisResource
 
 
 class AnalysisFailed(JobReference):
