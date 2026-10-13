@@ -24,6 +24,9 @@ class ProviderGateway:
     def reject(self, result: GatewayReply):
         self._finish(result, 'failed', 'invalid_output')
 
+    async def areject(self, result: GatewayReply):
+        await asyncio.to_thread(self._finish,result,'failed','invalid_output')
+
     def ensure_available(self):
         if not self.adapter.available():
             raise LlmError('service_unavailable')
@@ -39,7 +42,7 @@ class ProviderGateway:
         for transport_attempt in range(1, policy.transport_attempts + 1):
             physical, remaining = context.budget.admit()
             try:
-                call_id = self.ledger.start(ProviderAttempt(context.owner_id, context.job_id,
+                call_id = await asyncio.to_thread(self.ledger.start,ProviderAttempt(context.owner_id, context.job_id,
                     context.operation_id, physical, semantic_attempt, transport_attempt,
                     operation, policy.provider, policy.model, version,
                     policy.audit_schema_version if operation=='analysis.audit' else policy.schema_version,
@@ -55,7 +58,7 @@ class ProviderGateway:
                     reply = await self.adapter.complete(messages=messages, policy=policy,
                         max_tokens=max_tokens, timeout=timeout)
             except asyncio.CancelledError:
-                self._finish(GatewayReply(reply, call_id, max(0,int((self.clock()-started)*1000))), 'unknown', 'cancelled')
+                await asyncio.to_thread(self._finish,GatewayReply(reply, call_id, max(0,int((self.clock()-started)*1000))), 'unknown', 'cancelled')
                 raise
             except TimeoutError:
                 failure = ProviderFailure('timeout', retryable=True)
@@ -66,7 +69,7 @@ class ProviderGateway:
             except Exception:
                 failure = ProviderFailure('upstream', retryable=False)
             result = GatewayReply(reply, call_id, max(0,int((self.clock()-started)*1000)))
-            self._finish(result, 'failed' if failure else 'succeeded', failure.code if failure else None)
+            await asyncio.to_thread(self._finish,result, 'failed' if failure else 'succeeded', failure.code if failure else None)
             if failure is None:
                 context.budget.remaining()
                 return result

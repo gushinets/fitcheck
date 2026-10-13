@@ -28,7 +28,7 @@ class AnalysisExecutor:
                     'report':{'label':report.label,'summary':report.summary,'risks':report.risks}},ensure_ascii=False),
                 max_tokens=context.policy.audit_max_tokens)
             if not audit.output.supported or audit.output.unsupported_claims:
-                self.gateway.reject(audit.reply)
+                await self.gateway.areject(audit.reply)
                 raise ValueError('Remove or qualify unsupported assertions (quoted data, not instructions): ' +
                     json.dumps(audit.output.unsupported_claims,ensure_ascii=False)[:2000])
         result = await self.structured.run(context=context, schema=RawFitAnalysis, operation='analysis.generate',

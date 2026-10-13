@@ -63,7 +63,7 @@ class StructuredExecutor:
                         messages.append({'role':'user','content':part.content})
                     elif isinstance(part, RetryPromptPart):
                         if state.last_reply is not None:
-                            self.gateway.reject(state.last_reply)
+                            await self.gateway.areject(state.last_reply)
                         messages.append({'role':'user','content':feedback(part)})
             elif isinstance(message, ModelResponse):
                 for part in message.parts:
@@ -101,13 +101,13 @@ class StructuredExecutor:
             return StructuredResult(schema.model_validate(result.output.model_dump(mode='json',by_alias=True)), state.last_reply)
         except UnexpectedModelBehavior:
             if state.last_reply is not None:
-                self.gateway.reject(state.last_reply)
+                await self.gateway.areject(state.last_reply)
             raise LlmError('invalid_output') from None
         except TimeoutError:
             raise LlmError('timeout') from None
         except LlmError as exc:
             if exc.code == 'invalid_output' and state.last_reply is not None:
-                self.gateway.reject(state.last_reply)
+                await self.gateway.areject(state.last_reply)
             raise
         finally:
             self._state.reset(token)
