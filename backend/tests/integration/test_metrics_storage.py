@@ -136,3 +136,33 @@ def test_migration_0003_to_0004_preserves_jobs_and_calls(engine, storage_factory
             assert c.scalar(text('SELECT version_num FROM alembic_version')) == '0004'
     finally:
         run_migrations(Settings(database_url=os.environ['FITCHECK_TEST_DATABASE_URL']))
+
+
+@pytest.mark.parametrize('settled_before_delete', [False, True])
+def test_erased_attempt_retains_accounting_and_all_other_conflict_checks(engine,settled_before_delete):
+    from uuid import UUID
+    from sqlalchemy import update
+    now = utcnow()
+    start = WebsiteAttempt(callId=uuid4(),operationId=uuid4(),subjectId=uuid4(),purpose='analysis.audit',
+        ordinal=1,provider='openai',model='gpt-6-luna',promptVersion='v1',policyVersion='v1',startedAt=now,state='started')
+    finish = WebsiteAttempt.model_validate(start.model_dump() | {'state':'succeeded','finishedAt':now,
+        'inputTokens':100,'outputTokens':5,'cost':'0.01','currency':'USD','costBasis':'estimated'})
+    with unit_of_work(engine) as session:
+        MetricRepository(session).settle_attempt(finish if settled_before_delete else start,environment='test')
+        session.execute(update(WebsiteProviderAttempt).values(subject_id=UUID(int=0)))
+    with unit_of_work(engine) as session:
+        repo = MetricRepository(session)
+        assert repo.settle_attempt(finish,environment='test') is (not settled_before_delete)
+        assert not repo.settle_attempt(finish,environment='test')
+        assert not repo.settle_attempt(start,environment='test')
+    conflicts = {'operation_id':uuid4(),'purpose':'analysis.generate','ordinal':2,'provider':'deepseek',
+        'model':'different-model','prompt_version':'v2','policy_version':'v2','started_at':now-timedelta(seconds=1),
+        'cost':Decimal('0.02'),'input_tokens':101,'state':'failed'}
+    for field,value in conflicts.items():
+        with pytest.raises(MetricsError,match='conflict'), unit_of_work(engine) as session:
+            MetricRepository(session).settle_attempt(finish.model_copy(update={field:value}),environment='test')
+    with pytest.raises(MetricsError,match='conflict'), unit_of_work(engine) as session:
+        MetricRepository(session).settle_attempt(finish,environment='production')
+    with unit_of_work(engine) as session:
+        row = session.scalar(select(WebsiteProviderAttempt))
+        assert row.subject_id == UUID(int=0) and row.cost == Decimal('0.01') and row.state == 'succeeded'

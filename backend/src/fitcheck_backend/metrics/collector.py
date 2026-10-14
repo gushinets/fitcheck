@@ -1,10 +1,9 @@
 from datetime import timedelta
-from uuid import uuid4
 from sqlalchemy import select, delete, update, text
 from sqlalchemy.exc import SQLAlchemyError
 from ..storage.database import unit_of_work
 from ..storage.metrics import MetricJournal, WebsiteProviderAttempt
-from .contracts import WebsiteBatch, AttemptBatch, IngestResult
+from .contracts import WebsiteBatch, AttemptBatch, IngestResult, ERASED_VISITOR_ID
 from .repository import MetricRepository, fingerprint
 from .limits import MetricsRateLimiter
 from .errors import MetricsError
@@ -71,7 +70,7 @@ class MetricsCollector:
                     MetricJournal.subject_id==visitor_id, MetricJournal.environment==self.settings.metrics_environment)).rowcount
                 # Retain cost accounting while discarding the visitor association.
                 session.execute(update(WebsiteProviderAttempt).where(WebsiteProviderAttempt.subject_id==visitor_id,
-                    WebsiteProviderAttempt.environment==self.settings.metrics_environment).values(subject_id=uuid4()))
+                    WebsiteProviderAttempt.environment==self.settings.metrics_environment).values(subject_id=ERASED_VISITOR_ID))
                 return deleted
         except SQLAlchemyError:
             raise MetricsError('service_unavailable') from None

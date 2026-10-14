@@ -5,7 +5,7 @@ from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert
 from ..storage.metrics import MetricJournal, WebsiteProviderAttempt, MetricCollection
 from ..storage.base import utcnow
-from .contracts import MetricEvent, WebsiteAttempt, Environment
+from .contracts import MetricEvent, WebsiteAttempt, Environment, ERASED_VISITOR_ID
 from .registry import validate_event
 from .errors import MetricsError
 
@@ -70,6 +70,10 @@ class MetricRepository:
             return True
         row = self.session.scalar(select(WebsiteProviderAttempt).where(
             WebsiteProviderAttempt.call_id==attempt.call_id).with_for_update())
+        # Erasure removes only the visitor association. Stable call IDs still
+        # settle/replay, but cannot restore it; every other field stays checked.
+        if row.subject_id == ERASED_VISITOR_ID:
+            values['subject_id'] = ERASED_VISITOR_ID
         immutable = ('operation_id', 'subject_id', 'environment', 'purpose', 'ordinal', 'provider',
                      'model', 'prompt_version', 'policy_version', 'started_at')
         if any(getattr(row, key) != values[key] for key in immutable):

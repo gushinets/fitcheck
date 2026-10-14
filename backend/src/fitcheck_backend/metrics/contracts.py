@@ -7,6 +7,9 @@ from pydantic import Field, StrictInt, field_validator, model_validator
 from ..contracts.domain import DTO
 from .registry import REGISTRY, WEBSITE_SERVER, ModelName, SafeCode, Version
 
+# Reserved storage marker: no live visitor may claim an erased association.
+ERASED_VISITOR_ID = UUID(int=0)
+
 Environment = Literal['development', 'production', 'test']
 Source = Literal['website_client', 'website_server', 'backend_server', 'reconstructed_backend']
 TokenCount = Annotated[StrictInt, Field(ge=0, le=100_000_000)]
@@ -36,6 +39,8 @@ class MetricEvent(DTO):
 
     @model_validator(mode='after')
     def valid_properties(self):
+        if self.subject_kind == 'visitor' and self.subject_id == ERASED_VISITOR_ID:
+            raise ValueError('Reserved visitor identifier')
         kind = REGISTRY.get(self.name)
         if kind is None:
             raise ValueError('Unsupported event name')
@@ -70,6 +75,13 @@ class WebsiteAttempt(DTO):
     rate_version: Version | None = None
 
     _utc = field_validator('started_at', 'finished_at')(utc)
+
+    @field_validator('subject_id')
+    @classmethod
+    def live_visitor(cls, value):
+        if value == ERASED_VISITOR_ID:
+            raise ValueError('Reserved visitor identifier')
+        return value
 
     @model_validator(mode='after')
     def valid_settlement(self):

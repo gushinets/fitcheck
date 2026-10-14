@@ -145,3 +145,43 @@ def test_client_clock_at_tolerance_boundary_and_environment_not_caller_controlle
         row = session.scalar(select(MetricJournal))
         assert not row.clock_adjusted and row.environment == 'test'
     assert client.post('/internal/metrics/events',json={'source':'website_client','environment':'production','events':[event()]},headers=KEY).status_code == 400
+
+
+@pytest.mark.parametrize('settled_before_delete', [False, True])
+def test_deleted_visitor_attempt_can_settle_and_replay(metrics,engine,settled_before_delete):
+    from decimal import Decimal
+    from uuid import UUID
+    client,_,_ = metrics
+    subject = uuid4()
+    start = {'callId':str(uuid4()),'operationId':str(uuid4()),'subjectId':str(subject),
+        'purpose':'analysis.generate','ordinal':1,'provider':'openai','model':'gpt-6-luna',
+        'promptVersion':'v1','policyVersion':'v1','startedAt':NOW.isoformat(),'state':'started'}
+    finish = {**start,'state':'succeeded','finishedAt':(NOW+timedelta(seconds=1)).isoformat(),
+              'inputTokens':100,'outputTokens':5,'cost':'0.01','currency':'USD','costBasis':'estimated'}
+    def post(attempt):
+        return client.post('/internal/metrics/attempts',json={'source':'website_server','attempts':[attempt]},headers=KEY)
+    assert post(finish if settled_before_delete else start).status_code == 200
+    assert client.delete(f'/internal/metrics/visitors/{subject}',headers=KEY).status_code == 200
+    assert post(finish).json() == {'accepted':0 if settled_before_delete else 1,'duplicates':1 if settled_before_delete else 0}
+    assert post(finish).json() == {'accepted':0,'duplicates':1}
+    assert post(start).json() == {'accepted':0,'duplicates':1}
+    assert post({**finish,'operationId':str(uuid4())}).status_code == 409
+    assert post({**finish,'cost':'0.02'}).status_code == 409
+    with unit_of_work(engine) as session:
+        row = session.scalar(select(WebsiteProviderAttempt))
+        assert row.subject_id == UUID(int=0) and row.state == 'succeeded'
+        assert row.cost == Decimal('0.01') and row.input_tokens == 100
+        assert session.scalar(select(func.count()).select_from(MetricJournal).where(MetricJournal.subject_id==subject)) == 0
+
+
+def test_erased_visitor_sentinel_cannot_be_fresh_input(metrics,engine):
+    from uuid import UUID
+    client,_,_ = metrics
+    assert send(client,[event(subjectId=str(UUID(int=0)))]).status_code == 400
+    attempt = {'callId':str(uuid4()),'operationId':str(uuid4()),'subjectId':str(UUID(int=0)),
+        'purpose':'analysis.generate','ordinal':1,'provider':'openai','model':'gpt-6-luna',
+        'promptVersion':'v1','policyVersion':'v1','startedAt':NOW.isoformat(),'state':'started'}
+    response = client.post('/internal/metrics/attempts',json={'source':'website_server','attempts':[attempt]},headers=KEY)
+    assert response.status_code == 400
+    with unit_of_work(engine) as session:
+        assert session.scalar(select(func.count()).select_from(WebsiteProviderAttempt)) == 0
