@@ -43,7 +43,7 @@ class MetricsCollector:
                             MetricJournal.name=='page_viewed').order_by(MetricJournal.received_at, MetricJournal.event_id).limit(1))
                         campaign = event.properties.get('campaign')
                         event.properties['campaign'] = (first.properties['campaign'] if first else
-                            'direct' if campaign is None else campaign if campaign in self.settings.metrics_campaign_codes else 'other')
+                            'direct' if campaign is None else campaign if campaign in {'direct', 'other'} or campaign in self.settings.metrics_campaign_codes else 'other')
                     accepted += repository.append(event, source=batch.source,
                         environment=self.settings.metrics_environment, received_at=received,
                         clock_adjusted=adjusted, submitted_hash=fingerprint(payload))

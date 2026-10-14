@@ -50,12 +50,14 @@ export function ProfileEditor({
   copy,
   onSave,
   onSuggestSkills,
+  onSkillsAccepted,
 }: {
   profile: FreelancerProfile | null
   locale: Locale
   copy: WebMessages
   onSave: (profile: FreelancerProfile) => void
   onSuggestSkills: (input: SkillSuggestionRequest) => Promise<string[]>
+  onSkillsAccepted?: (count: number) => void
 }) {
   const [specialization, setSpecialization] = useState(profile?.specialization ?? "")
   const [skills, setSkills] = useState<string[]>(() => mergeSkills([], profile?.skills ?? []))
@@ -134,6 +136,7 @@ export function ProfileEditor({
   function addSuggestedSkill(skill: string) {
     setSkills((current) => mergeSkills(current, [...skillInput.split(","), skill]))
     setSkillInput("")
+    try { onSkillsAccepted?.(1) } catch { /* Observations never block editing. */ }
   }
 
   function commitSkillInput() {

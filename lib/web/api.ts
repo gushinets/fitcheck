@@ -1,3 +1,4 @@
+import { z } from "zod"
 import { fitAnalysisSchema } from "@/lib/analysis/schema"
 import {
   extractedVacancySchema,
@@ -44,6 +45,7 @@ export class WebApiError extends Error {
 export interface WebsiteApi {
   extractVacancy(url: string): Promise<VacancyDraft>
   analyzeVacancy(request: AnalysisRequest): Promise<FitAnalysis>
+  analyzeVacancyWithContext?(request: AnalysisRequest): Promise<{ analysis: FitAnalysis; operationId?: string }>
   suggestSkills(request: SkillSuggestionRequest): Promise<string[]>
 }
 
@@ -89,12 +91,17 @@ export async function extractVacancy(url: string): Promise<VacancyDraft> {
 export async function analyzeVacancy(
   request: AnalysisRequest,
 ): Promise<FitAnalysis> {
+  return (await analyzeVacancyWithContext(request)).analysis
+}
+
+export async function analyzeVacancyWithContext(request: AnalysisRequest): Promise<{ analysis: FitAnalysis; operationId?: string }> {
   const response = await post("/api/analyze", request)
   if (!response.ok) return errorFrom(response)
   const payload = await response.json().catch(() => null)
   const parsed = fitAnalysisSchema.safeParse(payload)
   if (!parsed.success) throw new WebApiError("invalid_response")
-  return parsed.data
+  const operationId = response.headers.get("X-FitCheck-Operation-Id")
+  return { analysis: parsed.data, ...(operationId && z.string().uuid().safeParse(operationId).success ? { operationId } : {}) }
 }
 
 export async function suggestSkills(
@@ -111,5 +118,6 @@ export async function suggestSkills(
 export const websiteApi: WebsiteApi = {
   extractVacancy,
   analyzeVacancy,
+  analyzeVacancyWithContext,
   suggestSkills,
 }

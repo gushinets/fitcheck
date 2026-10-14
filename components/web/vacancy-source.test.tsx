@@ -75,3 +75,14 @@ describe("VacancySource", () => {
     expect(screen.getByLabelText("Task description")).toBeVisible()
   })
 })
+
+it("observes first edited input once with its mode and without content", async () => {
+  const onInputStarted = vi.fn()
+  render(<VacancySource copy={webMessages.en} onLoadUrl={vi.fn()} onReview={vi.fn()} onInputStarted={onInputStarted} />)
+  const user = userEvent.setup()
+  await user.click(screen.getByRole("button", { name: "Paste text" }))
+  expect(onInputStarted).not.toHaveBeenCalled()
+  await user.type(screen.getByLabelText("Task title"), "private content")
+  await user.type(screen.getByLabelText("Task description"), "private description")
+  expect(onInputStarted.mock.calls).toEqual([["text"]])
+})

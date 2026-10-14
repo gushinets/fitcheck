@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { defaultProfile, detectedJob, goAnalysis } from "@/lib/mock-data"
-import { analyzeVacancy, extractVacancy, suggestSkills } from "./api"
+import { analyzeVacancy, analyzeVacancyWithContext, extractVacancy, suggestSkills } from "./api"
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -103,4 +103,12 @@ describe("website API client", () => {
       suggestSkills({ specialization: "Backend engineering", locale: "en" }),
     ).rejects.toMatchObject({ code: "invalid_response" })
   })
+})
+
+const operationId = "11111111-1111-4111-8111-111111111111"
+it.each([operationId, "invalid-private-value", null])("keeps validated operation header separate from public analysis JSON: %s", async (header) => {
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json(goAnalysis, { headers: header ? { "X-FitCheck-Operation-Id": header } : {} })))
+  const request = {profile: defaultProfile, job: detectedJob, locale: "en" as const, memory: []}
+  await expect(analyzeVacancyWithContext(request)).resolves.toEqual({analysis: goAnalysis, ...(header === operationId ? {operationId} : {})})
+  await expect(analyzeVacancy(request)).resolves.toEqual(goAnalysis)
 })

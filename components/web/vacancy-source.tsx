@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { FileText, Link2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,12 +16,20 @@ export function VacancySource({
   initialDraft = null,
   onLoadUrl,
   onReview,
+  onInputStarted,
 }: {
   copy: WebMessages
   initialDraft?: VacancyDraft | null
   onLoadUrl: (url: string) => Promise<VacancyDraft>
   onReview: (draft: VacancyDraft) => void
+  onInputStarted?: (mode: VacancySourceMode) => void
 }) {
+  const started = useRef(false)
+  function inputStarted() {
+    if (started.current) return
+    started.current = true
+    try { onInputStarted?.(mode) } catch { /* Observations never block input. */ }
+  }
   const [mode, setMode] = useState<VacancySourceMode>(initialDraft?.sourceMode ?? "url")
   const [url, setUrl] = useState(initialDraft?.sourceUrl ?? "")
   const [title, setTitle] = useState(initialDraft?.sourceMode === "text" ? initialDraft.title : "")
@@ -77,7 +85,7 @@ export function VacancySource({
           </button>
         ))}
       </div>
-      <div className="mt-4 rounded-3xl border border-border bg-card p-6 shadow-sm sm:p-8">
+      <div onChangeCapture={inputStarted} className="mt-4 rounded-3xl border border-border bg-card p-6 shadow-sm sm:p-8">
         {mode === "url" ? (
           <form onSubmit={loadUrl} className="space-y-5">
             <div className="space-y-1.5">

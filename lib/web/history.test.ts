@@ -60,3 +60,11 @@ describe("website history", () => {
     expect(memory.at(-1)?.jobTitle).toBe("Role 2")
   })
 })
+
+it("preserves opaque correlation locally and excludes it from calibration prompts", () => {
+  const providerOperationId = "11111111-1111-4111-8111-111111111111"
+  const entry = createHistoryEntry({ userId: "private-account", profile: defaultProfile, job: detectedJob, analysis: goAnalysis, providerOperationId })
+  expect(entry.providerOperationId).toBe(providerOperationId)
+  expect(toCalibrationMemory([entry])).toEqual([{jobTitle: detectedJob.title, predictedScore:goAnalysis.score}])
+  expect(JSON.stringify(toCalibrationMemory([entry]))).not.toContain(providerOperationId)
+})

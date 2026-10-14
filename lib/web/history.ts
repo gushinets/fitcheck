@@ -33,12 +33,14 @@ export function createHistoryEntry(input: {
   profile: FreelancerProfile
   job: Job
   analysis: FitAnalysis
+  providerOperationId?: string
   now?: Date
 }): WebHistoryEntry {
   const now = input.now ?? new Date()
   return structuredClone({
     id: crypto.randomUUID(),
     userId: input.userId,
+    ...(input.providerOperationId ? { providerOperationId: input.providerOperationId } : {}),
     profile: input.profile,
     job: input.job,
     analysis: input.analysis,

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import type { AnalysisFeedback, FreelancerProfile, Locale } from "@/lib/types"
 import { resolveLocale } from "@/lib/i18n/locale"
@@ -22,6 +22,11 @@ import { VacancySource } from "./vacancy-source"
 import { AnalysisResult } from "./analysis-result"
 import { HistoryView } from "./history-view"
 
+import { createMetricsClient, deleteBrowserVisitor, sendBrowserMetrics } from "@/lib/metrics/client"
+import { uuidSchema } from "@/lib/metrics/types"
+import type { ClientContext, ClientEventName, ClientProperties } from "@/lib/metrics/types"
+
+const noCampaignCodes: string[] = []
 const emptySnapshot: WebsiteSnapshot = {
   user: null,
   profile: null,
@@ -41,10 +46,36 @@ function initialLocale(): Locale {
 export function WebsiteApp({
   repository,
   api = websiteApi,
+  metricsEnabled = false,
+  knownCampaignCodes = noCampaignCodes,
 }: {
   repository?: WebsiteRepository
   api?: WebsiteApi
+  metricsEnabled?: boolean
+  knownCampaignCodes?: string[]
 }) {
+  const metrics = useRef<ReturnType<typeof createMetricsClient> | null>(null)
+  const observationGeneration = useRef(0)
+  const viewedResults = useRef(new Set<string>())
+  const campaignCodes = useRef(knownCampaignCodes)
+  const observe = useCallback(<N extends ClientEventName,>(name: N, properties: ClientProperties[N], context?: ClientContext, generation = observationGeneration.current) => {
+    if (generation !== observationGeneration.current) return
+    try {
+      if (context) metrics.current?.track(name, properties, context)
+      else metrics.current?.track(name, properties)
+    } catch { /* Telemetry cannot change product outcomes. */ }
+  }, [])
+  useEffect(() => {
+    if (!metricsEnabled) return
+    const client = createMetricsClient({ send: sendBrowserMetrics, deleteVisitor: deleteBrowserVisitor })
+    metrics.current = client
+    const generationRef = observationGeneration
+    return () => {
+      generationRef.current++
+      if (metrics.current === client) metrics.current = null
+      client.dispose()
+    }
+  }, [metricsEnabled])
   const [store] = useState<WebsiteRepository>(() =>
     repository ?? createWebsiteRepository(),
   )
@@ -68,14 +99,18 @@ export function WebsiteApp({
         if (!active) return
         setSnapshot(loaded)
         setDraft(loaded.draft)
-        setLocale(loaded.preferences?.locale ?? initialLocale())
+        const loadedLocale = loaded.preferences?.locale ?? initialLocale()
+        setLocale(loadedLocale)
+        const rawCampaign = new URLSearchParams(window.location.search).get("utm_campaign")
+        const campaign = rawCampaign === null ? "direct" : campaignCodes.current.includes(rawCampaign) && /^[a-z][a-z0-9_]{0,79}$/.test(rawCampaign) ? rawCampaign : "other"
+        observe("page_viewed", { locale: loadedLocale, campaign })
         if (!loaded.profile) setView("profile")
       })
       .finally(() => active && setInitialized(true))
     return () => {
       active = false
     }
-  }, [store])
+  }, [store, observe])
 
   useEffect(() => {
     document.documentElement.lang = locale
@@ -90,10 +125,12 @@ export function WebsiteApp({
     email: string
     password: string
   }) {
+    const generation = observationGeneration.current
     setBusy(true)
     setAuthError(null)
     try {
       const user = await store.createUser(input)
+      observe("local_registration_completed", { locale }, undefined, generation)
       await store.saveLocale(user.id, locale)
       await refresh()
       setView("profile")
@@ -105,10 +142,12 @@ export function WebsiteApp({
   }
 
   async function signIn(input: { email: string; password: string }) {
+    const generation = observationGeneration.current
     setBusy(true)
     setAuthError(null)
     try {
       await store.authenticate(input.email, input.password)
+      observe("local_login_completed", { locale }, undefined, generation)
       await refresh()
     } catch (error) {
       setAuthError(authErrorMessage(error))
@@ -137,7 +176,9 @@ export function WebsiteApp({
 
   async function saveProfile(profile: FreelancerProfile) {
     if (!snapshot.user) return
+    const generation = observationGeneration.current
     await store.saveProfile(snapshot.user.id, profile)
+    observe("profile_saved", { locale }, undefined, generation)
     await refresh()
     setView("analyze")
   }
@@ -158,25 +199,34 @@ export function WebsiteApp({
 
   async function startAnalysis(nextDraft: VacancyDraft) {
     if (!snapshot.user || !snapshot.profile) return
+    const generation = observationGeneration.current
     await store.saveDraft(snapshot.user.id, nextDraft)
+    if (generation !== observationGeneration.current) return
+    observe("analysis_requested", { locale, inputMode: nextDraft.sourceMode })
     setDraft(nextDraft)
     setAnalysisStep("analyzing")
     setAnalysisError(null)
     try {
       const request = createAnalysisRequest({ profile: snapshot.profile, draft: nextDraft, locale, history: snapshot.history })
-      const result = await api.analyzeVacancy(request)
-      const entry = createHistoryEntry({ userId: snapshot.user.id, profile: snapshot.profile, job: request.job, analysis: result })
+      const result = api.analyzeVacancyWithContext
+        ? await api.analyzeVacancyWithContext(request)
+        : { analysis: await api.analyzeVacancy(request) }
+      if (generation !== observationGeneration.current) return
+      const entry = createHistoryEntry({ userId: snapshot.user.id, profile: snapshot.profile, job: request.job, analysis: result.analysis, providerOperationId: result.operationId })
       await store.addHistory(entry)
+      if (generation !== observationGeneration.current) return
       setSnapshot((current) => ({ ...current, history: [entry, ...current.history].slice(0, 50) }))
       setActiveEntry(entry)
       setAnalysisStep("result")
     } catch (error) {
+      if (generation !== observationGeneration.current) return
       setAnalysisError(analysisErrorMessage(error))
       setAnalysisStep("review")
     }
   }
 
   function navigate(nextView: WebView) {
+    if (nextView === "history" && view !== "history") observe("history_viewed", {})
     setView(nextView === "analyze" && !snapshot.profile ? "profile" : nextView)
     if (nextView === "analyze") setAnalysisStep("source")
   }
@@ -211,6 +261,7 @@ export function WebsiteApp({
   }
 
   async function suggestProfileSkills(input: SkillSuggestionRequest) {
+    observe("skills_requested", { locale })
     try {
       return await api.suggestSkills(input)
     } catch (error) {
@@ -220,12 +271,28 @@ export function WebsiteApp({
 
   async function saveFeedback(feedback: Omit<AnalysisFeedback, "createdAt">) {
     if (!snapshot.user || !activeEntry) return
+    const generation = observationGeneration.current
     const saved = { ...feedback, createdAt: new Date().toISOString() }
     await store.saveFeedback(snapshot.user.id, activeEntry.id, saved)
+    observe("feedback_saved", { resultId: resultId(activeEntry), predictedScore: activeEntry.analysis.score, correctedScore: feedback.correctedScore }, resultContext(activeEntry), generation)
     const update = (entry: WebHistoryEntry) => entry.id === activeEntry.id ? { ...entry, feedback: saved } : entry
     setSnapshot((current) => ({ ...current, history: current.history.map(update) }))
     setActiveEntry((current) => current ? update(current) : current)
   }
+
+  function resultId(entry: WebHistoryEntry) {
+    return uuidSchema.safeParse(entry.providerOperationId).success ? entry.providerOperationId! : entry.id
+  }
+  function resultContext(entry: WebHistoryEntry): ClientContext {
+    return uuidSchema.safeParse(entry.providerOperationId).success ? { operationId: entry.providerOperationId } : {}
+  }
+  useEffect(() => {
+    if (view !== "analyze" || analysisStep !== "result" || !activeEntry) return
+    const id = resultId(activeEntry)
+    if (viewedResults.current.has(id)) return
+    viewedResults.current.add(id)
+    observe("analysis_result_viewed", { resultId: id, predictedScore: activeEntry.analysis.score }, resultContext(activeEntry))
+  }, [view, analysisStep, activeEntry, observe])
 
   function openHistory(entry: WebHistoryEntry) {
     const restoredDraft: VacancyDraft = {
@@ -256,9 +323,30 @@ export function WebsiteApp({
     setAnalysisStep("source")
   }
 
+  async function clearHistory() {
+    if (!snapshot.user || !window.confirm(copy.clearHistoryConfirmation)) return
+    const generation = observationGeneration.current
+    await store.clearHistory(snapshot.user.id)
+    observe("history_cleared", {}, undefined, generation)
+    if (generation !== observationGeneration.current) return
+    setSnapshot((current) => ({ ...current, history: [] }))
+  }
+
   async function deleteAccount() {
     if (!snapshot.user || !window.confirm(copy.deleteAccountConfirmation)) return
     await store.deleteUser(snapshot.user.id)
+    observe("local_account_deleted", {})
+    observationGeneration.current++
+    viewedResults.current.clear()
+    // The bridge rotates the cookie even when journal deletion delivery fails.
+    // Keep the owned client: deleteVisitor clears its old queue/session itself.
+    const client = metrics.current
+    void (async () => {
+      try {
+        const delivered = client ? await client.deleteVisitor() : await deleteBrowserVisitor()
+        if (!delivered) console.info("FitCheck metrics: visitor deletion observation was not delivered")
+      } catch { console.info("FitCheck metrics: visitor deletion observation was not delivered") }
+    })()
     setSnapshot(emptySnapshot)
     setDraft(null)
     setActiveEntry(null)
@@ -268,10 +356,10 @@ export function WebsiteApp({
 
   function content() {
     if (view === "profile") {
-      return <div className="space-y-6"><ProfileEditor profile={snapshot.profile} locale={locale} copy={copy} onSave={saveProfile} onSuggestSkills={suggestProfileSkills} /><section className="mx-auto max-w-3xl rounded-3xl border border-danger/20 bg-card p-6 sm:p-8"><h2 className="text-lg font-semibold">{copy.localDataTitle}</h2><p className="mt-2 text-sm text-muted-foreground">{copy.localDataDescription}</p><p className="mt-3 text-sm font-medium">{snapshot.user?.email}</p><Button type="button" variant="destructive" className="mt-5" onClick={deleteAccount}>{copy.deleteAccount}</Button></section></div>
+      return <div className="space-y-6"><ProfileEditor profile={snapshot.profile} locale={locale} copy={copy} onSave={saveProfile} onSuggestSkills={suggestProfileSkills} onSkillsAccepted={(count) => observe("skills_accepted", { locale, count })} /><section className="mx-auto max-w-3xl rounded-3xl border border-danger/20 bg-card p-6 sm:p-8"><h2 className="text-lg font-semibold">{copy.localDataTitle}</h2><p className="mt-2 text-sm text-muted-foreground">{copy.localDataDescription}</p><p className="mt-3 text-sm font-medium">{snapshot.user?.email}</p><Button type="button" variant="destructive" className="mt-5" onClick={deleteAccount}>{copy.deleteAccount}</Button></section></div>
     }
     if (view === "history") {
-      return <HistoryView entries={snapshot.history} locale={locale} copy={copy} onOpen={openHistory} onClear={async () => { if (window.confirm(copy.clearHistoryConfirmation) && snapshot.user) { await store.clearHistory(snapshot.user.id); setSnapshot((current) => ({ ...current, history: [] })) } }} />
+      return <HistoryView entries={snapshot.history} locale={locale} copy={copy} onOpen={openHistory} onClear={clearHistory} />
     }
     if (analysisStep === "review" && draft) {
       return <div className="space-y-4">{analysisError ? <div role="alert" className="mx-auto max-w-4xl rounded-xl bg-danger-muted p-4 text-sm text-danger">{analysisError}</div> : null}<VacancyReview draft={draft} copy={copy} onBack={backToSource} onAnalyze={startAnalysis} /></div>
@@ -282,7 +370,7 @@ export function WebsiteApp({
     if (analysisStep === "result" && activeEntry) {
       return <AnalysisResult entry={activeEntry} copy={copy} onBack={() => setAnalysisStep("source")} onAnalyzeAnother={analyzeAnother} onSaveFeedback={saveFeedback} />
     }
-    return <VacancySource copy={copy} initialDraft={draft} onLoadUrl={api.extractVacancy} onReview={reviewDraft} />
+    return <VacancySource copy={copy} initialDraft={draft} onInputStarted={(inputMode) => observe("vacancy_input_started", { locale, inputMode })} onLoadUrl={(url) => { observe("extraction_requested", { locale, inputMode: "url" }); return api.extractVacancy(url) }} onReview={reviewDraft} />
   }
 
   if (!initialized) {

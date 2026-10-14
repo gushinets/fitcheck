@@ -287,3 +287,14 @@ describe("ProfileEditor", () => {
     },
   )
 })
+
+it("observes accepted suggestion after adding it and isolates throwing telemetry", async () => {
+  const onSkillsAccepted = vi.fn(() => { throw Error("collector") })
+  render(<ProfileEditor profile={null} locale="en" copy={webMessages.en} onSave={vi.fn()} onSuggestSkills={async () => ["Python"]} onSkillsAccepted={onSkillsAccepted} />)
+  const user = userEvent.setup()
+  await user.type(screen.getByLabelText("Specialization"), "Backend")
+  await user.click(screen.getByRole("button", { name: "Suggest skills" }))
+  await user.click(await screen.findByRole("button", { name: "Python" }))
+  expect(onSkillsAccepted.mock.calls).toEqual([[1]])
+  expect(screen.getByRole("combobox", { name: "Proficiency: Python" })).toBeVisible()
+})

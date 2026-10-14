@@ -52,6 +52,7 @@ export interface VacancyDraft {
 }
 
 export interface WebHistoryEntry {
+  providerOperationId?: string
   id: string
   userId: string
   profile: FreelancerProfile

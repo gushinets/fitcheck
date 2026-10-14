@@ -185,3 +185,19 @@ def test_erased_visitor_sentinel_cannot_be_fresh_input(metrics,engine):
     assert response.status_code == 400
     with unit_of_work(engine) as session:
         assert session.scalar(select(func.count()).select_from(WebsiteProviderAttempt)) == 0
+
+@pytest.mark.parametrize(('campaign', 'expected'), [
+    (None, 'direct'), ('direct', 'direct'), ('other', 'other'),
+    ('launch', 'launch'), ('unknown', 'other'),
+])
+def test_client_mapped_campaign_preserves_reserved_codes_and_first_touch(metrics, engine, campaign, expected):
+    client, _, _ = metrics
+    subject = str(uuid4())
+    first = event(subjectId=subject, properties={} if campaign is None else {'campaign': campaign})
+    assert send(client, [first]).json() == {'accepted': 1, 'duplicates': 0}
+    assert send(client, [first]).json() == {'accepted': 0, 'duplicates': 1}
+    assert send(client, [event(subjectId=subject, properties={'campaign': 'launch'})]).status_code == 200
+    with unit_of_work(engine) as session:
+        rows = session.scalars(select(MetricJournal).where(MetricJournal.subject_id == subject)).all()
+        assert len(rows) == 2
+        assert [row.properties['campaign'] for row in rows] == [expected, expected]
