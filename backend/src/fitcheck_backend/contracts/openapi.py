@@ -22,6 +22,8 @@ def ref(model):
 
 def security_schemes():
     return {
+        'metricsBridge': {'type':'apiKey','in':'header','name':'X-FitCheck-Metrics-Key',
+                          'description':'Server-only website bridge; website visitor telemetry only. No account or product access.'},
         'webSession': {'type':'apiKey','in':'cookie','name':'__Host-fitcheck_session',
                        'description':'Secure HttpOnly SameSite=Lax Path=/, no Domain; separate dev HTTP cookie. Cookie mutations require verified Origin and CSRF.'},
         'guestSession': {'type':'apiKey','in':'cookie','name':'__Host-fitcheck_guest',
@@ -43,7 +45,9 @@ def _omit_absent_defaults(value):
 
 def export_openapi(app: FastAPI) -> dict:
     document = deepcopy(app.openapi())
-    models = {ErrorEnvelope}
+    from fitcheck_backend.metrics.registry import REGISTRY
+    # Website adapters use these property DTOs for alias-aware runtime validation.
+    models = {ErrorEnvelope, *REGISTRY.values()}
     for operation in PLANNED_OPERATIONS:
         models.update(m for m in [operation.request, operation.response] if m is not None)
     _, schema = models_json_schema([(m, "validation") for m in sorted(models, key=lambda m: m.__name__)],

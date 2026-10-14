@@ -36,7 +36,7 @@ class RequestBoundaryMiddleware:
                 status = message["status"]
                 output = MutableHeaders(scope=message)
                 output["X-Request-ID"] = request_id
-                if scope['path'].startswith('/v1/'):
+                if scope['path'].startswith(('/v1/', '/internal/metrics/')):
                     output['Cache-Control'] = 'no-store'
                 output.add_vary_header("Origin")
                 if allowed:
@@ -62,6 +62,7 @@ class RequestBoundaryMiddleware:
                     })(scope, receive, boundary_send)
                 return
             # Consume at most the configured bound before any route sees bytes.
+            limit = min(self.max_body_bytes, 32_768) if scope['path'].startswith('/internal/metrics/') else self.max_body_bytes
             chunks = []
             size = 0
             while True:
@@ -70,7 +71,7 @@ class RequestBoundaryMiddleware:
                     return
                 chunk = part.get("body", b"")
                 size += len(chunk)
-                if size > self.max_body_bytes:
+                if size > limit:
                     await fail(413, "body_too_large", "Request body is too large")
                     return
                 chunks.append(chunk)
@@ -94,4 +95,4 @@ class RequestBoundaryMiddleware:
             await fail(500, "internal_error", "Internal server error")
         finally:
             logger.info("requestId=%s method=%s path=%s status=%s", request_id,
-                        scope["method"], scope["path"], status)
+                        scope["method"], "/internal/metrics" if scope["path"].startswith("/internal/metrics/") else scope["path"], status)

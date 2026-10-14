@@ -49,3 +49,15 @@ class AuthRuntime:
                 raise AuthError('service_unavailable')
         except SQLAlchemyError:
             raise AuthError('service_unavailable') from None
+
+
+class MetricsRuntime:
+    def __init__(self, settings: Settings, *, engine=None, clock=utcnow):
+        from ..metrics.collector import MetricsCollector
+        self._owns_engine = engine is None
+        self.engine = engine if engine is not None else create_engine(settings)
+        self.collector = MetricsCollector(self.engine, settings, clock)
+
+    def close(self):
+        if self._owns_engine:
+            self.engine.dispose()

@@ -36,6 +36,22 @@
         "title": "AccountAnalysisStart",
         "type": "object"
       },
+      "ActivityProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "activeMs": {
+            "maximum": 30000,
+            "minimum": 0,
+            "title": "Activems",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "activeMs"
+        ],
+        "title": "ActivityProperties",
+        "type": "object"
+      },
       "AnalysisFailed": {
         "additionalProperties": false,
         "properties": {
@@ -318,6 +334,31 @@
         "title": "ApplicationStatusUpdate",
         "type": "object"
       },
+      "AttemptBatch": {
+        "additionalProperties": false,
+        "properties": {
+          "attempts": {
+            "items": {
+              "$ref": "#/components/schemas/WebsiteAttempt"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Attempts",
+            "type": "array"
+          },
+          "source": {
+            "const": "website_server",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "attempts"
+        ],
+        "title": "AttemptBatch",
+        "type": "object"
+      },
       "CsrfResource": {
         "additionalProperties": false,
         "properties": {
@@ -332,6 +373,20 @@
           "csrfToken"
         ],
         "title": "CsrfResource",
+        "type": "object"
+      },
+      "DeleteResult": {
+        "additionalProperties": false,
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "title": "DeleteResult",
         "type": "object"
       },
       "DraftResource": {
@@ -381,6 +436,12 @@
           "email"
         ],
         "title": "EmailRequest",
+        "type": "object"
+      },
+      "EmptyProperties": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "EmptyProperties",
         "type": "object"
       },
       "ErrorBody": {
@@ -527,6 +588,35 @@
           "url"
         ],
         "title": "ExtractionUrl",
+        "type": "object"
+      },
+      "FeedbackProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "correctedScore": {
+            "maximum": 100,
+            "minimum": 0,
+            "title": "Correctedscore",
+            "type": "integer"
+          },
+          "predictedScore": {
+            "maximum": 100,
+            "minimum": 0,
+            "title": "Predictedscore",
+            "type": "integer"
+          },
+          "resultId": {
+            "format": "uuid",
+            "title": "Resultid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resultId",
+          "predictedScore",
+          "correctedScore"
+        ],
+        "title": "FeedbackProperties",
         "type": "object"
       },
       "FeedbackResponse": {
@@ -1086,6 +1176,82 @@
         "title": "ImportSucceeded",
         "type": "object"
       },
+      "IngestResult": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "duplicates": {
+            "title": "Duplicates",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "accepted",
+          "duplicates"
+        ],
+        "title": "IngestResult",
+        "type": "object"
+      },
+      "InputProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "inputMode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "url",
+                  "text"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Inputmode"
+          },
+          "locale": {
+            "anyOf": [
+              {
+                "enum": [
+                  "en",
+                  "ru"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Locale"
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "enum": [
+                  "freelancer",
+                  "upwork",
+                  "other",
+                  "text"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Platform"
+          }
+        },
+        "title": "InputProperties",
+        "type": "object"
+      },
       "JobAdmissionResource": {
         "additionalProperties": false,
         "properties": {
@@ -1120,6 +1286,52 @@
           "status"
         ],
         "title": "JobAdmissionResource",
+        "type": "object"
+      },
+      "JobProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "attempts": {
+            "anyOf": [
+              {
+                "maximum": 2,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Attempts"
+          },
+          "executionToken": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Executiontoken"
+          },
+          "jobType": {
+            "enum": [
+              "analysis",
+              "skill_suggestions",
+              "import"
+            ],
+            "title": "Jobtype",
+            "type": "string"
+          }
+        },
+        "required": [
+          "jobType"
+        ],
+        "title": "JobProperties",
         "type": "object"
       },
       "JobReference": {
@@ -1192,6 +1404,81 @@
           }
         ],
         "title": "JobState"
+      },
+      "JobTerminalProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "attempts": {
+            "anyOf": [
+              {
+                "maximum": 2,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Attempts"
+          },
+          "durationMs": {
+            "maximum": 86400000,
+            "minimum": 0,
+            "title": "Durationms",
+            "type": "integer"
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z][a-z0-9_]{0,79}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Errorcode"
+          },
+          "executionToken": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Executiontoken"
+          },
+          "jobType": {
+            "enum": [
+              "analysis",
+              "skill_suggestions",
+              "import"
+            ],
+            "title": "Jobtype",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "succeeded",
+              "failed"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "durationMs",
+          "jobType"
+        ],
+        "title": "JobTerminalProperties",
+        "type": "object"
       },
       "LegacyFeedback": {
         "additionalProperties": false,
@@ -1410,6 +1697,29 @@
         "title": "LegacyProfile",
         "type": "object"
       },
+      "LocaleProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "locale": {
+            "anyOf": [
+              {
+                "enum": [
+                  "en",
+                  "ru"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Locale"
+          }
+        },
+        "title": "LocaleProperties",
+        "type": "object"
+      },
       "LoginCredentials": {
         "additionalProperties": false,
         "properties": {
@@ -1432,6 +1742,132 @@
           "password"
         ],
         "title": "LoginCredentials",
+        "type": "object"
+      },
+      "MetricEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "domainKey": {
+            "anyOf": [
+              {
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,119}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domainkey"
+          },
+          "eventId": {
+            "format": "uuid",
+            "title": "Eventid",
+            "type": "string"
+          },
+          "name": {
+            "pattern": "^[a-z][a-z0-9_]{0,79}$",
+            "title": "Name",
+            "type": "string"
+          },
+          "occurredAt": {
+            "format": "date-time",
+            "title": "Occurredat",
+            "type": "string"
+          },
+          "operationId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operationid"
+          },
+          "properties": {
+            "additionalProperties": true,
+            "title": "Properties",
+            "type": "object"
+          },
+          "schemaVersion": {
+            "default": 1,
+            "maximum": 1.0,
+            "minimum": 1.0,
+            "title": "Schemaversion",
+            "type": "integer"
+          },
+          "sessionId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessionid"
+          },
+          "subjectId": {
+            "format": "uuid",
+            "title": "Subjectid",
+            "type": "string"
+          },
+          "subjectKind": {
+            "default": "visitor",
+            "enum": [
+              "visitor",
+              "account"
+            ],
+            "title": "Subjectkind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "eventId",
+          "name",
+          "occurredAt",
+          "subjectId"
+        ],
+        "title": "MetricEvent",
+        "type": "object"
+      },
+      "PageProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "campaign": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z][a-z0-9_]{0,79}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Campaign"
+          },
+          "locale": {
+            "anyOf": [
+              {
+                "enum": [
+                  "en",
+                  "ru"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Locale"
+          }
+        },
+        "title": "PageProperties",
         "type": "object"
       },
       "PasswordConfirmation": {
@@ -1618,6 +2054,50 @@
         "title": "RegistrationCredentials",
         "type": "object"
       },
+      "ResultProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "predictedScore": {
+            "anyOf": [
+              {
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Predictedscore"
+          },
+          "resultId": {
+            "format": "uuid",
+            "title": "Resultid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resultId"
+        ],
+        "title": "ResultProperties",
+        "type": "object"
+      },
+      "RevisionProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "revision": {
+            "minimum": 1,
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "title": "RevisionProperties",
+        "type": "object"
+      },
       "SessionResource": {
         "additionalProperties": false,
         "properties": {
@@ -1661,6 +2141,43 @@
           "locale"
         ],
         "title": "SkillSuggestionStart",
+        "type": "object"
+      },
+      "SkillsProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "maximum": 10,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Count"
+          },
+          "locale": {
+            "anyOf": [
+              {
+                "enum": [
+                  "en",
+                  "ru"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Locale"
+          }
+        },
+        "title": "SkillsProperties",
         "type": "object"
       },
       "StrengthEvidence": {
@@ -1826,6 +2343,44 @@
           "skills"
         ],
         "title": "SuggestionsSucceeded",
+        "type": "object"
+      },
+      "TerminalProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "durationMs": {
+            "maximum": 86400000,
+            "minimum": 0,
+            "title": "Durationms",
+            "type": "integer"
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z][a-z0-9_]{0,79}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Errorcode"
+          },
+          "outcome": {
+            "enum": [
+              "succeeded",
+              "failed"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "durationMs"
+        ],
+        "title": "TerminalProperties",
         "type": "object"
       },
       "TokenRequest": {
@@ -2088,6 +2643,264 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "WebsiteAttempt": {
+        "additionalProperties": false,
+        "properties": {
+          "cacheWriteTokens": {
+            "anyOf": [
+              {
+                "maximum": 100000000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cachewritetokens"
+          },
+          "cachedInputTokens": {
+            "anyOf": [
+              {
+                "maximum": 100000000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cachedinputtokens"
+          },
+          "callId": {
+            "format": "uuid",
+            "title": "Callid",
+            "type": "string"
+          },
+          "cost": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost"
+          },
+          "costBasis": {
+            "default": "unknown",
+            "enum": [
+              "unknown",
+              "estimated",
+              "reported"
+            ],
+            "title": "Costbasis",
+            "type": "string"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "enum": [
+                  "USD",
+                  "EUR",
+                  "RUB"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z][a-z0-9_]{0,79}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorcode"
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finishedat"
+          },
+          "inputTokens": {
+            "anyOf": [
+              {
+                "maximum": 100000000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inputtokens"
+          },
+          "model": {
+            "pattern": "^[a-z][a-z0-9._-]{0,199}$",
+            "title": "Model",
+            "type": "string"
+          },
+          "operationId": {
+            "format": "uuid",
+            "title": "Operationid",
+            "type": "string"
+          },
+          "ordinal": {
+            "maximum": 8.0,
+            "minimum": 1.0,
+            "title": "Ordinal",
+            "type": "integer"
+          },
+          "outputTokens": {
+            "anyOf": [
+              {
+                "maximum": 100000000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outputtokens"
+          },
+          "policyVersion": {
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,119}$",
+            "title": "Policyversion",
+            "type": "string"
+          },
+          "promptVersion": {
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,119}$",
+            "title": "Promptversion",
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "openai",
+              "deepseek"
+            ],
+            "title": "Provider",
+            "type": "string"
+          },
+          "purpose": {
+            "enum": [
+              "analysis.generate",
+              "analysis.audit",
+              "skills.generate"
+            ],
+            "title": "Purpose",
+            "type": "string"
+          },
+          "rateVersion": {
+            "anyOf": [
+              {
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,119}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rateversion"
+          },
+          "reasoningTokens": {
+            "anyOf": [
+              {
+                "maximum": 100000000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoningtokens"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "title": "Startedat",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "started",
+              "succeeded",
+              "failed",
+              "unknown"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "subjectId": {
+            "format": "uuid",
+            "title": "Subjectid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "callId",
+          "operationId",
+          "subjectId",
+          "purpose",
+          "ordinal",
+          "provider",
+          "model",
+          "promptVersion",
+          "policyVersion",
+          "startedAt",
+          "state"
+        ],
+        "title": "WebsiteAttempt",
+        "type": "object"
+      },
+      "WebsiteBatch": {
+        "additionalProperties": false,
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/MetricEvent"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Events",
+            "type": "array"
+          },
+          "source": {
+            "enum": [
+              "website_client",
+              "website_server"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "events"
+        ],
+        "title": "WebsiteBatch",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -2095,6 +2908,12 @@
         "description": "Server-issued guest session, never a client-supplied guestId; separate dev HTTP cookie.",
         "in": "cookie",
         "name": "__Host-fitcheck_guest",
+        "type": "apiKey"
+      },
+      "metricsBridge": {
+        "description": "Server-only website bridge; website visitor telemetry only. No account or product access.",
+        "in": "header",
+        "name": "X-FitCheck-Metrics-Key",
         "type": "apiKey"
       },
       "webSession": {
@@ -2159,6 +2978,476 @@
         "summary": "Ready",
         "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-643"
+      }
+    },
+    "/internal/metrics/attempts": {
+      "post": {
+        "operationId": "ingestWebsiteAttempts",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttemptBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "invalid_request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "body_too_large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "unsupported_content_type"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "rate_limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "internal_error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "upstream_failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "service_unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "timeout"
+          }
+        },
+        "security": [
+          {
+            "metricsBridge": []
+          }
+        ],
+        "summary": "Attempts",
+        "x-fitcheck-implementation": "implemented",
+        "x-fitcheck-internal": true,
+        "x-fitcheck-owner-task": "fitcheck-metrics"
+      }
+    },
+    "/internal/metrics/events": {
+      "post": {
+        "operationId": "ingestWebsiteMetrics",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebsiteBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "invalid_request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "body_too_large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "unsupported_content_type"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "rate_limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "internal_error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "upstream_failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "service_unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "timeout"
+          }
+        },
+        "security": [
+          {
+            "metricsBridge": []
+          }
+        ],
+        "summary": "Events",
+        "x-fitcheck-implementation": "implemented",
+        "x-fitcheck-internal": true,
+        "x-fitcheck-owner-task": "fitcheck-metrics"
+      }
+    },
+    "/internal/metrics/visitors/{visitorId}": {
+      "delete": {
+        "operationId": "deleteWebsiteVisitorMetrics",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "visitorId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Visitorid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "invalid_request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "body_too_large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "unsupported_content_type"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "rate_limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "internal_error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "upstream_failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "service_unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "timeout"
+          }
+        },
+        "security": [
+          {
+            "metricsBridge": []
+          }
+        ],
+        "summary": "Visitor",
+        "x-fitcheck-implementation": "implemented",
+        "x-fitcheck-internal": true,
+        "x-fitcheck-owner-task": "fitcheck-metrics"
       }
     },
     "/v1/analyses/{analysisId}": {

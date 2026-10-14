@@ -41,7 +41,7 @@ def test_complete_valid_contract_and_live_route_separation():
             response = getattr(TestClient(app), method)(path.replace('{jobId}', 'j').replace('{analysisId}', 'a').replace('{importId}', 'i'))
             assert response.status_code == (503 if implemented else 404)
     assert len(ids) == len(set(ids))
-    assert set(app.openapi()['paths']) == {'/health/live','/health/ready'} | {p for p, methods in document['paths'].items() if any(m['x-fitcheck-owner-task'] in {'ANY-645', 'ANY-646', 'ANY-647', 'ANY-649'} for m in methods.values())}
+    assert set(app.openapi()['paths']) == {'/health/live','/health/ready', '/internal/metrics/events', '/internal/metrics/attempts', '/internal/metrics/visitors/{visitorId}'} | {p for p, methods in document['paths'].items() if any(m['x-fitcheck-owner-task'] in {'ANY-645', 'ANY-646', 'ANY-647', 'ANY-649'} for m in methods.values())}
     for path in ['/health/live','/health/ready']:
         assert document['paths'][path]['get']['x-fitcheck-implementation'] == 'implemented'
         assert document['paths'][path]['get']['responses'] == app.openapi()['paths'][path]['get']['responses']
@@ -95,3 +95,13 @@ def test_export_cli_detects_drift_without_rewriting(tmp_path):
 def test_existing_legacy_error_codes_have_http_semantics():
     mapping = export_openapi(create_app(Settings()))['x-fitcheck-legacy-error-status']
     assert mapping == {'rate_limit':429, 'timeout':504, 'invalid_output':502, 'upstream':502, 'invalid_url':400, 'blocked_address':403, 'redirect_limit':502, 'unsupported_content':415, 'response_too_large':413, 'fetch_failed':502}
+
+
+def test_internal_metrics_contract_has_bridge_security_only():
+    document = export_openapi(create_app(Settings()))
+    for path in ['/internal/metrics/events','/internal/metrics/attempts','/internal/metrics/visitors/{visitorId}']:
+        for operation in document['paths'][path].values():
+            assert operation['security'] == [{'metricsBridge':[]}]
+            assert operation['x-fitcheck-internal'] is True
+            assert 'x-fitcheck-cookie-mutation' not in operation
+    assert document['components']['securitySchemes']['metricsBridge']['in'] == 'header'

@@ -15,7 +15,7 @@ def test_removed_login_routes_are_absent_from_runtime_and_contract():
             path = '/v1/auth/extension/' + action
             assert client.post(path, json={}).status_code == 404
             assert path not in doc['paths']
-    assert set(doc['components']['securitySchemes']) == {'webSession', 'guestSession'}
+    assert set(doc['components']['securitySchemes']) == {'webSession', 'guestSession', 'metricsBridge'}
     assert doc['paths']['/v1/profile']['put']['security'] == [{'webSession': []}]
     assert not any(name.startswith('Extension') for name in doc['components']['schemas'])
 

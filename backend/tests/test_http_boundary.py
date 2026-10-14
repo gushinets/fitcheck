@@ -118,3 +118,21 @@ def test_actual_body_limit(declared):
     assert json.loads(output[1]["body"])["error"]["code"] == "body_too_large"
     output = asyncio.run(run([b'{"x":', b'12}']))
     assert output[0]["status"] == 200
+
+
+def test_internal_metrics_stream_stops_at_32kib():
+    app = create_app(Settings())
+    output = []
+    reads = [0]
+    async def receive():
+        reads[0] += 1
+        assert reads[0] <= 2, 'Boundary must stop reading after exceeding 32 KiB'
+        return {'type':'http.request','body':b' ' * (32768 if reads[0] == 1 else 1),'more_body':True}
+    async def send(message):
+        output.append(message)
+    scope = {'type':'http','asgi':{'version':'3.0'},'http_version':'1.1','method':'POST','scheme':'http',
+             'path':'/internal/metrics/events','raw_path':b'/internal/metrics/events','query_string':b'',
+             'headers':[(b'content-type',b'application/json'),(b'content-length',b'1')],
+             'server':('test',80),'client':('test',1)}
+    asyncio.run(app(scope,receive,send))
+    assert output[0]['status'] == 413 and reads[0] == 2

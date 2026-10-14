@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     log_level: Literal["debug", "info", "warning", "error", "critical"] = "info"
     api_body_max_bytes: int = Field(default=1_048_576, ge=1, le=16_777_216)
     auth_enabled: bool = False
+    metrics_enabled: bool = False
+    metrics_environment: Literal["development", "production", "test"] | None = None
+    metrics_ingest_key: SecretStr | None = None
+    metrics_campaign_codes: list[str] = Field(default_factory=list)
     jobs_enabled: bool = False
     auth_secret: SecretStr | None = None
     auth_web_base_url: str | None = None
@@ -32,6 +36,18 @@ class Settings(BaseSettings):
     smtp_password: SecretStr | None = None
     smtp_from: str | None = None
     smtp_security: Literal['smtps', 'starttls'] | None = None
+
+    @field_validator('metrics_campaign_codes')
+    @classmethod
+    def valid_campaigns(cls, values):
+        if len(values) > 100 or any(re.fullmatch(r'[a-z][a-z0-9_]{0,79}', value) is None for value in values):
+            raise ValueError('Invalid campaign allowlist')
+        return list(dict.fromkeys(values))
+
+    @property
+    def metrics_configured(self):
+        return bool(self.metrics_enabled and self.database_url is not None and self.metrics_environment is not None
+                    and self.metrics_ingest_key is not None and self.metrics_ingest_key.get_secret_value())
 
     @field_validator('auth_secret')
     @classmethod

@@ -29,13 +29,14 @@ class MetricRepository:
         self.session.execute(stmt.on_conflict_do_update(index_elements=['source', 'environment'],
             set_={'available_from':func.least(MetricCollection.available_from, stmt.excluded.available_from)}))
 
-    def append(self, event, *, source, environment, received_at, clock_adjusted=False):
+    def append(self, event, *, source, environment, received_at, clock_adjusted=False, submitted_hash=None):
         event = MetricEvent.model_validate(event.model_dump())
         validate_event(event, source=source)
         valid_environment(environment)
         payload = event.model_dump(mode='json')
         payload.pop('eventId')
-        digest = fingerprint(payload)
+        # Bridge normalization changes stored dimensions/time, not transport identity.
+        digest = submitted_hash if submitted_hash is not None else fingerprint(payload)
         values = dict(event_id=event.event_id, name=event.name, schema_version=event.schema_version,
             source=source, environment=environment, occurred_at=event.occurred_at,
             received_at=received_at, subject_kind=event.subject_kind, subject_id=event.subject_id,

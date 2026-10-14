@@ -89,3 +89,33 @@ class WebsiteAttempt(DTO):
         if self.reasoning_tokens is not None and (self.output_tokens is None or self.reasoning_tokens > self.output_tokens):
             raise ValueError('Invalid output token subdivision')
         return self
+
+
+class WebsiteBatch(DTO):
+    source: Literal['website_client', 'website_server']
+    events: list[MetricEvent] = Field(min_length=1, max_length=20)
+
+    @model_validator(mode='after')
+    def valid_source(self):
+        from .registry import validate_event
+        from .errors import MetricsError
+        for event in self.events:
+            try:
+                validate_event(event, source=self.source)
+            except MetricsError:
+                raise ValueError('Invalid website event source or identity') from None
+        return self
+
+
+class AttemptBatch(DTO):
+    source: Literal['website_server']
+    attempts: list[WebsiteAttempt] = Field(min_length=1, max_length=20)
+
+
+class IngestResult(DTO):
+    accepted: int
+    duplicates: int
+
+
+class DeleteResult(DTO):
+    deleted: int
