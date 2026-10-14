@@ -1,0 +1,24 @@
+"""Frozen metrics schema; additive to existing jobs and provider accounting."""
+from alembic import op
+
+revision = "0004"
+down_revision = "0003"
+branch_labels = None
+depends_on = None
+
+
+def upgrade():
+    op.execute("\nCREATE TABLE metric_journal (\n\tevent_id UUID NOT NULL, \n\tname VARCHAR(80) NOT NULL, \n\tschema_version INTEGER NOT NULL, \n\tsource VARCHAR(30) NOT NULL, \n\tenvironment VARCHAR(20) NOT NULL, \n\toccurred_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\treceived_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tsubject_kind VARCHAR(10) NOT NULL, \n\tsubject_id UUID NOT NULL, \n\towner_id UUID, \n\tsession_id UUID, \n\toperation_id UUID, \n\tdomain_key VARCHAR(120), \n\tproperties JSONB NOT NULL, \n\tpayload_hash VARCHAR(64) NOT NULL, \n\tclock_adjusted BOOLEAN NOT NULL, \n\tCONSTRAINT pk_metric_journal PRIMARY KEY (event_id), \n\tCONSTRAINT uq_metric_domain_transition UNIQUE (environment, subject_id, domain_key), \n\tCONSTRAINT ck_metric_journal_environment CHECK (environment IN ('development','production','test')), \n\tCONSTRAINT ck_metric_journal_source CHECK (source IN ('website_client','website_server','backend_server','reconstructed_backend')), \n\tCONSTRAINT ck_metric_journal_identity CHECK (schema_version=1 AND subject_kind IN ('visitor','account')), \n\tCONSTRAINT ck_metric_journal_payload CHECK (jsonb_typeof(properties)='object' AND payload_hash ~ '^[0-9a-f]{64}$'), \n\tCONSTRAINT ck_metric_journal_owner CHECK ((subject_kind='account' AND owner_id IS NOT NULL AND owner_id=subject_id) OR (subject_kind='visitor' AND owner_id IS NULL)), \n\tCONSTRAINT fk_metric_journal_owner_id_owners FOREIGN KEY(owner_id) REFERENCES owners (id) ON DELETE CASCADE\n)\n\n")
+    op.execute('CREATE INDEX ix_metric_journal_period ON metric_journal (environment, occurred_at, name)')
+    op.execute('CREATE INDEX ix_metric_journal_source_period ON metric_journal (environment, source, occurred_at)')
+    op.execute('CREATE INDEX ix_metric_journal_subject ON metric_journal (environment, subject_kind, subject_id, occurred_at)')
+    op.execute("\nCREATE TABLE website_provider_attempts (\n\tcall_id UUID NOT NULL, \n\toperation_id UUID NOT NULL, \n\tsubject_id UUID NOT NULL, \n\tenvironment VARCHAR(20) NOT NULL, \n\tpurpose VARCHAR(40) NOT NULL, \n\tordinal INTEGER NOT NULL, \n\tprovider VARCHAR(30) NOT NULL, \n\tmodel VARCHAR(200) NOT NULL, \n\tprompt_version VARCHAR(120) NOT NULL, \n\tpolicy_version VARCHAR(120) NOT NULL, \n\tstarted_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tfinished_at TIMESTAMP WITH TIME ZONE, \n\tstate VARCHAR(20) NOT NULL, \n\terror_code VARCHAR(80), \n\tinput_tokens INTEGER, \n\toutput_tokens INTEGER, \n\tcached_input_tokens INTEGER, \n\tcache_write_tokens INTEGER, \n\treasoning_tokens INTEGER, \n\tcost NUMERIC(20, 8), \n\tcurrency VARCHAR(3), \n\tcost_basis VARCHAR(20) NOT NULL, \n\trate_version VARCHAR(120), \n\tCONSTRAINT pk_website_provider_attempts PRIMARY KEY (call_id), \n\tCONSTRAINT ck_website_provider_attempts_environment CHECK (environment IN ('development','production','test')), \n\tCONSTRAINT ck_website_provider_attempts_provider CHECK (provider IN ('openai','deepseek') AND purpose IN ('analysis.generate','analysis.audit','skills.generate')), \n\tCONSTRAINT ck_website_provider_attempts_state CHECK (ordinal BETWEEN 1 AND 8 AND state IN ('started','succeeded','failed','unknown')), \n\tCONSTRAINT ck_website_provider_attempts_settled CHECK ((state='started')=(finished_at IS NULL) AND (finished_at IS NULL OR finished_at>=started_at)), \n\tCONSTRAINT ck_website_provider_attempts_usage CHECK (input_tokens>=0 AND output_tokens>=0 AND cached_input_tokens>=0 AND cache_write_tokens>=0 AND reasoning_tokens>=0 AND cost>=0), \n\tCONSTRAINT ck_website_provider_attempts_cost CHECK ((cost IS NULL)=(currency IS NULL) AND (cost IS NULL)=(cost_basis='unknown') AND cost_basis IN ('unknown','estimated','reported') AND (currency IS NULL OR currency IN ('USD','EUR','RUB')))\n)\n\n")
+    op.execute('CREATE INDEX ix_website_attempts_operation ON website_provider_attempts (environment, operation_id)')
+    op.execute('CREATE INDEX ix_website_attempts_period ON website_provider_attempts (environment, started_at)')
+    op.execute("\nCREATE TABLE metric_collections (\n\tsource VARCHAR(30) NOT NULL, \n\tenvironment VARCHAR(20) NOT NULL, \n\tstarted_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tavailable_from TIMESTAMP WITH TIME ZONE NOT NULL, \n\tCONSTRAINT pk_metric_collections PRIMARY KEY (source, environment), \n\tCONSTRAINT ck_metric_collections_environment CHECK (environment IN ('development','production','test')), \n\tCONSTRAINT ck_metric_collections_source CHECK (source IN ('website_client','website_server','backend_server','reconstructed_backend'))\n)\n\n")
+
+
+def downgrade():
+    op.drop_table('metric_collections')
+    op.drop_table('website_provider_attempts')
+    op.drop_table('metric_journal')
