@@ -3,7 +3,7 @@ import json
 
 from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert
-from ..storage.metrics import MetricJournal, WebsiteProviderAttempt, MetricCollection
+from ..storage.metrics import MetricJournal, WebsiteProviderAttempt, MetricCollection, MetricErasedVisitor
 from ..storage.base import utcnow
 from .contracts import MetricEvent, WebsiteAttempt, Environment, ERASED_VISITOR_ID
 from .registry import validate_event
@@ -19,9 +19,16 @@ def valid_environment(environment):
         raise MetricsError('invalid_request')
 
 
+def visitor_digest(environment, subject_id):
+    return fingerprint({'environment':environment, 'visitor':str(subject_id)})
+
+
 class MetricRepository:
     def __init__(self, session):
         self.session = session
+
+    def visitor_erased(self, subject_id, environment):
+        return self.session.get(MetricErasedVisitor, (environment, visitor_digest(environment, subject_id))) is not None
 
     def _collection(self, source, environment, received, occurred):
         stmt = insert(MetricCollection).values(source=source, environment=environment,
@@ -33,6 +40,8 @@ class MetricRepository:
         event = MetricEvent.model_validate(event.model_dump())
         validate_event(event, source=source)
         valid_environment(environment)
+        if event.subject_kind == 'visitor' and self.visitor_erased(event.subject_id, environment):
+            return False
         payload = event.model_dump(mode='json')
         payload.pop('eventId')
         # Bridge normalization changes stored dimensions/time, not transport identity.
@@ -63,6 +72,8 @@ class MetricRepository:
         valid_environment(environment)
         values = attempt.model_dump(by_alias=False)
         values['environment'] = environment
+        if self.visitor_erased(attempt.subject_id, environment):
+            values['subject_id'] = ERASED_VISITOR_ID
         inserted = self.session.scalar(insert(WebsiteProviderAttempt).values(**values)
             .on_conflict_do_nothing().returning(WebsiteProviderAttempt.call_id))
         if inserted is not None:

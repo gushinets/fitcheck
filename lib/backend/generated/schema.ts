@@ -1217,17 +1217,14 @@ export interface components {
             schemaVersion: number;
             /** Sessionid */
             sessionId?: string | null;
-            /**
-             * Subjectid
-             * Format: uuid
-             */
-            subjectId: string;
+            /** Subjectid */
+            subjectId: string | null;
             /**
              * Subjectkind
              * @default visitor
              * @enum {string}
              */
-            subjectKind: "visitor" | "account";
+            subjectKind: "visitor" | "account" | "anonymous";
         };
         /** PageProperties */
         PageProperties: {

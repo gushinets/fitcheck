@@ -11,11 +11,13 @@ from ..storage.calibration_repository import get_calibration
 from .envelope import AnalysisEnvelope, SuggestionsEnvelope, execution_versions
 from .types import AdmissionResult
 from .errors import JobError
+from ..metrics.lifecycle import append_domain_event, job_key
 
 
 class JobAdmission:
-    def __init__(self, engine, limiter):
+    def __init__(self, engine, limiter, *, metrics_environment=None):
         self.engine, self.limiter = engine, limiter
+        self.metrics_environment = metrics_environment
 
     def start_analysis(self, *, owner_id: UUID, request: AccountAnalysisStart,
             idempotency_key: str, client_ip: str) -> AdmissionResult:
@@ -70,6 +72,9 @@ class JobAdmission:
                 job = Job(owner_id=owner_id, type=kind, idempotency_key=key,
                     request_hash=digest, input=envelope.model_dump(mode='json', by_alias=True))
                 s.add(job); s.flush()
+                append_domain_event(s, name="job_admitted", owner_id=job.owner_id,
+                    domain_key=job_key(job.id,"admitted"), occurred_at=job.created_at,
+                    properties={"jobType":job.type}, environment=self.metrics_environment)
                 return AdmissionResult(job.id, job.type, job.status)
         except (SQLAlchemyError, ValidationError):
             raise JobError('service_unavailable') from None

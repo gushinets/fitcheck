@@ -80,3 +80,15 @@ def test_website_terminal_facts_require_operation_id(name):
     assert value.operation_id == operation_id
     with pytest.raises(MetricsError, match='invalid_request'):
         validate_event(value.model_copy(update={'operation_id': None}), source='website_server')
+
+
+def test_anonymous_subject_is_only_trusted_deletion_with_no_identity():
+    from fitcheck_backend.metrics.errors import MetricsError
+    value=MetricEvent.model_validate(event(name='account_deleted',subjectKind='anonymous',subjectId=None))
+    validate_event(value,source='backend_server')
+    for source in ['website_client','website_server','reconstructed_backend']:
+        with pytest.raises(MetricsError): validate_event(value,source=source)
+    for changed in [{'subjectId':str(uuid4())},{'name':'account_registered'},{'domainKey':'deleted:one'},
+                    {'sessionId':str(uuid4())},{'operationId':str(uuid4())}]:
+        with pytest.raises(ValueError):
+            MetricEvent.model_validate(event(name='account_deleted',subjectKind='anonymous',subjectId=None) | changed)

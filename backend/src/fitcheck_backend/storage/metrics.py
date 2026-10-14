@@ -21,7 +21,7 @@ class MetricJournal(Base):
     occurred_at: Mapped[datetime] = mapped_column(UTCDateTime)
     received_at: Mapped[datetime] = mapped_column(UTCDateTime)
     subject_kind: Mapped[str] = mapped_column(String(10))
-    subject_id: Mapped[UUID]
+    subject_id: Mapped[UUID | None]
     owner_id: Mapped[UUID | None] = mapped_column(ForeignKey('owners.id', ondelete='CASCADE'))
     session_id: Mapped[UUID | None]
     operation_id: Mapped[UUID | None]
@@ -32,9 +32,10 @@ class MetricJournal(Base):
     __table_args__ = (
         UniqueConstraint('environment', 'subject_id', 'domain_key', name='uq_metric_domain_transition'),
         CheckConstraint(ENVIRONMENTS, name='environment'), CheckConstraint(SOURCES, name='source'),
-        CheckConstraint("schema_version=1 AND subject_kind IN ('visitor','account')", name='identity'),
+        CheckConstraint("schema_version=1 AND subject_kind IN ('visitor','account','anonymous')", name='identity'),
         CheckConstraint("jsonb_typeof(properties)='object' AND payload_hash ~ '^[0-9a-f]{64}$'", name='payload'),
-        CheckConstraint("(subject_kind='account' AND owner_id IS NOT NULL AND owner_id=subject_id) OR (subject_kind='visitor' AND owner_id IS NULL)", name='owner'),
+        CheckConstraint("(subject_kind='account' AND subject_id IS NOT NULL AND owner_id IS NOT NULL AND owner_id=subject_id) OR (subject_kind='visitor' AND subject_id IS NOT NULL AND owner_id IS NULL) OR (subject_kind='anonymous' AND subject_id IS NULL AND owner_id IS NULL AND name='account_deleted' AND source='backend_server' AND session_id IS NULL AND operation_id IS NULL AND domain_key IS NULL AND properties='{}'::jsonb)", name='owner'),
+        Index('ix_metric_journal_retention', 'received_at', 'event_id'),
         Index('ix_metric_journal_period', 'environment', 'occurred_at', 'name'),
         Index('ix_metric_journal_source_period', 'environment', 'source', 'occurred_at'),
         Index('ix_metric_journal_subject', 'environment', 'subject_kind', 'subject_id', 'occurred_at'),
@@ -85,3 +86,13 @@ class MetricCollection(Base):
     started_at: Mapped[datetime] = mapped_column(UTCDateTime)
     available_from: Mapped[datetime] = mapped_column(UTCDateTime)
     __table_args__ = (CheckConstraint(ENVIRONMENTS, name='environment'), CheckConstraint(SOURCES, name='source'))
+
+
+class MetricErasedVisitor(Base):
+    __tablename__ = 'metric_erased_visitors'
+    environment: Mapped[str] = mapped_column(String(20), primary_key=True)
+    visitor_digest: Mapped[str] = mapped_column(String(64), primary_key=True)
+    erased_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    __table_args__ = (CheckConstraint(ENVIRONMENTS, name='environment'),
+        CheckConstraint("visitor_digest ~ '^[0-9a-f]{64}$'", name='digest'),
+        Index('ix_metric_erased_visitors_expiry', 'erased_at'))

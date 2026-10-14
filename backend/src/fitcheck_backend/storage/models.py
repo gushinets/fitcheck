@@ -5,6 +5,6 @@ from .profiles import Profile, ProfileRevision, Preference, Draft
 from .work import VacancyRecord, Job, AnalysisRecord, AnalysisAnnotation, ImportEntry
 from .accounting import QuotaBucket, QuotaReservation, ProviderCall
 from .auth_limits import AuthRateBucket
-from .metrics import MetricJournal, WebsiteProviderAttempt, MetricCollection
+from .metrics import MetricJournal, WebsiteProviderAttempt, MetricCollection, MetricErasedVisitor
 
-__all__ = ["Base", "Owner", "User", "Guest", "AuthSession", "AuthToken", "AuthRateBucket", "Profile", "ProfileRevision", "Preference", "Draft", "VacancyRecord", "Job", "AnalysisRecord", "AnalysisAnnotation", "QuotaBucket", "QuotaReservation", "ProviderCall", "ImportEntry", "MetricJournal", "WebsiteProviderAttempt", "MetricCollection"]
+__all__ = ["Base", "Owner", "User", "Guest", "AuthSession", "AuthToken", "AuthRateBucket", "Profile", "ProfileRevision", "Preference", "Draft", "VacancyRecord", "Job", "AnalysisRecord", "AnalysisAnnotation", "QuotaBucket", "QuotaReservation", "ProviderCall", "ImportEntry", "MetricJournal", "WebsiteProviderAttempt", "MetricCollection", "MetricErasedVisitor"]

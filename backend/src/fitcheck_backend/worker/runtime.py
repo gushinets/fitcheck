@@ -28,8 +28,9 @@ class WorkerRuntime:
         await asyncio.to_thread(check_schema,self.settings)
         self.engine = create_engine(self.settings)
         self.llm = LlmRuntime(self.settings,self.engine)
-        self.runner = WorkerRunner(JobQueue(self.engine,lease_seconds=self.worker_settings.lease_seconds),
-            FrozenJobExecutor(self.llm),JobPublication(self.engine),self.worker_settings,self.health)
+        metrics_environment = self.settings.metrics_environment if self.settings.metrics_enabled else None
+        self.runner = WorkerRunner(JobQueue(self.engine,lease_seconds=self.worker_settings.lease_seconds,metrics_environment=metrics_environment),
+            FrozenJobExecutor(self.llm),JobPublication(self.engine,metrics_environment=metrics_environment),self.worker_settings,self.health)
         self.health.mark()
         return self.runner
 

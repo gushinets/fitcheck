@@ -10,6 +10,7 @@ from ..contracts.resources import normalize_email
 from ..storage.database import unit_of_work
 from ..storage.auth_repository import AuthRepository
 from ..storage.identity import User, Owner, AuthSession
+from ..metrics.lifecycle import append_domain_event, registration_key, verification_key
 
 
 @contextmanager
@@ -37,9 +38,10 @@ def active_session(repo, principal, now):
 
 
 class AuthService:
-    def __init__(self, engine, crypto, passwords, limiter, mailer, clock):
+    def __init__(self, engine, crypto, passwords, limiter, mailer, clock, *, metrics_environment=None):
         self.engine, self.crypto, self.passwords = engine, crypto, passwords
         self.limiter, self.mailer, self.clock = limiter, mailer, clock
+        self.metrics_environment = metrics_environment
 
     def _issue(self, repo, user):
         raw = self.crypto.new_token()
@@ -77,6 +79,9 @@ class AuthService:
                 self._rotate(repo, old_session_token)
                 repo.create_token(user, 'verify_email', self.crypto.digest(verification), self.clock() + timedelta(hours=24))
                 issued = self._issue(repo, user)
+                append_domain_event(session, name="account_registered", owner_id=user.owner_id,
+                    domain_key=registration_key(user.owner_id), occurred_at=user.created_at,
+                    properties={}, environment=self.metrics_environment)
         except IntegrityError as exc:
             if exc.orig.sqlstate == '23505' and exc.orig.diag.constraint_name == 'uq_users_normalized_email':
                 raise AuthError('registration_conflict') from None

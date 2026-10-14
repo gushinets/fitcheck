@@ -77,7 +77,7 @@ def test_auth_readiness_requires_db_and_schema_head(http_auth):
         assert c.get('/health/ready').status_code==503
         assert c.get('/health/live').status_code==200
     finally:
-        with a.engine.begin() as conn:conn.execute(text("UPDATE alembic_version SET version_num='0004'"))
+        with a.engine.begin() as conn:conn.execute(text("UPDATE alembic_version SET version_num='0005'"))
     a.mailer.enabled=False
     ready=c.get('/health/ready')
     assert ready.status_code==200 and ready.json()['dependencies']['email']=='unconfigured'

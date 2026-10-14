@@ -8,6 +8,7 @@ from fitcheck_backend.contracts.domain import FreelancerProfile
 from fitcheck_backend.contracts.resources import ProfileResource
 from .models import Profile, ProfileRevision
 from .payloads import encode_profile, decode_profile
+from ..metrics.lifecycle import append_domain_event, profile_key
 
 
 class ProfileRevisionConflict(RuntimeError):
@@ -27,17 +28,21 @@ def get_profile(session: Session, owner_id: UUID, revision: int | None = None) -
     return ProfileResource(revision=str(value.revision), profile=decode_profile(value.profile))
 
 
-def create_profile(session: Session, owner_id: UUID, profile: FreelancerProfile) -> ProfileResource:
+def create_profile(session: Session, owner_id: UUID, profile: FreelancerProfile, *, metrics_environment=None) -> ProfileResource:
     payload = encode_profile(profile)
     inserted = session.scalar(insert(Profile).values(owner_id=owner_id, current_revision=1).on_conflict_do_nothing(index_elements=[Profile.owner_id]).returning(Profile.owner_id))
     if inserted is None:
         raise ProfileRevisionConflict("Profile already exists")
-    session.add(ProfileRevision(owner_id=owner_id, revision=1, profile=payload))
+    value = ProfileRevision(owner_id=owner_id, revision=1, profile=payload)
+    session.add(value)
     session.flush()
+    append_domain_event(session, name="profile_revision_saved", owner_id=owner_id,
+        domain_key=profile_key(owner_id, value.revision), occurred_at=value.created_at,
+        properties={"revision":value.revision}, environment=metrics_environment)
     return ProfileResource(revision="1", profile=decode_profile(payload))
 
 
-def update_profile(session: Session, owner_id: UUID, expected_revision: int, profile: FreelancerProfile) -> ProfileResource:
+def update_profile(session: Session, owner_id: UUID, expected_revision: int, profile: FreelancerProfile, *, metrics_environment=None) -> ProfileResource:
     if type(expected_revision) is not int or expected_revision < 1:
         raise ProfileRevisionConflict("Invalid expected profile revision")
     payload = encode_profile(profile)
@@ -56,6 +61,10 @@ def update_profile(session: Session, owner_id: UUID, expected_revision: int, pro
     changed = session.execute(update(Profile).where(Profile.owner_id==owner_id, Profile.current_revision==expected_revision).values(current_revision=new_revision)).rowcount
     if not changed:
         raise ProfileRevisionConflict("Profile revision changed")
-    session.add(ProfileRevision(owner_id=owner_id, revision=new_revision, profile=payload))
+    value = ProfileRevision(owner_id=owner_id, revision=new_revision, profile=payload)
+    session.add(value)
     session.flush()
+    append_domain_event(session, name="profile_revision_saved", owner_id=owner_id,
+        domain_key=profile_key(owner_id, value.revision), occurred_at=value.created_at,
+        properties={"revision":value.revision}, environment=metrics_environment)
     return ProfileResource(revision=str(new_revision), profile=decode_profile(payload))

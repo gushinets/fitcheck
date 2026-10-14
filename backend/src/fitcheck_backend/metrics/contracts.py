@@ -28,8 +28,8 @@ class MetricEvent(DTO):
     name: SafeCode
     schema_version: Annotated[StrictInt, Field(ge=1, le=1)] = 1
     occurred_at: datetime
-    subject_id: UUID
-    subject_kind: Literal['visitor', 'account'] = 'visitor'
+    subject_id: UUID | None
+    subject_kind: Literal['visitor', 'account', 'anonymous'] = 'visitor'
     session_id: UUID | None = None
     operation_id: UUID | None = None
     domain_key: Version | None = None
@@ -39,6 +39,12 @@ class MetricEvent(DTO):
 
     @model_validator(mode='after')
     def valid_properties(self):
+        if self.subject_kind == 'anonymous':
+            if (self.name != 'account_deleted' or self.subject_id is not None or self.session_id is not None
+                    or self.operation_id is not None or self.domain_key is not None or self.properties):
+                raise ValueError('Invalid anonymous deletion fact')
+        elif self.subject_id is None:
+            raise ValueError('Subject identifier required')
         if self.subject_kind == 'visitor' and self.subject_id == ERASED_VISITOR_ID:
             raise ValueError('Reserved visitor identifier')
         kind = REGISTRY.get(self.name)

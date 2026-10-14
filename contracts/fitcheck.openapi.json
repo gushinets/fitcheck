@@ -1811,15 +1811,23 @@
             "title": "Sessionid"
           },
           "subjectId": {
-            "format": "uuid",
-            "title": "Subjectid",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subjectid"
           },
           "subjectKind": {
             "default": "visitor",
             "enum": [
               "visitor",
-              "account"
+              "account",
+              "anonymous"
             ],
             "title": "Subjectkind",
             "type": "string"

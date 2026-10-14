@@ -29,12 +29,13 @@ class AuthRuntime:
         passwords = PasswordCodec()
         self.limiter = AuthRateLimiter(self.engine, self.crypto, clock)
         self.mailer = mailer if mailer is not None else SMTPMailer(settings)
-        self.auth = AuthService(self.engine, self.crypto, passwords, self.limiter, self.mailer, clock)
-        self.email = EmailAuthService(self.engine, self.crypto, passwords, self.limiter, self.mailer, clock)
-        self.deletion = AccountDeletionService(self.engine, passwords, self.limiter, clock)
-        self.profiles = ProfileService(self.engine, clock)
+        metrics_environment = settings.metrics_environment if settings.metrics_enabled else None
+        self.auth = AuthService(self.engine, self.crypto, passwords, self.limiter, self.mailer, clock, metrics_environment=metrics_environment)
+        self.email = EmailAuthService(self.engine, self.crypto, passwords, self.limiter, self.mailer, clock, metrics_environment=metrics_environment)
+        self.deletion = AccountDeletionService(self.engine, passwords, self.limiter, clock, metrics_environment=metrics_environment)
+        self.profiles = ProfileService(self.engine, clock, metrics_environment=metrics_environment)
         self.extraction = ExtractionService(self.limiter)
-        self.jobs = JobAdmission(self.engine,self.limiter)
+        self.jobs = JobAdmission(self.engine,self.limiter,metrics_environment=metrics_environment)
         self.job_status = JobStatusReader(self.engine)
 
     def close(self):

@@ -6,6 +6,7 @@ from ..storage.database import unit_of_work
 from ..storage.auth_repository import AuthRepository
 from ..storage.models import Owner, User, Guest, Profile, Job, AnalysisRecord, AnalysisAnnotation, ImportEntry
 from ..storage.ownership import delete_owner
+from ..metrics.lifecycle import erase_account_metrics, append_account_deleted
 
 RESOURCE_KEYS = {Profile: Profile.owner_id, Job: Job.id, AnalysisRecord: AnalysisRecord.id,
                  AnalysisAnnotation: AnalysisAnnotation.analysis_id, ImportEntry: ImportEntry.id}
@@ -33,8 +34,9 @@ class _OwnershipGraphChanged(Exception):
 
 
 class AccountDeletionService:
-    def __init__(self, engine, passwords, limiter, clock):
+    def __init__(self, engine, passwords, limiter, clock, *, metrics_environment=None):
         self.engine, self.passwords, self.limiter, self.clock = engine, passwords, limiter, clock
+        self.metrics_environment = metrics_environment
 
     def delete(self, principal, password):
         self.limiter.enforce('delete', {'user': str(principal.user_id)})
@@ -60,7 +62,9 @@ class AccountDeletionService:
                     current = set(session.scalars(select(Guest.owner_id).where(Guest.claimed_by_user_id == principal.user_id)))
                     if current != guest_ids:
                         raise _OwnershipGraphChanged()
+                    erase_account_metrics(session, principal.owner_id)
                     delete_owner(session, principal.owner_id)
+                    append_account_deleted(session, environment=self.metrics_environment, occurred_at=self.clock())
                 return
             except _OwnershipGraphChanged:
                 continue

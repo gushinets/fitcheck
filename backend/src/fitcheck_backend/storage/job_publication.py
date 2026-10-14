@@ -1,36 +1,47 @@
 from pydantic import TypeAdapter
-from sqlalchemy import update
+from sqlalchemy import update, select
 from ..contracts.domain import Skill
 from ..contracts.resources import AnalysisSnapshot
 from ..jobs.envelope import decode_envelope, AnalysisEnvelope
-from .models import VacancyRecord, AnalysisRecord, AnalysisAnnotation, ProviderCall
+from .models import VacancyRecord, AnalysisRecord, AnalysisAnnotation, ProviderCall, Owner
 from .payloads import encode_analysis, encode_snapshot
 from .job_queue import job_transaction, fenced_job, db_now
+from ..metrics.lifecycle import append_job_finished
 
 
 class _LostLease(Exception):
     pass
 
 
-def _finish(session, job, *, status, output=None, error=None):
+def _finish(session, job, *, status, output=None, error=None, metrics_environment=None):
     now = db_now(session)
     if job.lease_expires_at <= now:
         raise _LostLease()
     job.status, job.finished_at = status, now
     job.output, job.error = output, error
     job.lease_token, job.lease_expires_at = None, None
+    append_job_finished(session, job, metrics_environment)
 
 
 class JobPublication:
-    def __init__(self, engine):
+    def __init__(self, engine, *, metrics_environment=None):
         self.engine = engine
+        self.metrics_environment = metrics_environment
+
+    def _fenced_job(self, session, lease):
+        if self.metrics_environment is not None:
+            owner = session.scalar(select(Owner.id).where(Owner.id==lease.owner_id)
+                .with_for_update(read=True, key_share=True))
+            if owner is None:
+                return None
+        return fenced_job(session, lease)
 
     def succeed_analysis(self, lease, result):
         if lease.type != 'analysis':
             raise ValueError('Invalid publication type')
         try:
             with job_transaction(self.engine) as s:
-                job = fenced_job(s, lease)
+                job = self._fenced_job(s, lease)
                 if job is None:
                     return None
                 envelope = decode_envelope(job.type, job.input)
@@ -49,7 +60,7 @@ class JobPublication:
                     snapshot=encode_snapshot(result.snapshot), analysis=encode_analysis(result.analysis))
                 s.add(analysis); s.flush()
                 s.add(AnalysisAnnotation(owner_id=job.owner_id, analysis_id=analysis.id)); s.flush()
-                _finish(s, job, status='succeeded')
+                _finish(s, job, metrics_environment=self.metrics_environment, status='succeeded')
                 return analysis.id
         except _LostLease:
             return None
@@ -62,9 +73,9 @@ class JobPublication:
             raise ValueError('Too many suggestions')
         try:
             with job_transaction(self.engine) as s:
-                job = fenced_job(s, lease)
+                job = self._fenced_job(s, lease)
                 if job is None: return False
-                _finish(s, job, status='succeeded', output={'skills':value})
+                _finish(s, job, metrics_environment=self.metrics_environment, status='succeeded', output={'skills':value})
                 return True
         except _LostLease:
             return False
@@ -72,12 +83,12 @@ class JobPublication:
     def fail(self, lease, error):
         try:
             with job_transaction(self.engine) as s:
-                job = fenced_job(s, lease)
+                job = self._fenced_job(s, lease)
                 if job is None: return False
                 s.execute(update(ProviderCall).where(ProviderCall.job_id == job.id,
                     ProviderCall.execution_token == lease.execution_token,ProviderCall.state == 'started')
                     .values(state='unknown',error_code='execution_failed',finished_at=db_now(s)))
-                _finish(s, job, status='failed', error=error.model_dump(mode='json'))
+                _finish(s, job, metrics_environment=self.metrics_environment, status='failed', error=error.model_dump(mode='json'))
                 return True
         except _LostLease:
             return False

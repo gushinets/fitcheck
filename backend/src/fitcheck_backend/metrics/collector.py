@@ -1,10 +1,11 @@
 from datetime import timedelta
 from sqlalchemy import select, delete, update, text
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import SQLAlchemyError
 from ..storage.database import unit_of_work
-from ..storage.metrics import MetricJournal, WebsiteProviderAttempt
+from ..storage.metrics import MetricJournal, WebsiteProviderAttempt, MetricErasedVisitor
 from .contracts import WebsiteBatch, AttemptBatch, IngestResult, ERASED_VISITOR_ID
-from .repository import MetricRepository, fingerprint
+from .repository import MetricRepository, fingerprint, visitor_digest
 from .limits import MetricsRateLimiter
 from .errors import MetricsError
 
@@ -66,6 +67,9 @@ class MetricsCollector:
         try:
             with unit_of_work(self.engine) as session:
                 self._lock_visitor(session, visitor_id)
+                session.execute(insert(MetricErasedVisitor).values(environment=self.settings.metrics_environment,
+                    visitor_digest=visitor_digest(self.settings.metrics_environment, visitor_id), erased_at=self.clock())
+                    .on_conflict_do_nothing())
                 deleted = session.execute(delete(MetricJournal).where(MetricJournal.subject_kind=='visitor',
                     MetricJournal.subject_id==visitor_id, MetricJournal.environment==self.settings.metrics_environment)).rowcount
                 # Retain cost accounting while discarding the visitor association.

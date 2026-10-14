@@ -8,14 +8,16 @@ from .mail import MailDeliveryError
 from .service import auth_transaction, active_session
 from ..contracts.resources import normalize_email
 from ..storage.identity import AuthToken
+from ..metrics.lifecycle import append_domain_event, registration_key, verification_key
 
 logger = logging.getLogger('fitcheck.auth.email')
 
 
 class EmailAuthService:
-    def __init__(self, engine, crypto, passwords, limiter, mailer, clock):
+    def __init__(self, engine, crypto, passwords, limiter, mailer, clock, *, metrics_environment=None):
         self.engine, self.crypto, self.passwords = engine, crypto, passwords
         self.limiter, self.mailer, self.clock = limiter, mailer, clock
+        self.metrics_environment = metrics_environment
 
     def _request(self, email, client_ip, purpose, action):
         email = normalize_email(email)
@@ -60,7 +62,12 @@ class EmailAuthService:
             value = repo.lock_token(self.crypto.digest(token), 'verify_email')
             self._check_token(value, user.id)
             value.consumed_at = self.clock()
+            first_verification = user.email_verified_at is None
             user.email_verified_at = user.email_verified_at or self.clock()
+            if first_verification:
+                append_domain_event(repo.session, name="email_verified", owner_id=user.owner_id,
+                    domain_key=verification_key(user.owner_id), occurred_at=user.email_verified_at,
+                    properties={}, environment=self.metrics_environment)
             user.updated_at = self.clock()
 
     def confirm_reset(self, token, password, client_ip):

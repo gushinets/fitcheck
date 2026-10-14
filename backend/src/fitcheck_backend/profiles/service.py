@@ -16,8 +16,9 @@ from ..storage import preferences_repository as preferences
 
 
 class ProfileService:
-    def __init__(self, engine, clock):
+    def __init__(self, engine, clock, *, metrics_environment=None):
         self.engine, self.clock = engine, clock
+        self.metrics_environment = metrics_environment
 
     @contextmanager
     def _transaction(self, principal, *, mutation=False):
@@ -51,8 +52,8 @@ class ProfileService:
     def update(self, principal, value: ProfileUpdate):
         with self._transaction(principal, mutation=True) as session:
             if value.expected_revision is None:
-                return create_profile(session, principal.owner_id, value.profile)
-            return update_profile(session, principal.owner_id, int(value.expected_revision), value.profile)
+                return create_profile(session, principal.owner_id, value.profile, metrics_environment=self.metrics_environment)
+            return update_profile(session, principal.owner_id, int(value.expected_revision), value.profile, metrics_environment=self.metrics_environment)
 
     def compare(self, principal, revision):
         with self._transaction(principal) as session:

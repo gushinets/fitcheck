@@ -96,6 +96,7 @@ def validate_event(event, *, source: str) -> None:
         raise MetricsError('invalid_request')
     if event.name in WEBSITE_SERVER and event.operation_id is None:
         raise MetricsError('invalid_request')
-    expected_kind = 'visitor' if source.startswith('website_') else 'account'
+    expected_kind = ('anonymous' if event.name == 'account_deleted' and source == 'backend_server'
+                     else 'visitor' if source.startswith('website_') else 'account')
     if event.subject_kind != expected_kind or source.startswith('website_') and event.domain_key is not None:
         raise MetricsError('invalid_request')
