@@ -33,7 +33,7 @@ def test_registry_rejects_pii_unknown_names_and_forged_fact_properties():
 
 def test_client_cannot_assert_server_fact_or_account_identity():
     from fitcheck_backend.metrics.errors import MetricsError
-    value = MetricEvent.model_validate(event(name='analysis_finished', properties={
+    value = MetricEvent.model_validate(event(name='analysis_finished', operationId=str(uuid4()), properties={
         'outcome': 'succeeded', 'durationMs': 10}))
     with pytest.raises(MetricsError):
         validate_event(value, source='website_client')
@@ -65,3 +65,18 @@ def test_metrics_error_never_exposes_unsafe_content():
     from fitcheck_backend.metrics.errors import MetricsError
     error = MetricsError('private@example.com credentials')
     assert error.code == str(error) == 'invalid_request'
+
+
+@pytest.mark.parametrize('name', ['extraction_finished', 'analysis_finished', 'suggestions_finished'])
+def test_website_terminal_facts_require_operation_id(name):
+    from fitcheck_backend.metrics.errors import MetricsError
+    payload = event(name=name, properties={'outcome': 'succeeded', 'durationMs': 10})
+    for missing_operation in ({}, {'operationId': None}):
+        with pytest.raises(ValidationError):
+            MetricEvent.model_validate(payload | missing_operation)
+    operation_id = uuid4()
+    value = MetricEvent.model_validate(payload | {'operationId': str(operation_id)})
+    validate_event(value, source='website_server')
+    assert value.operation_id == operation_id
+    with pytest.raises(MetricsError, match='invalid_request'):
+        validate_event(value.model_copy(update={'operation_id': None}), source='website_server')

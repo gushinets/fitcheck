@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import Field, StrictInt, field_validator, model_validator
 from ..contracts.domain import DTO
-from .registry import REGISTRY, ModelName, SafeCode, Version
+from .registry import REGISTRY, WEBSITE_SERVER, ModelName, SafeCode, Version
 
 Environment = Literal['development', 'production', 'test']
 Source = Literal['website_client', 'website_server', 'backend_server', 'reconstructed_backend']
@@ -39,6 +39,8 @@ class MetricEvent(DTO):
         kind = REGISTRY.get(self.name)
         if kind is None:
             raise ValueError('Unsupported event name')
+        if self.name in WEBSITE_SERVER and self.operation_id is None:
+            raise ValueError('Website terminal event requires operation ID')
         self.properties = kind.model_validate(self.properties).model_dump(mode='json', exclude_none=True)
         return self
 
