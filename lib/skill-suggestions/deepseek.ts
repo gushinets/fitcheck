@@ -1,3 +1,5 @@
+import { recordProviderCall, summarizeDeepSeek, type ProviderAttemptSink } from "@/lib/metrics/provider"
+import type { OperationContext } from "@/lib/metrics/operations"
 import OpenAI from "openai"
 import type { SkillSuggestionTransport } from "./service"
 import { SkillSuggestionServiceError } from "./service"
@@ -50,33 +52,22 @@ function mapProviderError(error: unknown): SkillSuggestionServiceError {
   return new SkillSuggestionServiceError("upstream", "DeepSeek request failed")
 }
 
-function logProviderError(error: unknown) {
-  const candidate = error as {
-    name?: string
-    status?: number
-    code?: string
-    message?: string
-    error?: { type?: string }
-  }
-  console.error("[fitcheck] DeepSeek skill suggestion request failed", {
-    name: candidate.name,
-    status: candidate.status,
-    code: candidate.code,
-    type: candidate.error?.type,
-    message: candidate.message?.slice(0, 500),
-  })
-}
-
 export function createDeepSeekSkillSuggestionTransport(options: {
   apiKey: string
   model?: string
+  metrics?: {context:OperationContext; sink:ProviderAttemptSink}
 }): SkillSuggestionTransport {
   const client = new OpenAI({
     apiKey: options.apiKey,
     baseURL: "https://api.deepseek.com",
     timeout: 45_000,
+    maxRetries: 0,
   })
   const model = options.model ?? "deepseek-v4-flash"
+  let ordinal = 0
+  const send = (params: DeepSeekChatCompletionParams, purpose: "analysis.generate" | "analysis.audit" | "skills.generate") => options.metrics
+    ? recordProviderCall({context:options.metrics.context,sink:options.metrics.sink,purpose,ordinal:++ordinal,model,send:()=>client.chat.completions.create(params),summarize:r=>summarizeDeepSeek(r,model)})
+    : client.chat.completions.create(params)
 
   return async (request) => {
     const language = request.locale === "ru" ? "Russian" : "English"
@@ -106,7 +97,7 @@ export function createDeepSeekSkillSuggestionTransport(options: {
         thinking: { type: "disabled" },
       } satisfies DeepSeekChatCompletionParams
 
-      const response = await client.chat.completions.create(completionParams)
+      const response = await send(completionParams, "skills.generate")
       const output = response.choices[0]?.message.content
       if (!output) {
         throw new SkillSuggestionServiceError(
@@ -124,7 +115,6 @@ export function createDeepSeekSkillSuggestionTransport(options: {
         )
       }
     } catch (error) {
-      logProviderError(error)
       throw mapProviderError(error)
     }
   }

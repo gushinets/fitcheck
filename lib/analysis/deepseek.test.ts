@@ -126,3 +126,20 @@ describe("DeepSeek analysis transport", () => {
     ).rejects.toMatchObject({ code: "timeout" })
   })
 })
+
+it('test_analysis_audit_and_retry_are_three_calls_one_operation', async () => {
+  const { createWebsiteOperation } = await import('@/lib/metrics/operations')
+  const { analyzeJob } = await import('./service')
+  const sink = { start: vi.fn<(call: import('@/lib/metrics/provider').ProviderAttempt)=>Promise<void>>().mockResolvedValue(undefined), finish: vi.fn<(call: import('@/lib/metrics/provider').ProviderAttempt)=>Promise<void>>().mockResolvedValue(undefined) }
+  const context = createWebsiteOperation({visitorId:'11111111-1111-4111-8111-111111111111',environment:'test',name:'analysis',now:Date.now})
+  const responses = [ {...goAnalysis,strengths:['invalid-fact']}, {...goAnalysis,strengths:[]}, {supported:true,unsupportedClaims:[]} ]
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(responses.shift())}}],usage:{prompt_tokens:12,completion_tokens:4}}), {headers:{'content-type':'application/json'}})))
+  const transport = createDeepSeekTransport({apiKey:'test-key',metrics:{context,sink}})
+  const result = await analyzeJob({profile:defaultProfile,job:detectedJob,locale:'en',memory:[]},transport)
+  expect(result.strengths).toEqual([])
+  expect(sink.start).toHaveBeenCalledTimes(3)
+  expect(sink.finish).toHaveBeenCalledTimes(3)
+  expect(sink.start.mock.calls.map(([call]) => [call.operationId,call.purpose,call.ordinal])).toEqual([
+    [context.operationId,'analysis.generate',1],[context.operationId,'analysis.generate',2],[context.operationId,'analysis.audit',3],
+  ])
+})

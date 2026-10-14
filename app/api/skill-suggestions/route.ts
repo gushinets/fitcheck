@@ -1,3 +1,5 @@
+import { after } from "next/server"
+import { beginWebsiteOperation } from "@/lib/metrics/operations"
 import { createDeepSeekSkillSuggestionTransport } from "@/lib/skill-suggestions/deepseek"
 import { corsHeaders, createSkillSuggestionsHandler, json } from "./handler"
 
@@ -19,14 +21,17 @@ export async function POST(request: Request) {
   const apiKey = process.env.DEEPSEEK_API_KEY
   if (!apiKey) return json({ error: "server_not_configured" }, 503)
 
+  const operation = beginWebsiteOperation(request, "suggestions", after)
   const handler = createSkillSuggestionsHandler({
     allowedOrigins: origins,
     transport: createDeepSeekSkillSuggestionTransport({
       apiKey,
       model: process.env.DEEPSEEK_MODEL,
+      metrics: operation ?? undefined,
     }),
   })
-  return handler(request)
+  const response = await handler(request)
+  return operation?.complete(response) ?? response
 }
 
 export async function OPTIONS(request: Request) {

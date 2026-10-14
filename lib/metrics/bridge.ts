@@ -43,3 +43,7 @@ export async function deleteVisitorMetrics(visitorId: string, config: BridgeConf
   if (!uuidSchema.safeParse(visitorId).success) return false
   return deliver(`/internal/metrics/visitors/${visitorId}`, 'DELETE', undefined, config, fetchImpl)
 }
+
+export async function sendAttempt(attempt: import('./provider').ProviderAttempt, config: BridgeConfig, fetchImpl: typeof fetch = fetch): Promise<boolean> {
+  try {return await deliver('/internal/metrics/attempts','POST',JSON.stringify({source:'website_server',attempts:[attempt]}),config,fetchImpl)} catch {return false}
+}

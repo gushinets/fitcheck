@@ -1,3 +1,5 @@
+import { recordProviderCall, summarizeDeepSeek, type ProviderAttemptSink } from "@/lib/metrics/provider"
+import type { OperationContext } from "@/lib/metrics/operations"
 import OpenAI from "openai"
 import { z } from "zod"
 import type { AnalysisTransport } from "./service"
@@ -77,26 +79,10 @@ function mapProviderError(error: unknown): AnalysisServiceError {
   return new AnalysisServiceError("upstream", "DeepSeek request failed")
 }
 
-function logProviderError(error: unknown) {
-  const candidate = error as {
-    name?: string
-    status?: number
-    code?: string
-    message?: string
-    error?: { type?: string }
-  }
-  console.error("[fitcheck] DeepSeek request failed", {
-    name: candidate.name,
-    status: candidate.status,
-    code: candidate.code,
-    type: candidate.error?.type,
-    message: candidate.message?.slice(0, 500),
-  })
-}
-
 export function createDeepSeekTransport(options: {
   apiKey: string
   model?: string
+  metrics?: {context:OperationContext; sink:ProviderAttemptSink}
 }): AnalysisTransport {
   const client = new OpenAI({
     apiKey: options.apiKey,
@@ -105,6 +91,10 @@ export function createDeepSeekTransport(options: {
     maxRetries: 0,
   })
   const model = options.model ?? "deepseek-v4-flash"
+  let ordinal = 0
+  const send = (params: DeepSeekChatCompletionParams, purpose: "analysis.generate" | "analysis.audit" | "skills.generate") => options.metrics
+    ? recordProviderCall({context:options.metrics.context,sink:options.metrics.sink,purpose,ordinal:++ordinal,model,send:()=>client.chat.completions.create(params),summarize:r=>summarizeDeepSeek(r,model)})
+    : client.chat.completions.create(params)
 
   const generate: AnalysisTransport = async (_request, prompt) => {
     try {
@@ -132,7 +122,7 @@ export function createDeepSeekTransport(options: {
           type: "disabled",
         },
       } satisfies DeepSeekChatCompletionParams
-      const response = await client.chat.completions.create(completionParams)
+      const response = await send(completionParams, "analysis.generate")
       const output = response.choices[0]?.message.content
       if (!output) {
         throw new AnalysisServiceError("invalid_output", "Model returned no output")
@@ -143,7 +133,6 @@ export function createDeepSeekTransport(options: {
         throw new AnalysisServiceError("invalid_output", "Model returned invalid JSON")
       }
     } catch (error) {
-      logProviderError(error)
       throw mapProviderError(error)
     }
   }
@@ -166,7 +155,7 @@ export function createDeepSeekTransport(options: {
         ],
         response_format: { type: "json_object" }, thinking: { type: "disabled" },
       } satisfies DeepSeekChatCompletionParams
-      const response = await client.chat.completions.create(auditParams)
+      const response = await send(auditParams, "analysis.audit")
       const output = response.choices[0]?.message.content
       if (!output) throw new AnalysisServiceError("invalid_output", "Grounding verification returned no output")
       let value: unknown

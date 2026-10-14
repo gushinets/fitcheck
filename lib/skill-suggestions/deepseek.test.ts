@@ -236,3 +236,10 @@ describe("DeepSeek skill suggestion transport", () => {
     })
   })
 })
+
+it('disables hidden SDK retries at outbound send', async () => {
+  const fetcher = vi.fn(async () => new Response(JSON.stringify({error:{message:'private'}}),{status:500,headers:{'content-type':'application/json'}}))
+  vi.stubGlobal('fetch',fetcher)
+  await expect(createDeepSeekSkillSuggestionTransport({apiKey:'test-key'})(request)).rejects.toMatchObject({code:'upstream'})
+  expect(fetcher).toHaveBeenCalledTimes(1)
+})
