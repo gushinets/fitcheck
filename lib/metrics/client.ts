@@ -152,11 +152,15 @@ export function createMetricsClient(options: ClientOptions) {
   return {
     track, flush, resetIdentity,
     async deleteVisitor(): Promise<boolean> {
+      if (disposed) return false
       deleting = true
       resetIdentity()
       // Settle any old POST response before rotation so it cannot restore its cookie.
       await running
-      try { return await boundedDelivery(signal => options.deleteVisitor?.(signal) ?? Promise.resolve(false)) } catch { return false }
+      try {
+        if (disposed) return false
+        return await boundedDelivery(signal => options.deleteVisitor?.(signal) ?? Promise.resolve(false))
+      } catch { return false }
       finally { resetIdentity(); deleting = false }
     },
     stats: () => ({ queued: queue.length, delivered, failed, dropped }),
