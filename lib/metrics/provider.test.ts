@@ -30,3 +30,16 @@ it.each([Object.assign(new Error('private upstream response'),{name:'AbortError'
   expect(sink.finish).toHaveBeenCalledWith(expect.objectContaining({state:'unknown',errorCode:'timeout'}))
   expect(JSON.stringify(sink.finish.mock.calls)).not.toContain('private')
 })
+it.each([
+  {prompt_cache_hit_tokens:3,completion_tokens_details:{reasoning_tokens:2}},
+  {prompt_tokens_details:{cached_tokens:3},completion_tokens_details:{reasoning_tokens:2}},
+])('preserves supplied partial token subdivisions without inventing totals', usage=>{
+  expect(summarizeDeepSeek({usage},'deepseek-v4-flash')).toMatchObject({
+    inputTokens:null,outputTokens:null,cachedInputTokens:3,reasoningTokens:2,cost:null,costBasis:'unknown',
+  })
+})
+it('drops contradictory supplied subdivisions only when their totals are known',()=>{
+  expect(summarizeDeepSeek({usage:{prompt_tokens:2,completion_tokens:1,prompt_cache_hit_tokens:3,completion_tokens_details:{reasoning_tokens:2}}},'deepseek-v4-flash')).toMatchObject({
+    inputTokens:2,outputTokens:1,cachedInputTokens:null,reasoningTokens:null,cost:null,costBasis:'unknown',
+  })
+})

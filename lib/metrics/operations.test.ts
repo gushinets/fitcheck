@@ -55,3 +55,20 @@ it('collector outage preserves validated DTO and records only safe delivery coun
   await callbacks[0]()
   expect(deliveryCounters.failed).toBe(before+1)
 })
+it('freezes terminal facts at completion before deferred delivery advances the clock',async()=>{
+  config()
+  vi.useFakeTimers()
+  try {
+    const startedAt=Date.parse('2026-10-14T20:59:59.000Z')
+    vi.setSystemTime(startedAt)
+    const callbacks:(()=>Promise<void>)[]=[],fetcher=vi.fn().mockResolvedValue(new Response('{}'))
+    const operation=beginWebsiteOperation(new Request('https://app.test/api/analyze'),'analysis',cb=>callbacks.push(cb),fetcher)!
+    vi.setSystemTime(startedAt+125)
+    operation.complete(Response.json({score:42}))
+    vi.setSystemTime(startedAt+3600000)
+    await callbacks[0]()
+    const event=JSON.parse(fetcher.mock.calls[0][1].body).events[0]
+    expect(event.occurredAt).toBe('2026-10-14T20:59:59.125Z')
+    expect(event.properties).toEqual({outcome:'succeeded',durationMs:125})
+  } finally {vi.useRealTimers();vi.restoreAllMocks()}
+})

@@ -92,3 +92,21 @@ def test_anonymous_subject_is_only_trusted_deletion_with_no_identity():
                     {'sessionId':str(uuid4())},{'operationId':str(uuid4())}]:
         with pytest.raises(ValueError):
             MetricEvent.model_validate(event(name='account_deleted',subjectKind='anonymous',subjectId=None) | changed)
+
+
+def test_attempt_retains_partial_subdivisions_but_rejects_known_total_contradictions():
+    values = dict(callId=uuid4(), operationId=uuid4(), subjectId=uuid4(),
+                  purpose='analysis.generate', ordinal=1, provider='deepseek', model='deepseek-v4-flash',
+                  startedAt='2026-10-14T10:00:00Z', finishedAt='2026-10-14T10:00:01Z',
+                  state='succeeded', promptVersion='website.v1', policyVersion='grounding.v1',
+                  cachedInputTokens=3, cacheWriteTokens=2, reasoningTokens=4)
+    partial = WebsiteAttempt.model_validate(values)
+    assert partial.input_tokens is partial.output_tokens is None
+    assert (partial.cached_input_tokens, partial.cache_write_tokens, partial.reasoning_tokens) == (3, 2, 4)
+    assert partial.cost is None and partial.cost_basis == 'unknown'
+    assert WebsiteAttempt.model_validate(values | {'inputTokens': 5, 'outputTokens': 4})
+    for changes in ({'inputTokens': 4}, {'outputTokens': 3}, {'cachedInputTokens': -1},
+                    {'reasoningTokens': True}, {'cacheWriteTokens': 100_000_001},
+                    {'state': 'started', 'finishedAt': None}, {'cost': '0.01'}):
+        with pytest.raises(ValidationError):
+            WebsiteAttempt.model_validate(values | changes)

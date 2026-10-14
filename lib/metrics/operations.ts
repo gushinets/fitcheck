@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { sendMetrics, sendAttempt } from './bridge'
 import type { BridgeConfig } from './bridge'
 import { resolveVisitor, VISITOR_COOKIE } from './cookie'
-import type { MetricsEnvironment } from './types'
+import type { MetricsEnvironment, WebsiteBatch } from './types'
 import { createProviderAttemptSink } from './provider'
 
 export type OperationName = 'analysis' | 'suggestions' | 'extraction'
@@ -66,11 +66,13 @@ export function beginWebsiteOperation(request: Request, name: OperationName, sch
     if (!completed) {
       completed = true
       const success = response.ok
-      enqueue(()=>sendMetrics({source:'website_server',events:[{
+      const finishedAt = context.now()
+      const batch: WebsiteBatch = {source:'website_server',events:[{
         eventId:randomUUID(),name:`${name === 'suggestions' ? 'suggestions' : name}_finished`,schemaVersion:1,
-        occurredAt:new Date(context.now()).toISOString(),subjectId:context.visitorId,subjectKind:'visitor',operationId:context.operationId,
-        properties:{outcome:success?'succeeded':'failed',durationMs:Math.min(86400000,Math.max(0,context.now()-context.startedAt)),...(success?{}:{errorCode:'operation_failed'})},
-      }]},bridge,fetchImpl))
+        occurredAt:new Date(finishedAt).toISOString(),subjectId:context.visitorId,subjectKind:'visitor',operationId:context.operationId,
+        properties:{outcome:success?'succeeded':'failed',durationMs:Math.min(86400000,Math.max(0,finishedAt-context.startedAt)),...(success?{}:{errorCode:'operation_failed'})},
+      }]}
+      enqueue(()=>sendMetrics(batch,bridge,fetchImpl))
     }
     const reply = new NextResponse(response.body,{status:response.status,headers:response.headers})
     if (name === 'analysis' && response.ok) {

@@ -102,9 +102,9 @@ class WebsiteAttempt(DTO):
                 self.cached_input_tokens, self.cache_write_tokens, self.reasoning_tokens)):
             raise ValueError('Started attempt cannot declare usage')
         cached = (self.cached_input_tokens or 0) + (self.cache_write_tokens or 0)
-        if cached and (self.input_tokens is None or cached > self.input_tokens):
+        if self.input_tokens is not None and cached > self.input_tokens:
             raise ValueError('Invalid input token subdivision')
-        if self.reasoning_tokens is not None and (self.output_tokens is None or self.reasoning_tokens > self.output_tokens):
+        if self.reasoning_tokens is not None and self.output_tokens is not None and self.reasoning_tokens > self.output_tokens:
             raise ValueError('Invalid output token subdivision')
         return self
 

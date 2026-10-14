@@ -44,6 +44,6 @@ export function summarizeDeepSeek(response:unknown,model:string):ProviderUsage {
   const input=tokens(usage?.prompt_tokens), output=tokens(usage?.completion_tokens)
   const cached=tokens(usage?.prompt_cache_hit_tokens ?? usage?.prompt_tokens_details?.cached_tokens)
   const reasoning=tokens(usage?.completion_tokens_details?.reasoning_tokens)
-  return {model,inputTokens:input,outputTokens:output,cachedInputTokens:input !== null && cached !== null && cached <= input ? cached:null,
-    cacheWriteTokens:null,reasoningTokens:output !== null && reasoning !== null && reasoning <= output ? reasoning:null,cost:null,currency:null,costBasis:'unknown',rateVersion:null}
+  return {model,inputTokens:input,outputTokens:output,cachedInputTokens:input !== null && cached !== null && cached > input ? null:cached,
+    cacheWriteTokens:null,reasoningTokens:output !== null && reasoning !== null && reasoning > output ? null:reasoning,cost:null,currency:null,costBasis:'unknown',rateVersion:null}
 }
