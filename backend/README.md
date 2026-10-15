@@ -314,3 +314,134 @@ responses and disposable PostgreSQL, including claim/publish/recovery races.
 | Anonymous provider metrics | 90 days |
 
 Account deletion removes the ownership graph, including claimed guests' remaining private profile/draft data. Ledger owner/job/request-key links are cleared before cascading deletion; only technical metrics survive. Job cleanup must detach optional analysis and ledger links before deleting a referenced job, preserving its report snapshot. Guest history transferred to an account follows account retention. Quota/import deduplication records remain for their policy/account lifetime. Cleanup scheduling, account deletion HTTP flow and configurable TTL enforcement are future service/operations tasks; ANY-644 defines the policy and tests the storage behavior.
+
+## Telemetry and operator reports
+
+Telemetry is additive migration `0004_metrics` plus `0005_metrics_erasure`. Frozen
+`0001`–`0004` must not be rewritten. Apply both before enabling the upgraded API
+and worker. The companion OpenAI pricing migration, if needed, uses next-free
+`0006`; telemetry rollout preserves the existing DeepSeek provider/model.
+See the [development rollout record](../docs/deployments/2026-10-14-fitcheck-metrics.md)
+for ordering, evidence, approved decisions and remaining live checks.
+
+Enable `FITCHECK_METRICS_ENABLED=true`, explicit
+`FITCHECK_METRICS_ENVIRONMENT=development`, and `FITCHECK_METRICS_INGEST_KEY` in the
+API and worker's supported secret/configuration store. The website uses the matching
+`METRICS_BRIDGE_KEY`, fixed HTTPS `METRICS_BACKEND_URL`, separate high-entropy
+`METRICS_COOKIE_SECRET`, and matching `METRICS_ENVIRONMENT`. These environment
+partitions are independent of `FITCHECK_ENV=dev` and production `NODE_ENV` builds.
+Never use provider keys as telemetry secrets. Templates contain no real credentials.
+
+Set `FITCHECK_METRICS_DATABASE_ENVIRONMENT=development` independently: it asserts the
+physical database scope for legacy domain/provider records and backfill, which lack
+per-row environment. Do not change it during temporary `test` ingestion. Without a
+matching explicit database scope, legacy metrics are unavailable; scoped journal
+observations remain reportable. Mixed historical database environments need future
+reconciliation. Mirror public campaign codes as backend JSON array (for example
+`["launch"]`) and website comma-separated `METRICS_CAMPAIGN_CODES=launch`; unknown
+values map to `other`, absent values to `direct`. Website enabled/campaign props are
+prerendered and require configuration at build time plus rebuild/deploy on changes.
+
+Reports are operator CLI only, with database access; there is no public report API.
+From `backend/` with explicitly exported settings (dotenv is not automatically read):
+
+```sh
+uv run --locked python -m fitcheck_backend.metrics --help
+uv run --locked python -m fitcheck_backend.metrics report \
+  --start 2026-10-01T00:00:00+03:00 --end 2026-10-14T00:00:00+03:00 \
+  --timezone Europe/Moscow --environment development --population all \
+  --format json --output /tmp/fitcheck-metrics.json
+uv run --locked python -m fitcheck_backend.metrics report \
+  --start 2026-10-01T00:00:00+03:00 --end 2026-10-14T00:00:00+03:00 \
+  --timezone Europe/Moscow --environment development --population visitor \
+  --format csv --output /tmp/fitcheck-metrics.csv
+uv run --locked python -m fitcheck_backend.metrics backfill --environment development --limit 1000
+uv run --locked python -m fitcheck_backend.metrics cleanup --dry-run --limit 1000
+# Mutating cleanup, after reviewing dry-run output:
+uv run --locked python -m fitcheck_backend.metrics cleanup --execute --limit 1000
+```
+
+In an installed operator container replace `uv run --locked python` with
+`/app/.venv/bin/python`; ensure that container contains the target committed code.
+Backfill mutates telemetry only, requires matching independent database scope, and
+repeats bounded idempotent batches; it never invents views, queue claims or activity.
+Maintenance limits are 1–1000, default 1000. Cleanup defaults to dry run even without
+`--dry-run`. It has no scope filter: do not use it to erase a named synthetic scope.
+
+Report dates require explicit offsets and a positive half-open `[start,end)` UTC
+range of at most 366 days with no future end. Timezone defaults to Europe/Moscow;
+`--population` is required (`visitor`, `account`, or `all`) and never merges people
+across populations. JSON and CSV contain aggregate rows, dimensions, value,
+numerator/denominator, sample count, coverage, availability/reason and data start,
+with no subject/call/operation/result identifiers. CSV preserves nulls and escapes
+formula-leading cells. A repeatable-read read-only snapshot uses 5-second statement,
+1-second lock, and 10-second idle transaction timeouts. Projections cap each query
+at 100,000 rows and fail explicitly; narrow the period instead of treating failure
+as a zero. Context before period start is bounded to 180 days.
+
+### Metric interpretation
+
+| Metric | Implemented basis |
+| --- | --- |
+| Activation | 100 × subjects activated within seven days of registration / registrations whose full seven-day window ends by report end. Website activation is a viewed analysis result; backend activation is successful analysis completion. |
+| Onboarding / email verification | Same mature registration denominator, with profile save / verified email within seven days. Email verification is backend only. |
+| Time to value | Seconds registration → first qualifying activation, p50/p95 among the activated mature cohort. |
+| Funnel | Ordered first page view → local registration → profile save → analysis request → result view within seven days; each stage / mature first-entry cohort × 100. |
+| Active subjects / stickiness | Distinct useful-action subjects in trailing 1/7/30 days ending at report end; stickiness = 100 × DAU / MAU. Page views, login and retries alone are not useful actions. |
+| D7 / D30 retention | Useful return during local calendar day [7,8) / [30,31) after first observed activation; full return window must be mature. Observed registration and retained registration-to-activation history required; uncertain first activations are excluded with coverage counts. |
+| Feature adoption | 100 × active subjects using the feature / all useful-action active subjects in period. |
+| Sessions | Observed starts among active visitors / active visitors; median duration sums visible activity pulses capped at 30 seconds each, not wall-clock tab duration. |
+| Acquisition | First observed retained page-touch campaign counts for period visitors, registrations and activations, not arbitrary URL attribution or authenticated account linking. |
+| Feedback coverage | 100 × mature successful website analyses with linked feedback within seven days / mature successful analyses; same visitor and server operation ID required. Legacy unlinked history excluded. |
+| Score correction | Median absolute predicted-minus-corrected score and bucket counts from latest period feedback per result; not model accuracy or a satisfaction survey. |
+| Operations | One logical operation, distinct from physical generation/audit/retry calls. Success rate = 100 × successes / terminal operations finishing in period. Latencies p50/p95 use available timestamps; website creation is reconstructed only from non-clamped terminal duration. |
+| Provider coverage / spend | Calls started in period; terminal/known-cost coverage reports percentages with counts. Known spend sums only priced calls, separately per currency, date/provider/model/purpose/outcome/cost basis. Unknown token fields or costs stay null, never inferred as zero. |
+| Cost per success | Known spend across all observed attempts through report end for operations created in period / successful operations in that cohort, per currency. Failed attempts and audits contribute spend, not extra successes. Attempts per operation uses the same cohort. |
+
+Ratios with empty denominators and empty percentile samples are null. Percentiles
+use nearest rank (`ceil(n × percentile/100)`). Read coverage alongside every value:
+collection start, retention floor and incomplete delivery can make a metric
+unavailable. Observed and reconstructed backend provenance stays separate;
+reconstructed history cannot establish viewed-result retention. Website operation
+starts and missing terminal facts are not authoritative: pending state and creation
+cohort completeness are unavailable even if all observed calls have terminal facts.
+Known cost-success ratios cover observed operations with reconstructable creation;
+unlinked calls and unresolved operation counts disclose missing coverage.
+
+No MRR/ARR, payment conversion, subscription churn, NRR/GRR, CAC/LTV, margin, sales,
+NPS/CSAT/CES or historical outcome conversion source exists. Rows state specific
+unavailability reasons. Corrected scores are not surveys. Backend application
+statuses are current snapshots, not historical transitions. Backend feedback awaits
+ANY-650; website account/backend identity linkage awaits explicit integration.
+
+### Collection, deletion and retention
+
+The registry accepts bounded technical facts, no account emails/passwords, profile
+or vacancy text, full URLs, raw UTM, IP identity, prompts or responses. Website
+visitor IDs are signed-cookie identities, independent of local IndexedDB accounts
+and backend accounts; shared browsers and multiple devices cannot establish people.
+The HttpOnly cookie has a hard 180-day issuance expiry without sliding renewal.
+Deletion rotates visitor/session identity, requests erasure of that visitor's facts,
+and detaches provider accounting. Remote failure means erasure delivery is not
+proven; the product flow continues. Backend account deletion removes associated
+facts atomically and retains only anonymous deletion counts and detached accounting.
+Erased visitor digests fence late facts for 181 days without retaining raw identity.
+
+Browser queues are in-memory, max 100 events, 20 per batch, 32 KiB, two retries.
+Bridge delivery has a 1500 ms deadline and refuses redirects. Collector limits are
+60 requests per minute per trusted bridge environment. Client clock skew over five
+minutes is adjusted to receipt time. Blockers, closure, restarts and failed delivery
+lose observations; process-local diagnostic counters cannot measure all losses.
+Unknown spend and delivery coverage remain unknown, including failed final delivery.
+
+Cleanup removes journal facts older than 180 days by **received_at**, advances
+available-history metadata, and removes expired 181-day erasure digests in bounded
+batches. It preserves domain data and provider/website accounting ledgers; ledger
+retention follows its separate policy and is not implemented by this cleanup.
+No scheduler is installed by these commands. Reports expose availability floors;
+a 366-day selectable range does not promise 366 days of raw events.
+
+Disable collection by setting API/worker `FITCHECK_METRICS_ENABLED=false`, removing
+website bridge configuration and rebuilding/redeploying its static enabled props.
+Preserve migrations, domain data and accounting ledgers. Stop any operator cleanup
+schedule separately. Do not downgrade/reset the database as telemetry rollback.
