@@ -18,6 +18,8 @@ FEATURES = {'profile_saved': 'profile', 'profile_revision_saved': 'profile',
 WEBSITE_LIMIT = 'Observed only; client blockers and failed delivery are not exhaustively measurable'
 BACKEND_LIMIT = 'Committed scoped facts; retained history cannot establish activity before collection'
 LEGACY_LIMIT = 'Deployment database scope; legacy rows have no per-row historical environment'
+WEBSITE_PENDING_REASON = ('Website operation starts and missing terminal facts are not observed; '
+                          'pending state and creation-cohort completeness are unavailable')
 
 
 def ratio(numerator, denominator):
@@ -287,7 +289,8 @@ def operation_metrics(out, ops, active_by_population):
             out.add('operation_success_rate', dims=dims, sources=sources, reason=reason,
                     value=ratio(len(successful), len(terminal)), numerator=len(successful), denominator=len(terminal), coverage=coverage)
             for status in ('queued', 'running', 'unknown'):
-                out.add('pending_operations', dims=dims | {'state': status}, sources=sources, reason=reason,
+                out.add('pending_operations', dims=dims | {'state': status}, sources=sources,
+                        reason=WEBSITE_PENDING_REASON if source == 'website_server' else reason,
                         value=sum(op.state == status for op in pending), coverage=coverage)
             for code in sorted({op.error_code or 'unknown' for op in terminal if op.state == 'failed'}):
                 out.add('operation_errors', dims=dims | {'error_code': code}, sources=sources, reason=reason,
@@ -335,6 +338,11 @@ def attempt_metrics(out, ops):
     for source in selected:
         all_calls = [a for a in data.attempts if a.source == source]
         calls = [a for a in all_calls if opt.start <= a.started_at < opt.end]
+        source_operations = [op for op in ops if op.source == source]
+        source_operation_ids = {op.operation_id for op in source_operations}
+        unlinked_period_calls = sum(a.operation_id is None or a.operation_id not in source_operation_ids for a in calls)
+        unresolved_observed_operations = len({a.operation_id for a in calls
+            if a.operation_id is not None and a.operation_id not in source_operation_ids})
         dims = {'source': source, 'population': 'visitor' if source == 'website_server' else 'account',
                 'provenance': 'website_server' if source == 'website_server' else 'deployment_database_scope'}
         reason = data.backend_scope_reason if source == 'backend_server' else None
@@ -378,16 +386,21 @@ def attempt_metrics(out, ops):
                         value=sum(samples) if samples else None, sample_count=len(samples),
                         coverage=coverage | {'known_calls': len(samples), 'observed_calls': len(group)})
         for kind in ('analysis', 'skill_suggestions', 'extraction' if source == 'website_server' else 'import'):
-            cohort = [op for op in ops if op.source == source and op.kind == kind and op.created_at and opt.start <= op.created_at < opt.end]
+            cohort = [op for op in source_operations if op.kind == kind and op.created_at and opt.start <= op.created_at < opt.end]
             ids = {op.operation_id for op in cohort}
             cohort_calls = [a for a in all_calls if a.operation_id in ids and a.started_at < opt.end]
             successes = sum(op.state == 'succeeded' and op.finished_at is not None and op.finished_at < opt.end for op in cohort)
             pending = sum(op.state not in {'succeeded', 'failed'} for op in cohort)
             linked = {a.operation_id for a in cohort_calls}
-            extra = coverage | {'pending_operations': pending, 'cohort_operations': len(cohort),
+            extra = coverage | {'pending_operations': None if source == 'website_server' else pending, 'cohort_operations': len(cohort),
                 'operations_with_observed_calls': len(linked), 'unpriced_calls': sum(not priced(a) for a in cohort_calls),
-                'unlinked_period_calls': sum(a.operation_id is None or a.operation_id not in {op.operation_id for op in ops if op.source == source} for a in calls),
+                'unlinked_period_calls': unlinked_period_calls,
                 'basis': 'known_spend_for_created_operations_all_observed_attempts_through_end'}
+            if source == 'website_server':
+                extra.update(cohort_completeness='unavailable', cohort_completeness_reason=WEBSITE_PENDING_REASON,
+                    cohort_scope='observed_operations_with_reconstructable_creation_only',
+                    unresolved_observed_operations=unresolved_observed_operations,
+                    unresolved_operation_scope='all_operation_types_in_source_period_attempts')
             out.add('attempts_per_operation', dims=dims | {'operation': kind}, sources=sources, reason=reason,
                     value=len(cohort_calls)/len(cohort) if cohort else None, numerator=len(cohort_calls), denominator=len(cohort), coverage=extra)
             currencies = sorted({a.currency for a in cohort_calls if priced(a)}) or ['unknown']

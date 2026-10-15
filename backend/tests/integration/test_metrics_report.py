@@ -150,3 +150,20 @@ def test_later_backfill_receipt_can_report_exact_historical_facts(engine,storage
             source='reconstructed_backend',environment='test',received_at=END+timedelta(days=1))
     report=MetricReportService(engine,clock=lambda:END+timedelta(days=2)).build(opts(population='account'))
     assert metric(report,'registrations',provenance='reconstructed_backend').value==1
+
+
+@pytest.mark.parametrize('state',['started','succeeded'])
+def test_website_attempt_without_terminal_keeps_pending_and_cohort_completeness_unknown(engine,state):
+    with unit_of_work(engine) as s:
+        MetricRepository(s).settle_attempt(WebsiteAttempt(callId=uuid4(),operationId=uuid4(),subjectId=uuid4(),
+            purpose='analysis.generate',ordinal=1,provider='deepseek',model='deepseek-v4-flash',promptVersion='v1',policyVersion='v1',
+            startedAt=START,finishedAt=START+timedelta(seconds=1) if state=='succeeded' else None,state=state),environment='test')
+    report=MetricReportService(engine,clock=lambda:END).build(opts())
+    pending=metric(report,'pending_operations',source='website_server',operation='analysis',state='running')
+    assert pending.value is None and not pending.available and pending.reason
+    cost=metric(report,'cost_per_success',source='website_server',operation='analysis',currency='unknown')
+    assert cost.coverage['pending_operations'] is None
+    assert cost.coverage['cohort_completeness']=='unavailable'
+    assert cost.coverage['unresolved_observed_operations']==1
+    assert cost.denominator==0 and cost.value is None
+    assert metric(report,'successful_operations',source='website_server',operation='analysis').value==0

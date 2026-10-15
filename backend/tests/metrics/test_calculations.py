@@ -187,3 +187,49 @@ def test_acquisition_attributes_returning_visitors_to_existing_first_touch():
     assert row(rows,'acquisition',campaign='partner',stage='visitors').value==1
     assert row(rows,'acquisition',campaign='partner',stage='registrations').value==1
     assert row(rows,'acquisition',campaign='partner',stage='activations').value==1
+
+
+@pytest.mark.parametrize('state', ['started', 'succeeded'])
+def test_website_missing_terminal_never_claims_zero_pending_or_complete_cost_cohort(state):
+    p,op=uuid4(),uuid4()
+    attempt=Attempt(call_id=uuid4(),operation_id=op,subject_id=p,source='website_server',purpose='analysis.generate',
+        provider='deepseek',model='safe',started_at=START+timedelta(days=1),state=state,
+        finished_at=START+timedelta(days=2) if state=='succeeded' else None)
+    rows=calculate(options(),snapshot(attempts=[attempt]))
+    for status in ('queued','running','unknown'):
+        pending=row(rows,'pending_operations',source='website_server',operation='analysis',state=status)
+        assert pending.value is None and not pending.available
+        assert 'operation start' in pending.reason.lower() and 'terminal' in pending.reason.lower()
+    cost=row(rows,'cost_per_success',source='website_server',operation='analysis',currency='unknown')
+    assert cost.value is None and cost.denominator==0
+    assert cost.coverage['pending_operations'] is None
+    assert cost.coverage['cohort_completeness']=='unavailable'
+    assert cost.coverage['cohort_completeness_reason']
+    assert cost.coverage['unresolved_observed_operations']==1
+
+
+def test_unlinked_aggregation_does_not_rescan_operations_for_each_physical_call():
+    from fitcheck_backend.metrics.calculations import Rows, attempt_metrics
+    from fitcheck_backend.metrics.report_types import Operation
+    p,op=uuid4(),uuid4()
+    class CountedOperations(list):
+        traversed=0
+        def __iter__(self):
+            for value in super().__iter__():
+                self.traversed+=1
+                yield value
+    def report(repeats):
+        ops=CountedOperations([Operation(operation_id=op,subject_id=p,source='website_server',kind='analysis',
+            created_at=START,finished_at=START+timedelta(days=1),state='succeeded')])
+        calls=[Attempt(call_id=uuid4(),operation_id=identity,subject_id=p,source='website_server',purpose='analysis.generate',
+            provider='deepseek',model='safe',started_at=START,state='succeeded',cost=Decimal('1'),currency='USD',cost_basis='estimated')
+            for identity in [op]*repeats+[None,uuid4()]]
+        out=Rows(options(),snapshot(attempts=calls))
+        attempt_metrics(out,ops)
+        assert row(out.rows,'known_spend',currency='USD').value==repeats+2
+        for kind in ('analysis','skill_suggestions','extraction'):
+            assert row(out.rows,'attempts_per_operation',operation=kind).coverage['unlinked_period_calls']==2
+        assert row(out.rows,'cost_per_success',operation='analysis',currency='USD').value==repeats
+        return ops.traversed
+    small,large=report(1),report(100)
+    assert large <= small+2, 'Physical calls must not repeatedly traverse the operation projection'
