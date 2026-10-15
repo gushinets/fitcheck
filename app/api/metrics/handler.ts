@@ -43,7 +43,17 @@ export function createMetricsHandlers(config: HandlerConfig) {
   let windowStarted = now(), count = 0
   function guard(request: Request) {
     const origin = request.headers.get('origin')
-    if (!origin || origin !== new URL(request.url).origin || !config.allowedOrigins.includes(origin)) return response({ error: 'origin_not_allowed' }, 403)
+    let sameHost = false
+    if (origin && config.allowedOrigins.includes(origin)) {
+      try {
+        const parsed = new URL(origin)
+        // TLS termination can leave request.url on an internal origin. Use the
+        // public Host only with an exact configured Origin; never forwarded headers.
+        sameHost = ['http:', 'https:'].includes(parsed.protocol) && parsed.origin === origin &&
+          (origin === new URL(request.url).origin || request.headers.get('host') === parsed.host)
+      } catch { /* Malformed origins fail closed. */ }
+    }
+    if (!sameHost) return response({ error: 'origin_not_allowed' }, 403)
     if (now() - windowStarted >= 60000) { windowStarted = now(); count = 0 }
     if (++count > 60) return response({ error: 'rate_limited' }, 429)
     if (request.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/json') return response({ error: 'invalid_request' }, 400)

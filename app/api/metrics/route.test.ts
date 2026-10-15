@@ -10,6 +10,48 @@ const setup = () => {
   return { ...handlers, fetcher }
 }
 describe('browser metrics boundary', () => {
+  it.each(['POST', 'DELETE'] as const)('accepts same-public-host %s behind a TLS terminating proxy', async method => {
+    const handlers = setup()
+    const visitor = resolveVisitor(undefined, 'test-secret', Date.now())!
+    const incoming = new Request('http://0.0.0.0:3000/api/metrics', {
+      method,
+      headers: { origin, host: 'website.example', 'content-type': 'application/json', cookie: `${VISITOR_COOKIE}=${visitor.cookieValue}` },
+      body: JSON.stringify(method === 'POST' ? { events: [event()] } : {}),
+    })
+    const response = await handlers[method](incoming)
+    expect(response.status).toBe(202)
+    expect(await response.json()).toEqual({ delivered: true })
+    expect(handlers.fetcher).toHaveBeenCalledOnce()
+    if (method === 'DELETE') expect(response.headers.get('set-cookie')).not.toContain(visitor.cookieValue)
+  })
+  it.each(['POST', 'DELETE'] as const)('rejects invalid proxy origin boundaries for %s before forwarding', async method => {
+    const { fetcher } = setup()
+    const handlers = createMetricsHandlers({ secret: 'test-secret', allowedOrigins: [origin, 'https://other.example', 'https://website.example/path', 'null'], bridge: {}, fetchImpl: fetcher })
+    const cases: Record<string, string>[] = [
+      { host: 'website.example' },
+      { host: 'website.example', origin: 'null' },
+      { host: 'website.example', origin: 'https://website.example/path' },
+      { host: 'website.example', origin: 'https://evil.example' },
+      { host: 'evil.example', origin: 'https://evil.example' },
+      { host: 'website.example', origin: 'https://other.example' },
+      { host: 'other.example', origin, 'x-forwarded-host': 'website.example', 'x-forwarded-proto': 'https', forwarded: 'host=website.example;proto=https' },
+      { origin, 'x-forwarded-host': 'website.example', 'x-forwarded-proto': 'https' },
+      { host: 'website.example:8443', origin },
+      { host: 'website.example', origin: 'http://website.example' },
+    ]
+    for (const headers of cases) {
+      const incoming = new Request('http://0.0.0.0:3000/api/metrics', {
+        method, headers: { 'content-type': 'application/json', ...headers },
+        body: JSON.stringify(method === 'POST' ? { events: [event()] } : {}),
+      })
+      expect((await handlers[method](incoming)).status, JSON.stringify(headers)).toBe(403)
+    }
+    const disabled = createMetricsHandlers({ allowedOrigins: [], bridge: {}, fetchImpl: fetcher })
+    expect((await disabled[method](new Request('http://0.0.0.0:3000/api/metrics', {
+      method, headers: { origin, host: 'website.example', 'content-type': 'application/json' }, body: '{}',
+    }))).status).toBe(403)
+    expect(fetcher).not.toHaveBeenCalled()
+  })
   it('test_cross_origin_and_server_fact_in_browser_batch_rejected', async () => {
     const { POST, fetcher } = setup()
     expect((await POST(request({ events: [event()] }, { origin: 'https://evil.example' }))).status).toBe(403)
