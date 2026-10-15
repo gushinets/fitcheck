@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     auth_enabled: bool = False
     metrics_enabled: bool = False
     metrics_environment: Literal["development", "production", "test"] | None = None
+    metrics_database_environment: Literal["development", "production", "test"] | None = None
     metrics_ingest_key: SecretStr | None = None
     metrics_campaign_codes: list[str] = Field(default_factory=list)
     jobs_enabled: bool = False
