@@ -37,8 +37,14 @@ def load_snapshot(conn, options, backend_database_environment=None):
                     else 'Backend database environment does not match report environment'
                     if backend_database_environment != options.environment else None)
     data = Snapshot(backend_scope_reason=scope_reason, history_floor=floor)
-    data.collections = dict(conn.execute(select(MetricCollection.source, MetricCollection.available_from)
-        .where(MetricCollection.environment == options.environment)).all())
+    for row in conn.execute(select(MetricCollection.source, MetricCollection.available_from,
+            MetricCollection.retention_floor, MetricCollection.backfill_complete_through)
+            .where(MetricCollection.environment == options.environment)).mappings():
+        data.collections[row['source']] = max(row['available_from'], row['retention_floor'] or row['available_from'])
+        if row['retention_floor'] is not None:
+            data.retention_floors[row['source']] = row['retention_floor']
+        if row['source'] == 'reconstructed_backend':
+            data.backfill_complete_through = row['backfill_complete_through']
     columns = [getattr(MetricJournal, key) for key in ('name', 'occurred_at', 'source', 'subject_kind',
                'subject_id', 'session_id', 'operation_id', 'domain_key')]
     columns += [MetricJournal.properties[key].label(key) for key in PROPERTY_KEYS]
@@ -82,14 +88,14 @@ def load_snapshot(conn, options, backend_database_environment=None):
         data.attempts.append(Attempt(source='backend_server', cost_basis='estimated' if values['cost'] is not None else 'unknown', **values))
     # User is one-to-one with owner. Guest jobs never become registered people.
     statement = select(Job.id, Job.owner_id, Job.type, Job.created_at, Job.started_at,
-        Job.finished_at, Job.status, Job.attempts, Job.error['code'].as_string().label('error_code'))\
+        Job.finished_at, Job.status, Job.available_at, Job.attempts, Job.error['code'].as_string().label('error_code'))\
         .join(User, User.owner_id == Job.owner_id).where(Job.created_at >= floor, Job.created_at < options.end)
     for row in bounded(conn, statement):
         finished = row['finished_at'] if row['finished_at'] is not None and row['finished_at'] < options.end else None
         started = row['started_at'] if row['started_at'] is not None and row['started_at'] < options.end else None
         data.operations.append(Operation(operation_id=row['id'], subject_id=row['owner_id'], source='backend_server',
             kind=row['type'], created_at=row['created_at'], started_at=started, finished_at=finished,
-            state=row['status'] if finished else 'unknown' if row['finished_at'] is not None else 'running' if started else 'queued',
+            state=backend_job_state(row, options.end),
             error_code=safe_code(row['error_code']) if finished and row['error_code'] else None,
             executions=row['attempts'] if finished else 0, provenance='deployment_database_scope'))
     # These are current statuses, not historical transitions or cohort outcomes.
@@ -97,3 +103,14 @@ def load_snapshot(conn, options, backend_database_environment=None):
         .join(User, User.owner_id == AnalysisAnnotation.owner_id)
         .group_by(AnalysisAnnotation.application_status)).all())
     return data
+
+
+def backend_job_state(row, end):
+    """Latest domain timestamps prove only states with a known surviving boundary."""
+    if row['finished_at'] is not None:
+        return row['status'] if row['finished_at'] < end else 'unknown'
+    if row['status'] == 'queued' and (row['attempts'] == 0 or row['available_at'] < end):
+        return 'queued'
+    if row['status'] == 'running' and row['started_at'] is not None and row['started_at'] < end:
+        return 'running'
+    return 'unknown'

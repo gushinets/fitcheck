@@ -130,3 +130,5 @@ class Snapshot:
     statuses: dict[str, int] = field(default_factory=dict)
     backend_scope_reason: str | None = 'Backend database environment scope is not configured'
     history_floor: datetime | None = None
+    backfill_complete_through: datetime | None = None
+    retention_floors: dict[str, datetime] = field(default_factory=dict)

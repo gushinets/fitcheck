@@ -47,7 +47,7 @@ without printing credentials; no push or remote configuration/deployment occurre
 | Frontend production build | `node node_modules/next/dist/bin/next build --webpack` passed at `79132e7`: seven static pages, Proxy, four dynamic API routes. `/` prerendered. |
 | Lint / generated types / TypeScript | Full ESLint and generated backend TS `--check` passed at `79132e7`; final focused TypeScript/lint checks passed. Frontend unchanged afterward. |
 | API image | Final rebuild at `09724ae` passed on 2026-10-15: `fitcheck-metrics-api:20261015`, digest `sha256:d6fd6b776c52aec907c46b9c82f2fba65c0afe5fbc1bf49d61180f2dcc503654`. |
-| Worker image | Build running at latest 2026-10-15 update; result pending. |
+| Worker image | Build at `09724ae` passed on 2026-10-15: `fitcheck-metrics-worker:20261015`, digest `sha256:774fddb5e8abb130ebad5a0be9ba6dbdd7d25c0966c579ff0075530e86f61af9`. This and the API image predate the whole-branch corrections; both need rebuilding. |
 | Schema / contracts | Task 4 disposable PostgreSQL migration 0004→0005 preservation/index/erasure checks passed (24); Alembic metadata check found no new operations; OpenAPI/generated TS drift clean. Latest 2026-10-15 OpenAPI `--check` is current; actual Alembic check found no new upgrade operations against guarded disposable test DB at 0005. No development schema evidence yet. |
 
 Backend full command (from backend/, disposable database only):
@@ -72,8 +72,8 @@ either item from the final review decision.
    images. Commit exact runtime code. Before pushing, control all three autodeploy
    settings so new code cannot start ahead of migrations; record original states.
    Push `dev` and verify CI for the exact runtime SHA.
-2. Apply additive **0004_metrics + 0005_metrics_erasure**, preserving frozen
-   `0001`–`0004`. Verify runner code and actual packaged migration paths. The old
+2. Apply additive **0004_metrics + 0005_metrics_erasure + 0006_metrics_coverage**, preserving frozen
+   `0001`–`0005`. Verify runner code and actual packaged migration paths. The old
    live image may contain only `0003`; its plain `upgrade head` cannot see new files.
    Prefer a supported new-image one-off migration runner. If unavailable, review an
    exact committed migration transfer to a writable temporary copy of the old tree,
@@ -85,11 +85,15 @@ either item from the final review decision.
    provider key. Configure API/worker database scope independently as development.
 4. Perform the real-bridge synthetic check with a concrete excluded scope. Both
    website and collector have one server-trusted environment; client payload cannot
-   select test scope. Proposed staging: temporarily set website and collector to
-   `test`, keep backend domain collection disabled, rebuild/deploy website, submit a
-   named non-PII event twice and confirm one stored fact plus duplicate behavior via
-   operator report/aggregate inspection. Controller must confirm the supported
-   enablement arrangement before execution; no new public test endpoint or flag.
+   select test scope. Supported staging: temporarily set website and collector to
+   `test`, with API auth disabled and jobs disabled. AuthRuntime is then absent, so
+   backend account product routes return 503; the independent MetricsRuntime can
+   ingest the synthetic test observations without emitting backend domain facts.
+   Keep `FITCHECK_METRICS_DATABASE_ENVIRONMENT=development` throughout. Rebuild/deploy
+   website, submit a named non-PII event twice and confirm one stored fact plus
+   duplicate behavior via operator report/aggregate inspection. This arrangement
+   has been inspected locally; no remote staging settings have been applied yet.
+   No new public test endpoint or configuration flag is introduced.
 5. Record only the named synthetic facts and erase only those through a supported,
    explicitly scoped mechanism. The cleanup CLI has no scope selector and is not
    a synthetic-scope deletion tool. No development reset. Capture exact evidence;
@@ -105,7 +109,7 @@ either item from the final review decision.
    aggregate result/coverage and erasure proof without raw identifiers or secrets.
    Restore intended autodeploy settings after ordering is safe.
 8. Append actual evidence below and only then close the metrics plan. Continue the
-   companion OpenAI plan afterward, using next-free `0006` if pricing needs schema.
+   companion OpenAI plan afterward, using next-free `0007` if pricing needs schema.
 
 Local provider tests remain skipped; no live model coverage is claimed. Report
 population `all` keeps visitor/account provenance separate and does not count a
@@ -167,3 +171,21 @@ scope wording refines the earlier scope decision; it does not change past rows.
 14. strengthen legacy database scope to independent FITCHECK_METRICS_DATABASE_ENVIRONMENT, not collector metrics_environment — collector may temporarily be test while physical DB and historical calls are development; shared setting would relabel history — cost if wrong: one explicit deployment setting needed, backend legacy metrics unavailable until configured. This refines the earlier explicit-database-scope ruling; no default inference or schema rewrite.
 
 15. observed D7/D30 retention cohort requires observed registration and retained registration→first-observed-activation history, excluding uncertain-first subjects with coverage counts — earlier activation outside collection cannot be disproved, and raw retention alone must not turn old users into new activation cohorts — cost if wrong: conservative exclusion reduces sample size; website blockers/delivery remain observation limitations.
+
+## Whole-branch correction qualification — 2026-10-15
+
+The single correction wave adds 0006 coverage metadata and corrects recovered/as-of
+job pending state. Existing image and schema evidence above predates this wave.
+Deployment still has old 0003; no telemetry migrations were applied outside the
+guarded disposable test database. Final tests, fresh 0005→0006 preservation/drift
+checks and rebuilt API/worker images must be recorded before rollout. The next
+OpenAI usage/pricing revision is 0007. Existing 0004/0005 migration files are frozen.
+
+Backfill operators repeat bounded invocations until `backfill_complete` is true and
+`backfill_complete_through` covers the report's exclusive end. A drain has a fixed
+cutoff; outcomes beyond it require another drain. Partial coverage is explicitly
+unavailable; insertion of an old fact cannot reverse the independent retention
+floor. Mixed backend registration/outcome provenance is explicit in coverage.
+Generic website failure causes and the success-publication rollback regression
+remain nonblocking follow-ups. The unexplained transient lease test record above
+is preserved without claiming a diagnosis.

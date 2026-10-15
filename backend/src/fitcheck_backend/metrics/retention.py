@@ -1,6 +1,6 @@
 """Bounded telemetry-only retention. Provider accounting is never deleted here."""
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from sqlalchemy import delete, select, func, text
 from ..storage.database import unit_of_work
 from ..storage.metrics import MetricJournal, MetricCollection, MetricErasedVisitor
@@ -12,6 +12,9 @@ class MaintenanceResult:
     processed: int = 0
     deleted: int = 0
     tombstones_deleted: int = 0
+    backfill_target_at: datetime | None = None
+    backfill_complete_through: datetime | None = None
+    backfill_complete: bool | None = None
 
 
 def valid_limit(limit):
@@ -25,6 +28,7 @@ def cleanup_metrics(engine, *, now, dry_run=True, limit=1000) -> MaintenanceResu
     cutoff = now-timedelta(days=180)
     with unit_of_work(engine) as session:
         session.execute(text("SET LOCAL statement_timeout='5s'"))
+        maintenance_guard(session)
         rows = session.execute(select(MetricJournal.event_id, MetricJournal.source, MetricJournal.environment)
             .where(MetricJournal.received_at < cutoff)
             .order_by(MetricJournal.received_at, MetricJournal.event_id).limit(limit).with_for_update(skip_locked=True)).all()
@@ -43,8 +47,16 @@ def cleanup_metrics(engine, *, now, dry_run=True, limit=1000) -> MaintenanceResu
                 if collection is not None:
                     oldest = session.scalar(select(func.min(MetricJournal.occurred_at)).where(
                         MetricJournal.source==source, MetricJournal.environment==environment))
-                    collection.available_from = max(collection.available_from, cutoff, oldest or cutoff)
+                    collection.retention_floor = max(collection.retention_floor or cutoff, cutoff, oldest or cutoff)
+                    collection.available_from = max(collection.available_from, collection.retention_floor)
         for environment, digest in tombstones:
             session.execute(delete(MetricErasedVisitor).where(MetricErasedVisitor.environment==environment,
                 MetricErasedVisitor.visitor_digest==digest))
         return MaintenanceResult(processed=len(rows)+len(tombstones), deleted=len(rows), tombstones_deleted=len(tombstones))
+
+
+def maintenance_guard(session):
+    # Both maintenance paths take this before any journal/owner/collection locks.
+    # Fail fast so a repeatable-read snapshot cannot wait behind another drain.
+    if not session.scalar(text('SELECT pg_try_advisory_xact_lock(5064669371900342605)')):
+        raise ValueError('Another metrics maintenance operation is running; retry later')

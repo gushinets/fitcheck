@@ -59,7 +59,9 @@ def operation_key(event):
 def operations(data):
     """One record per source/operation before relating any physical attempts."""
     result = {}
-    for event in sorted(data.events, key=lambda e: e.occurred_at):
+    authoritative = set()
+    transition_order = {'job_admitted': 0, 'job_execution_started': 1, 'job_execution_recovered': 2, 'job_finished': 3}
+    for event in sorted(data.events, key=lambda e: (e.occurred_at, (e.properties.get('attempts') or 0), transition_order.get(e.name, 0))):
         key = operation_key(event)
         if key is None:
             continue
@@ -77,17 +79,21 @@ def operations(data):
                 duration_ms=duration, error_code=event.properties.get('errorCode'), provenance='website_server')
         elif event.name.startswith('job_'):
             identity = ('backend_server', key)
+            if event.source == 'backend_server':
+                authoritative.add(identity)
             op = result.setdefault(identity, Operation(operation_id=key, subject_id=event.subject_id,
                 source='backend_server', kind=event.properties.get('jobType', 'unknown'),
                 created_at=None, provenance=event.source))
             if event.name == 'job_admitted':
-                op.created_at, op.state = event.occurred_at, 'queued'
+                op.created_at = event.occurred_at
+                op.state = 'queued' if event.source == 'backend_server' else 'unknown'
             elif event.name == 'job_execution_started':
                 op.started_at = op.started_at or event.occurred_at
                 op.state = 'running'
                 op.executions += 1
             elif event.name == 'job_execution_recovered':
                 op.recovered = True
+                op.state = 'queued' if event.properties.get('attempts') == 1 else 'unknown'
             elif event.name == 'job_finished':
                 op.finished_at, op.state = event.occurred_at, event.properties.get('outcome', 'unknown')
                 op.duration_ms = event.properties.get('durationMs')
@@ -96,7 +102,7 @@ def operations(data):
         old = result.get((op.source, op.operation_id))
         if old:
             op.recovered = old.recovered
-            if op.state == 'unknown' and old.state in {'queued', 'running'}:
+            if op.finished_at is None and (op.source, op.operation_id) in authoritative and old.state in {'queued', 'running', 'unknown'}:
                 op.state = old.state
             op.executions = max(op.executions, old.executions)
             # Domain started_at is the most recent claim; first observed claim
@@ -112,12 +118,20 @@ class Rows:
     def __init__(self, options, data):
         self.options, self.data, self.rows = options, data, []
 
-    def add(self, metric, *, dims=None, sources=(), required_start=None, reason=None, coverage=None, **values):
+    def add(self, metric, *, dims=None, sources=(), required_start=None, reason=None, coverage=None, backfill_required=False, retention_floor=None, **values):
         starts = [self.data.collections.get(source) for source in sources]
         start = max(starts) if starts and all(value is not None for value in starts) else None
         required = required_start or self.options.start
+        if retention_floor is not None:
+            start = max(start, retention_floor) if start is not None else None
+            if required < retention_floor:
+                reason = reason or 'Required outcome history is outside the retention coverage floor'
         if sources and (start is None or start > required):
             reason = reason or 'Required observation history is unavailable for this source and period'
+        if 'reconstructed_backend' in sources or backfill_required:
+            through = self.data.backfill_complete_through
+            if through is None or through < self.options.end:
+                reason = reason or 'Incomplete backfill coverage through the requested report end'
         if self.data.history_floor and required < self.data.history_floor:
             reason = reason or 'Required history is outside the bounded snapshot'
         dimensions = dict(dims or {})
@@ -129,6 +143,10 @@ class Rows:
             start = min(relevant, default=None)
         details = {'observation_limit': WEBSITE_LIMIT if dimensions.get('population') == 'visitor' or
                    dimensions.get('source') == 'website_server' else BACKEND_LIMIT}
+        if 'reconstructed_backend' in sources or backfill_required:
+            details['backfill_complete_through'] = self.data.backfill_complete_through
+        if retention_floor is not None:
+            details['retention_floor'] = retention_floor
         details.update(coverage or {})
         if reason:
             values['value'] = None
@@ -136,7 +154,7 @@ class Rows:
             available=reason is None, reason=reason, data_start=start, **values))
 
 
-def population_metrics(out, events, population, provenance):
+def population_metrics(out, events, population, provenance, outcome_events=None):
     opt = out.options
     source = 'website_client' if population == 'visitor' else provenance
     dims = {'population': population, 'provenance': provenance}
@@ -151,25 +169,38 @@ def population_metrics(out, events, population, provenance):
     registered = {p: t for p, t in registered.items() if t is not None}
     cohort = {p: t for p, t in registered.items() if in_period(t) and t+WEEK <= opt.end}
     out.add('registrations', dims=dims, sources=(source,), value=sum(in_period(t) for t in registered.values()))
+    outcome_history = by_subject
+    outcome_coverage = {}
+    if outcome_events is not None:
+        outcome_history = defaultdict(list)
+        for event in outcome_events:
+            if event.subject_id in registered:
+                outcome_history[event.subject_id].append(event)
+        outcome_coverage = {'registration_source': provenance,
+            'outcome_sources': sorted({e.source for history in outcome_history.values() for e in history}),
+            'outcome_basis': 'exact_backend_account_facts_across_live_and_reconstructed_sources'}
     activation = {}
-    for p, history in by_subject.items():
+    for p, history in outcome_history.items():
         candidates = [e.occurred_at for e in history if (
             e.name == 'analysis_result_viewed' if population == 'visitor' else
             e.name == 'job_finished' and e.properties.get('jobType') == 'analysis' and e.properties.get('outcome') == 'succeeded')]
         if candidates:
             activation[p] = min(candidates)
+    outcome_floor = max((floor for source, floor in out.data.retention_floors.items()
+        if source in {'backend_server', 'reconstructed_backend'}), default=None) if outcome_events is not None else None
+    backfill_required = 'reconstructed_backend' in outcome_coverage.get('outcome_sources', [])
     activated = {p: activation[p] for p, t in cohort.items() if p in activation and t <= activation[p] < t+WEEK}
     coverage = {'mature_registrations': len(cohort), 'immature_registrations': sum(in_period(t) and t+WEEK > opt.end for t in registered.values()),
-                'activation_basis': 'viewed_result' if population == 'visitor' else 'completion_based'}
-    out.add('activation', dims=dims, sources=(source,), numerator=len(activated), denominator=len(cohort),
+                'activation_basis': 'viewed_result' if population == 'visitor' else 'completion_based'} | outcome_coverage
+    out.add('activation', dims=dims, sources=(source,), backfill_required=backfill_required, retention_floor=outcome_floor, numerator=len(activated), denominator=len(cohort),
             value=ratio(len(activated), len(cohort)), coverage=coverage)
     durations = [(t-registered[p]).total_seconds() for p, t in activated.items()]
     for percentile in (50, 95):
-        out.add('time_to_value_seconds', dims=dims | {'percentile': f'p{percentile}'}, sources=(source,),
+        out.add('time_to_value_seconds', dims=dims | {'percentile': f'p{percentile}'}, sources=(source,), backfill_required=backfill_required, retention_floor=outcome_floor,
                 value=nearest_rank(durations, percentile), sample_count=len(durations), coverage=coverage)
     for metric, target in [('onboarding', profile)] + ([('email_verification', 'email_verified')] if population == 'account' else []):
-        successes = sum(any(e.name == target and t <= e.occurred_at < t+WEEK for e in by_subject[p]) for p, t in cohort.items())
-        out.add(metric, dims=dims, sources=(source,), numerator=successes, denominator=len(cohort), value=ratio(successes, len(cohort)))
+        successes = sum(any(e.name == target and t <= e.occurred_at < t+WEEK for e in outcome_history[p]) for p, t in cohort.items())
+        out.add(metric, dims=dims, sources=(source,), backfill_required=backfill_required, retention_floor=outcome_floor, numerator=successes, denominator=len(cohort), value=ratio(successes, len(cohort)), coverage=outcome_coverage)
     active = {e.subject_id for e in events if useful(e) and in_period(e.occurred_at)}
     rolling = {}
     for days in (1, 7, 30):
@@ -178,10 +209,17 @@ def population_metrics(out, events, population, provenance):
         out.add('active_subjects', dims=dims | {'window_days': str(days)}, sources=(source,), required_start=begin, value=len(rolling[days]))
     out.add('stickiness', dims=dims, sources=(source,), required_start=opt.end-timedelta(days=30),
             value=ratio(len(rolling[1]), len(rolling[30])), numerator=len(rolling[1]), denominator=len(rolling[30]))
+    # Retention remains based on source-local observed activation and activity;
+    # mixed exact outcomes only establish the registration cohort conversions.
+    retention_activation = activation
+    if outcome_events is not None:
+        retention_activation = {p: min(times) for p, history in by_subject.items()
+            if (times := [e.occurred_at for e in history if e.name == 'job_finished'
+                and e.properties.get('jobType') == 'analysis' and e.properties.get('outcome') == 'succeeded'])}
     zone = ZoneInfo(opt.timezone)
     for offset in (7, 30):
         retained = mature = uncertain_first = 0
-        for p, activated_at in activation.items():
+        for p, activated_at in retention_activation.items():
             if not in_period(activated_at):
                 continue
             collection_start = out.data.collections.get(source)
@@ -424,7 +462,9 @@ def calculate(options, data):
         active['account'] = set()
         for provenance in ('backend_server', 'reconstructed_backend'):
             events = [e for e in data.events if e.source == provenance and e.subject_kind == 'account' and e.occurred_at < options.end]
-            subjects = population_metrics(out, events, 'account', provenance)
+            outcomes = [e for e in data.events if e.source in {'backend_server', 'reconstructed_backend'}
+                        and e.subject_kind == 'account' and e.occurred_at < options.end]
+            subjects = population_metrics(out, events, 'account', provenance, outcomes)
             active[('account', provenance)] = subjects
             if provenance == 'backend_server':
                 active['account'] = subjects

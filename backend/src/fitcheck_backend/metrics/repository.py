@@ -34,7 +34,8 @@ class MetricRepository:
         stmt = insert(MetricCollection).values(source=source, environment=environment,
                                                started_at=received, available_from=occurred)
         self.session.execute(stmt.on_conflict_do_update(index_elements=['source', 'environment'],
-            set_={'available_from':func.least(MetricCollection.available_from, stmt.excluded.available_from)}))
+            set_={'available_from':func.greatest(MetricCollection.retention_floor,
+                func.least(MetricCollection.available_from, stmt.excluded.available_from))}))
 
     def append(self, event, *, source, environment, received_at, clock_adjusted=False, submitted_hash=None):
         event = MetricEvent.model_validate(event.model_dump())

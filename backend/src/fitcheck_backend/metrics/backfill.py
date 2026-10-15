@@ -1,11 +1,11 @@
 """Reconstruct only exact persisted facts, draining stable missing-fact batches."""
-from sqlalchemy import select, literal, cast, String, union_all, exists, text
+from sqlalchemy import select, literal, cast, String, union_all, exists, text, func
 from ..storage.database import unit_of_work
 from ..storage.models import User, Owner, ProfileRevision, Job
-from ..storage.metrics import MetricJournal
+from ..storage.metrics import MetricJournal, MetricCollection
 from .repository import valid_environment
 from .lifecycle import append_domain_event, terminal_properties
-from .retention import MaintenanceResult, valid_limit
+from .retention import MaintenanceResult, valid_limit, maintenance_guard
 
 
 def backfill_metrics(engine, *, environment, limit=1000) -> MaintenanceResult:
@@ -30,9 +30,15 @@ def backfill_metrics(engine, *, environment, limit=1000) -> MaintenanceResult:
     missing = ~exists(select(MetricJournal.event_id).where(MetricJournal.environment==environment,
         MetricJournal.subject_id==candidates.c.owner_id, MetricJournal.domain_key==candidates.c.domain_key))
     with unit_of_work(engine) as session:
+        session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"))
         session.execute(text("SET LOCAL statement_timeout='5s'"))
         session.execute(text("SET LOCAL lock_timeout='3s'"))
-        rows = session.execute(select(candidates).where(missing).order_by(
+        maintenance_guard(session)
+        collection = session.get(MetricCollection, ('reconstructed_backend', environment))
+        target = collection.backfill_target_at if collection is not None else None
+        target = target or session.scalar(select(func.transaction_timestamp()))
+        eligible = candidates.c.occurred_at < target
+        rows = session.execute(select(candidates).where(missing, eligible).order_by(
             candidates.c.occurred_at, candidates.c.owner_id, candidates.c.domain_key).limit(limit)).all()
         # The key-share lock is compatible with ordinary mutations and prevents
         # erasure while these facts reference the owner. Always sorted before facts.
@@ -55,4 +61,17 @@ def backfill_metrics(engine, *, environment, limit=1000) -> MaintenanceResult:
                 domain_key=row.domain_key, occurred_at=row.occurred_at, properties=properties,
                 environment=environment, source='reconstructed_backend')
             count += 1
-        return MaintenanceResult(processed=count)
+        session.flush()
+        incomplete = session.scalar(select(exists(select(candidates).where(missing, eligible))))
+        # No metadata lock precedes Owner -> Journal. Maintenance is serialized;
+        # live producers may append facts but never publish these watermarks.
+        collection = session.get(MetricCollection, ('reconstructed_backend', environment), populate_existing=True)
+        if collection is None:
+            collection = MetricCollection(source='reconstructed_backend', environment=environment,
+                started_at=target, available_from=target)
+            session.add(collection)
+        collection.backfill_target_at = target if incomplete else None
+        if not incomplete:
+            collection.backfill_complete_through = target
+        return MaintenanceResult(processed=count, backfill_target_at=collection.backfill_target_at,
+            backfill_complete_through=collection.backfill_complete_through, backfill_complete=not incomplete)

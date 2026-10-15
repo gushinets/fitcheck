@@ -317,10 +317,10 @@ Account deletion removes the ownership graph, including claimed guests' remainin
 
 ## Telemetry and operator reports
 
-Telemetry is additive migration `0004_metrics` plus `0005_metrics_erasure`. Frozen
-`0001`–`0004` must not be rewritten. Apply both before enabling the upgraded API
+Telemetry uses additive migrations `0004_metrics`, `0005_metrics_erasure`, and
+`0006_metrics_coverage`. Frozen `0001`–`0005` must not be rewritten. Apply all three before enabling the upgraded API
 and worker. The companion OpenAI pricing migration, if needed, uses next-free
-`0006`; telemetry rollout preserves the existing DeepSeek provider/model.
+`0007`; telemetry rollout preserves the existing DeepSeek provider/model.
 See the [development rollout record](../docs/deployments/2026-10-14-fitcheck-metrics.md)
 for ordering, evidence, approved decisions and remaining live checks.
 
@@ -365,6 +365,27 @@ In an installed operator container replace `uv run --locked python` with
 `/app/.venv/bin/python`; ensure that container contains the target committed code.
 Backfill mutates telemetry only, requires matching independent database scope, and
 repeats bounded idempotent batches; it never invents views, queue claims or activity.
+Each drain fixes an exclusive `backfill_target_at` and returns
+`backfill_complete`, `backfill_complete_through`, and the outstanding target.
+Repeat until complete; a processed count alone is not completion evidence. A new
+invocation after completion starts a later cutoff. Reports requiring reconstructed
+facts remain unavailable unless their end is at or before the last completed
+cutoff, even when registration rows have already been inserted. The completion
+watermark proves all eligible persisted facts in the drain's repeatable-read
+snapshot, including existing live facts; it does not promise future late writes.
+Concurrent maintenance fails safely; retry after the other command finishes.
+Cleanup advances an independent monotonic retention floor. Old late events or
+subsequent backfill never lower that floor or silently restore removed history.
+Existing 0005 collection boundaries are preserved conservatively on upgrade and
+reconstruction completeness starts unknown until a completed drain.
+
+Backend registration cohorts retain their registration source. Exact verification,
+profile and completed-analysis outcomes for those same backend accounts can come
+from either backend source; coverage lists the outcome sources explicitly. Cohort conversions also respect the
+latest retention floor across both backend sources, so deletion of live outcomes
+cannot become zero in a reconstructed registration cohort. This
+never joins website visitors or reconstructs viewed activation or observed returns.
+
 Maintenance limits are 1–1000, default 1000. Cleanup defaults to dry run even without
 `--dry-run`. It has no scope filter: do not use it to erase a named synthetic scope.
 

@@ -23,6 +23,7 @@ def event(name, subject, day=0, *, source='website_client', operation=None, sess
 
 
 def snapshot(events=(), attempts=(), **kwargs):
+    kwargs.setdefault('backfill_complete_through', END)
     return Snapshot(events=list(events), attempts=list(attempts), collections={
         'website_client': START-timedelta(days=1), 'website_server': START-timedelta(days=1),
         'backend_server': START-timedelta(days=1), 'reconstructed_backend': START-timedelta(days=1)}, **kwargs)
@@ -233,3 +234,94 @@ def test_unlinked_aggregation_does_not_rescan_operations_for_each_physical_call(
         return ops.traversed
     small,large=report(1),report(100)
     assert large <= small+2, 'Physical calls must not repeatedly traverse the operation projection'
+
+
+@pytest.mark.parametrize('projected', [None, 'running', 'queued'])
+def test_authoritative_recovery_queues_even_with_stale_domain_claim(projected):
+    from fitcheck_backend.metrics.calculations import operations
+    from fitcheck_backend.metrics.report_types import Operation
+    p, op = uuid4(), uuid4()
+    data = snapshot([event('job_admitted', p, 0, source='backend_server', operation=op, jobType='analysis'),
+        event('job_execution_started', p, 1, source='backend_server', operation=op, jobType='analysis', attempts=1),
+        event('job_execution_recovered', p, 2, source='backend_server', operation=op, jobType='analysis', attempts=1)])
+    if projected:
+        data.operations.append(Operation(operation_id=op, subject_id=p, source='backend_server', kind='analysis',
+            created_at=START, started_at=START+timedelta(days=1), state=projected, provenance='deployment_database_scope'))
+    result, = operations(data)
+    assert result.state == 'queued' and result.recovered
+
+
+def test_asof_first_execution_wins_over_later_overwritten_domain_claim():
+    from fitcheck_backend.metrics.calculations import operations
+    from fitcheck_backend.metrics.report_types import Operation
+    p, op = uuid4(), uuid4()
+    data = snapshot([event('job_admitted', p, 0, source='backend_server', operation=op, jobType='analysis'),
+        event('job_execution_started', p, 1, source='backend_server', operation=op, jobType='analysis', attempts=1)])
+    data.operations.append(Operation(operation_id=op, subject_id=p, source='backend_server', kind='analysis',
+        created_at=START, state='queued', provenance='deployment_database_scope'))
+    assert operations(data)[0].state == 'running'
+
+
+def test_partial_reconstruction_and_later_outcome_drain_cannot_publish_false_zero():
+    p = uuid4()
+    data = snapshot([event('account_registered', p, source='reconstructed_backend')])
+    # Dynamic assignment lets RED demonstrate the missing availability check,
+    # rather than failing merely because a new dataclass argument is absent.
+    data.backfill_complete_through = None
+    for through in (None, END-timedelta(days=1)):
+        data.backfill_complete_through = through
+        rows = calculate(options(population='account'), data)
+        for name in ('activation', 'onboarding', 'email_verification'):
+            result = row(rows, name, provenance='reconstructed_backend')
+            assert not result.available and result.value is None
+            assert 'backfill' in result.reason.lower()
+    data.backfill_complete_through = END
+    assert row(calculate(options(population='account'), data), 'activation', provenance='reconstructed_backend').available
+
+
+@pytest.mark.parametrize('registration_source,outcome_source', [
+    ('reconstructed_backend','backend_server'), ('backend_server','reconstructed_backend')])
+def test_backend_cohort_uses_exact_cross_inception_outcomes(registration_source,outcome_source):
+    p = uuid4()
+    data = snapshot([event('account_registered',p,source=registration_source),
+        event('email_verified',p,1,source=outcome_source),event('profile_revision_saved',p,2,source=outcome_source),
+        event('job_finished',p,3,source=outcome_source,jobType='analysis',outcome='succeeded')])
+    data.backfill_complete_through = None
+    for name in ('activation','onboarding','email_verification'):
+        assert not row(calculate(options(population='account'),data),name,provenance=registration_source).available
+    data.backfill_complete_through = END
+    for name in ('activation','onboarding','email_verification'):
+        value=row(calculate(options(population='account'),data),name,provenance=registration_source)
+        assert value.available and value.value == 100
+        assert value.coverage['outcome_sources'] == ['backend_server','reconstructed_backend']
+
+
+def test_exhausted_recovery_needs_terminal_fact_and_reconstructed_admission_is_unknown():
+    from fitcheck_backend.metrics.calculations import operations
+    p,op=uuid4(),uuid4()
+    data=snapshot([event('job_admitted',p,source='reconstructed_backend',operation=op,jobType='analysis')])
+    assert operations(data)[0].state=='unknown'
+    data.events += [event('job_execution_started',p,1,source='backend_server',operation=op,jobType='analysis',attempts=2),
+        event('job_execution_recovered',p,2,source='backend_server',operation=op,jobType='analysis',attempts=2)]
+    assert operations(data)[0].state=='unknown'
+    data.events += [event('job_finished',p,2,source='backend_server',operation=op,jobType='analysis',outcome='failed',attempts=2)]
+    assert operations(data)[0].state=='failed'
+
+
+@pytest.mark.parametrize('registration_source,deleted_source', [
+    ('reconstructed_backend','backend_server'), ('backend_server','reconstructed_backend')])
+def test_cross_source_cohort_respects_deleted_outcome_history(registration_source,deleted_source):
+    data=snapshot([event('account_registered',uuid4(),source=registration_source)])
+    data.retention_floors={deleted_source:START+timedelta(days=5)}
+    for name in ('activation','onboarding','email_verification'):
+        value=row(calculate(options(population='account'),data),name,provenance=registration_source)
+        assert not value.available and value.value is None
+        assert 'retention' in value.reason.lower()
+
+
+@pytest.mark.parametrize('attempts',[None,0])
+def test_recovery_without_known_remaining_execution_stays_unknown(attempts):
+    from fitcheck_backend.metrics.calculations import operations
+    data=snapshot([event('job_execution_recovered',uuid4(),source='backend_server',operation=uuid4(),
+        jobType='analysis',attempts=attempts)])
+    assert operations(data)[0].state=='unknown'

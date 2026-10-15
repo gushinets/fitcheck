@@ -148,6 +148,7 @@ def test_later_backfill_receipt_can_report_exact_historical_facts(engine,storage
         MetricRepository(s).append(MetricEvent(eventId=uuid4(),name='account_registered',subjectKind='account',
             subjectId=owner.id,occurredAt=START,domainKey=f'account:{owner.id}:registered'),
             source='reconstructed_backend',environment='test',received_at=END+timedelta(days=1))
+        s.get(MetricCollection,('reconstructed_backend','test')).backfill_complete_through=END
     report=MetricReportService(engine,clock=lambda:END+timedelta(days=2)).build(opts(population='account'))
     assert metric(report,'registrations',provenance='reconstructed_backend').value==1
 
@@ -167,3 +168,43 @@ def test_website_attempt_without_terminal_keeps_pending_and_cohort_completeness_
     assert cost.coverage['unresolved_observed_operations']==1
     assert cost.denominator==0 and cost.value is None
     assert metric(report,'successful_operations',source='website_server',operation='analysis').value==0
+
+
+def historical_job(session, **state):
+    """Create the historical admission payload before its first INSERT."""
+    from fitcheck_backend.storage.models import Owner, User, Job
+    owner=Owner(kind='user')
+    session.add(owner)
+    session.flush()
+    session.add(User(owner_id=owner.id,normalized_email=f'{uuid4()}@example.com',password_hash='unused',created_at=START))
+    job=Job(owner_id=owner.id,type='analysis',created_at=START,input={},idempotency_key=str(uuid4()),
+        request_hash='a'*64,**state)
+    session.add(job)
+    session.flush()
+    return owner,job
+
+
+@pytest.mark.parametrize('scope',[None,'test'])
+@pytest.mark.parametrize('end_day,expected',[(1.5,'running'),(2.5,'queued')])
+def test_asof_job_state_uses_transitions_before_later_claim(engine,scope,end_day,expected):
+    from fitcheck_backend.metrics.lifecycle import append_domain_event
+    with unit_of_work(engine) as s:
+        owner,job=historical_job(s,started_at=START+timedelta(days=3),status='running',attempts=2,
+            lease_token=uuid4(),lease_expires_at=START+timedelta(days=4))
+        for name,day,attempt in [('job_admitted',0,0),('job_execution_started',1,1),('job_execution_recovered',2,1),('job_execution_started',3,2)]:
+            append_domain_event(s,name=name,owner_id=owner.id,domain_key=f'job:{job.id}:{name}:{day}',
+                occurred_at=START+timedelta(days=day),properties={'jobType':'analysis','attempts':attempt} | (
+                    {'executionToken':uuid4()} if name!='job_admitted' else {}),environment='test')
+    report=MetricReportService(engine,backend_database_environment=scope).build(ReportOptions(
+        start=START,end=START+timedelta(days=end_day),environment='test',population='account'))
+    assert metric(report,'pending_operations',source='backend_server',operation='analysis',state=expected).value==1
+
+
+def test_legacy_recovered_current_queue_and_unknown_history(engine):
+    with unit_of_work(engine) as s:
+        historical_job(s,started_at=START+timedelta(days=1),status='queued',
+            available_at=START+timedelta(days=2),attempts=1)
+    for day,state in [(3,'queued'),(1.5,'unknown')]:
+        report=MetricReportService(engine,backend_database_environment='test').build(ReportOptions(
+            start=START,end=START+timedelta(days=day),environment='test',population='account'))
+        assert metric(report,'pending_operations',source='backend_server',operation='analysis',state=state).value==1

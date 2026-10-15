@@ -85,6 +85,9 @@ class MetricCollection(Base):
     environment: Mapped[str] = mapped_column(String(20), primary_key=True)
     started_at: Mapped[datetime] = mapped_column(UTCDateTime)
     available_from: Mapped[datetime] = mapped_column(UTCDateTime)
+    retention_floor: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    backfill_target_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    backfill_complete_through: Mapped[datetime | None] = mapped_column(UTCDateTime)
     __table_args__ = (CheckConstraint(ENVIRONMENTS, name='environment'), CheckConstraint(SOURCES, name='source'))
 
 

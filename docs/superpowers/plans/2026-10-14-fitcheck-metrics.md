@@ -137,7 +137,7 @@ reuse the existing test server on 55464 if occupied. Frontend commands run at ro
 - [ ] Document configuration, formulas, collection limits, unavailable metrics, report/CSV commands, retention/deletion and current website/account identity limits. Document disabling collection rollback with preserved data.
 - [ ] Run full backend PG suite, migration drift/package checks and OpenAPI export drift; run `pnpm backend:types:check`, `pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm exec next build --webpack`, both backend Docker builds and `git diff --check`. Optional live tests remain skipped. Fix actual failures with regression evidence.
 - [ ] Obtain a fresh whole-branch review using chosen execution skill, fix verified Important/Critical findings in one RED→GREEN pass, record exact checks and decisions.
-- [ ] Commit, push dev and verify CI for exact runtime commit. Apply additive 0004_metrics and 0005_metrics_erasure through a verified migration runner (0001–0004 remain frozen); deploy collector with ingestion disabled, configure concrete bridge/cookie credentials using supported secret stores, then deploy website and enable ingestion. Observe Computer Use action-time approval if new access is granted; never output credentials or reuse OpenAI key as bridge key.
+- [ ] Commit, push dev and verify CI for exact runtime commit. Apply additive 0004_metrics, 0005_metrics_erasure and 0006_metrics_coverage through a verified migration runner (0001–0005 remain frozen); deploy collector with ingestion disabled, configure concrete bridge/cookie credentials using supported secret stores, then deploy website and enable ingestion. Observe Computer Use action-time approval if new access is granted; never output credentials or reuse OpenAI key as bridge key.
 - [ ] Verify schema head and existing API/worker health. Submit a synthetic non-PII event in an explicitly excluded test scope through the real bridge, run report from operator container, assert received/deduplicated once and no public report access. Clean only the named synthetic scope; do not reset dev data. Verify one real non-paid website observation in development scope and its aggregate visibility. Record missing live-model coverage.
 - [ ] Save exact deployment/CI/metric report evidence, mark this plan complete and commit/push clean documentation. Continue the OpenAI plan only after this verification; do not start unrelated backlog work yet.
 
@@ -152,3 +152,19 @@ ReportOptions and MetricRow names throughout. Each Review Focus case has a named
 regression in its owning task. No billing/status/survey UI or ANY-653 integration
 is introduced. Each runtime deliverable has its own failing/passing verification
 and commit gate.
+
+## Whole-branch coverage correction (2026-10-15)
+
+Approved additive `0006_metrics_coverage` introduces nullable retention floor, fixed
+backfill target and proven complete-through watermark. Reconstructed report periods
+need completed coverage through their exclusive end; bounded partial batches cannot
+turn missing outcomes into zero. Cleanup floors remain monotonic across late facts
+and later drains. Maintenance is serialized before data locks; live owner-before-job
+and owner-before-fact ordering remains intact. Registration-source backend cohorts
+may consume exact same-account outcomes from both backend sources with explicit
+coverage provenance. Reconstructed viewed retention remains unavailable.
+
+Ordered authoritative job transitions establish historical pending state; recovery
+queues the next execution and exhaustion requires its terminal fact. Mutable latest
+domain claim timestamps cannot override the journal; unsupported legacy history is
+unknown. Frozen migrations 0004/0005 are unchanged; OpenAI pricing uses next-free 0007.

@@ -11,7 +11,7 @@ from ..storage.database import create_engine
 from .backfill import backfill_metrics
 from .retention import cleanup_metrics, valid_limit
 from .report import MetricReportService
-from .report_types import ReportOptions
+from .report_types import ReportOptions, serializable
 from .csv_export import write_csv
 
 
@@ -69,7 +69,7 @@ def main(argv=None):
             else:
                 render(sys.stdout)
         elif args.command == 'backfill':
-            print(json.dumps(asdict(backfill_metrics(engine, environment=args.environment, limit=args.limit)), sort_keys=True))
+            print(json.dumps(serializable(asdict(backfill_metrics(engine, environment=args.environment, limit=args.limit))), sort_keys=True))
         else:
             print(json.dumps(asdict(cleanup_metrics(engine, now=datetime.now(timezone.utc), dry_run=not args.execute, limit=args.limit)), sort_keys=True))
         return 0
