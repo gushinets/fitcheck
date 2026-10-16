@@ -80,10 +80,16 @@ def test_disabled_admission_preserves_existing_get(profile_http):
     assert c.get('/v1/jobs/'+response.json()['jobId']).status_code == 200
 
 
-def test_api_jobs_work_without_provider_key(profile_http):
+def test_api_admits_openai_versions_without_provider_key(profile_http):
     a,c,r,issued,h = enabled(profile_http)
-    assert c.app.state.settings.deepseek_api_key is None
-    assert c.post('/v1/analysis-jobs',json=body(),headers=h).status_code == 202
+    assert c.app.state.settings.open_ai_key is None
+    response = c.post('/v1/analysis-jobs',json=body(),headers=h)
+    assert response.status_code == 202
+    with unit_of_work(a.engine) as s:
+        versions = s.get(Job, UUID(response.json()['jobId'])).input['versions']
+        assert versions['provider'] == 'openai'
+        assert versions['model'] == 'gpt-6-luna'
+        assert versions['policyVersion'] == 'fitcheck.llm.policy.v2'
 
 
 def test_job_get_contains_committed_result(profile_http):
@@ -97,7 +103,7 @@ def test_job_get_contains_committed_result(profile_http):
     assert response.status_code == 202
     lease = JobQueue(a.engine).claim()
     snapshot = AnalysisSnapshot(profileRevision='1',profile=DATA['profile'],vacancy=DATA['vacancy'],locale='en',
-        promptVersion='fitcheck.analysis.prompt.v1',schemaVersion='fitcheck.analysis.v1',policyVersion='fitcheck.llm.policy.v1')
+        promptVersion='fitcheck.analysis.prompt.v1',schemaVersion='fitcheck.analysis.v1',policyVersion='fitcheck.llm.policy.v2')
     analysis_id = JobPublication(a.engine).succeed_analysis(lease,AnalysisResult(FitAnalysis.model_validate(DATA['analysis']),snapshot))
     result = c.get('/v1/jobs/'+response.json()['jobId'])
     assert result.status_code == 200 and result.json()['analysisId'] == str(analysis_id)

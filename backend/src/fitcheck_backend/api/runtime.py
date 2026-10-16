@@ -35,7 +35,7 @@ class AuthRuntime:
         self.deletion = AccountDeletionService(self.engine, passwords, self.limiter, clock, metrics_environment=metrics_environment)
         self.profiles = ProfileService(self.engine, clock, metrics_environment=metrics_environment)
         self.extraction = ExtractionService(self.limiter)
-        self.jobs = JobAdmission(self.engine,self.limiter,metrics_environment=metrics_environment)
+        self.jobs = JobAdmission(self.engine,self.limiter,model=settings.open_ai_model,metrics_environment=metrics_environment)
         self.job_status = JobStatusReader(self.engine)
 
     def close(self):

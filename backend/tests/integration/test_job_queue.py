@@ -93,7 +93,7 @@ def test_recovery_preserves_succeeded_provider_usage(engine):
     lease = q.claim()
     with unit_of_work(engine) as s:
         call = ProviderCall(owner_id=row.owner_id, job_id=row.id, execution_token=lease.execution_token,
-            provider='deepseek', model='test', operation='analysis', attempt=1, state='succeeded',
+            provider='openai', model='gpt-6-luna', operation='analysis', attempt=1, state='succeeded',
             cost=Decimal('0.02'), currency='USD', input_tokens=12)
         s.add(call); s.flush(); call_id = call.id
     expire(engine, row.id); q.recover_expired()
@@ -110,7 +110,7 @@ def test_recovery_scopes_started_calls_to_old_token(engine):
     with unit_of_work(engine) as s:
         for token in (lease.execution_token, other_token):
             s.add(ProviderCall(owner_id=row.owner_id, job_id=row.id, execution_token=token,
-                provider='deepseek', model='test', operation='analysis', attempt=1, state='started'))
+                provider='openai', model='gpt-6-luna', operation='analysis', attempt=1, state='started'))
     expire(engine, row.id); q.recover_expired()
     with unit_of_work(engine) as s:
         calls = {c.execution_token: c for c in s.scalars(select(ProviderCall))}

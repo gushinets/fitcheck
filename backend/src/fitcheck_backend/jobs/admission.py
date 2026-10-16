@@ -15,7 +15,9 @@ from ..metrics.lifecycle import append_domain_event, job_key
 
 
 class JobAdmission:
-    def __init__(self, engine, limiter, *, metrics_environment=None):
+    def __init__(self, engine, limiter, *, model='gpt-6-luna', metrics_environment=None):
+        from ..llm.policy import resolve_model
+        self.model = resolve_model(model)
         self.engine, self.limiter = engine, limiter
         self.metrics_environment = metrics_environment
 
@@ -65,10 +67,10 @@ class JobAdmission:
                         raise JobError('not_found')
                     envelope = AnalysisEnvelope(envelopeVersion=1, request=request,
                         profile=profile.profile, memory=get_calibration(s, owner_id),
-                        versions=execution_versions(kind))
+                        versions=execution_versions(kind, model=self.model))
                 else:
                     envelope = SuggestionsEnvelope(envelopeVersion=1, request=request,
-                        versions=execution_versions(kind))
+                        versions=execution_versions(kind, model=self.model))
                 job = Job(owner_id=owner_id, type=kind, idempotency_key=key,
                     request_hash=digest, input=envelope.model_dump(mode='json', by_alias=True))
                 s.add(job); s.flush()

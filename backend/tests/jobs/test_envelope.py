@@ -1,3 +1,5 @@
+import asyncio
+from types import SimpleNamespace
 from copy import deepcopy
 
 import pytest
@@ -49,3 +51,12 @@ def test_extra_envelope_fields_rejected():
     from fitcheck_backend.jobs.errors import JobError
     with pytest.raises(JobError):
         decode_envelope('analysis', {**payload(), 'secretOverride': True})
+
+def test_old_deepseek_envelope_rejected_before_http():
+    from fitcheck_backend.jobs.execution import FrozenJobExecutor
+    from fitcheck_backend.jobs.errors import JobError
+    original = payload()
+    frozen = deepcopy(original)
+    with pytest.raises(JobError):
+        asyncio.run(FrozenJobExecutor(SimpleNamespace()).execute(SimpleNamespace(type='analysis', input=frozen)))
+    assert frozen == original

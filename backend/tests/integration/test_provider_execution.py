@@ -15,7 +15,7 @@ pytestmark = pytest.mark.integration
 
 def attempt(owner_id, job_id, token=None):
     return ProviderAttempt(owner_id, job_id, uuid4(), 1, 1, 1, 'analysis.generate',
-        'deepseek', 'deepseek-v4-flash', 'prompt.v1', 'schema.v1', 'policy.v1', execution_token=token)
+        'openai', 'gpt-6-luna', 'prompt.v1', 'schema.v1', 'fitcheck.llm.policy.v2', execution_token=token)
 
 
 def test_execution_token_is_nullable_for_old_calls(engine, storage_factory):

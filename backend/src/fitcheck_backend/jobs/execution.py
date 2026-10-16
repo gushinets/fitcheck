@@ -5,12 +5,14 @@ from .envelope import decode_envelope, validate_supported_versions, AnalysisEnve
 
 
 class FrozenJobExecutor:
-    def __init__(self, runtime):
+    def __init__(self, runtime, *, model='gpt-6-luna'):
+        from ..llm.policy import resolve_model
+        self.model = resolve_model(model)
         self.runtime = runtime
 
     async def execute(self, lease):
         envelope = decode_envelope(lease.type, lease.input)
-        validate_supported_versions(envelope)
+        validate_supported_versions(envelope, model=self.model)
         service = self.runtime.analysis if isinstance(envelope, AnalysisEnvelope) else self.runtime.suggestions
         context = operation_context(lease.owner_id, lease.job_id, service.policy, lease.execution_token)
         context.budget.remaining()

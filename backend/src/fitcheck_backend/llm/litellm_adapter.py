@@ -8,14 +8,14 @@ from datetime import datetime, UTC
 from email.utils import parsedate_to_datetime
 
 import httpx
+from openai import AsyncOpenAI
 
 # Do not download pricing/catalog data or enable external telemetry during import.
 os.environ['LITELLM_LOCAL_MODEL_COST_MAP'] = 'True'
 import litellm
-from litellm.llms.custom_httpx.http_handler import AsyncHTTPHandler
 
 from .errors import LlmError, ProviderFailure
-from .policy import ProviderPolicy
+from .policy import ProviderPolicy, resolve_model
 from .types import ProviderReply
 
 litellm.telemetry = False
@@ -35,18 +35,24 @@ class LiteLlmAdapter:
         self._api_key = api_key
         self._sends = ContextVar('fitcheck_provider_sends', default=None)
         self._retry_after = ContextVar('fitcheck_provider_retry_after', default=None)
-        self.handler = AsyncHTTPHandler(transport=transport or httpx.AsyncHTTPTransport(retries=0),
+        self.client = httpx.AsyncClient(transport=transport or httpx.AsyncHTTPTransport(retries=0),
             follow_redirects=False, event_hooks={'request':[self._guard_send], 'response':[self._capture_response]})
-        self.client = self.handler.client
+        self._sdk = AsyncOpenAI(api_key=api_key or 'unconfigured', base_url='https://api.openai.com/v1',
+            http_client=self.client, max_retries=0)
         self._closed = False
 
     async def _guard_send(self, request):
         sends = self._sends.get()
-        if sends is None or sends >= 1:
+        if sends is None or sends[0] >= 1:
             raise RuntimeError('Hidden provider retry blocked')
-        if request.url.scheme != 'https' or request.url.host != 'api.deepseek.com':
+        url = request.url
+        if (url.scheme != 'https' or url.host != 'api.openai.com' or url.port not in (None, 443)
+                or url.raw_path != b'/v1/chat/completions' or url.userinfo or url.fragment
+                or request.method != 'POST'):
             raise RuntimeError('Provider destination blocked')
-        self._sends.set(sends + 1)
+        # Child SDK tasks inherit this same per-completion counter, not a copy
+        # of an integer which could independently admit another physical send.
+        sends[0] += 1
 
     async def _capture_response(self, response):
         # LiteLLM can discard headers while mapping provider exceptions.
@@ -69,7 +75,7 @@ class LiteLlmAdapter:
 
     async def aclose(self):
         self._closed = True
-        await self.handler.close()
+        await self._sdk.close()
 
     def available(self) -> bool:
         return bool(self._api_key) and not self._closed
@@ -78,14 +84,21 @@ class LiteLlmAdapter:
             max_tokens: int, timeout: float) -> ProviderReply:
         if not self._api_key or self._closed:
             raise LlmError('service_unavailable')
-        token = self._sends.set(0)
+        try:
+            resolve_model(policy.model)
+            if (policy.provider != 'openai' or policy.gateway_model != f'openai/{policy.model}'
+                    or policy.policy_version != 'fitcheck.llm.policy.v2'):
+                raise ValueError('Unsupported provider policy')
+        except ValueError:
+            raise LlmError('service_unavailable') from None
+        token = self._sends.set([0])
         retry_token = self._retry_after.set(None)
         try:
             response = await litellm.acompletion(model=policy.gateway_model, api_key=self._api_key,
-                api_base='https://api.deepseek.com', messages=messages, temperature=0,
-                max_tokens=max_tokens, response_format={'type':'json_object'},
-                extra_body={'thinking':{'type':'disabled'}}, num_retries=0, max_retries=0,
-                timeout=timeout, client=self.handler, drop_params=False, caching=False,
+                api_base='https://api.openai.com/v1', messages=messages, reasoning_effort='none',
+                max_completion_tokens=max_tokens, response_format={'type':'json_object'},
+                num_retries=0, max_retries=0,
+                timeout=timeout, client=self._sdk, drop_params=False, caching=False,
                 mock_response=None, no_log=True)
             content = response.choices[0].message.content or ''
             usage = getattr(response, 'usage', None)

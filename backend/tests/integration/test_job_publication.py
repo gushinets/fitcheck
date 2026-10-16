@@ -25,7 +25,7 @@ def prepared(engine, auth_components):
         request=request(),idempotency_key='one',client_ip='127.0.0.1')
     lease = JobQueue(engine).claim()
     snapshot = AnalysisSnapshot(profileRevision='1',profile=DATA['profile'],vacancy=DATA['vacancy'],locale='en',
-        promptVersion='fitcheck.analysis.prompt.v1',schemaVersion='fitcheck.analysis.v1',policyVersion='fitcheck.llm.policy.v1')
+        promptVersion='fitcheck.analysis.prompt.v1',schemaVersion='fitcheck.analysis.v1',policyVersion='fitcheck.llm.policy.v2')
     return lease, AnalysisResult(FitAnalysis.model_validate(DATA['analysis']),snapshot)
 
 
@@ -132,7 +132,7 @@ def test_failure_publication_reconciles_stranded_started_call(engine,auth_compon
     lease,_ = prepared(engine,auth_components)
     with unit_of_work(engine) as s:
         call = ProviderCall(owner_id=lease.owner_id,job_id=lease.job_id,execution_token=lease.execution_token,
-            provider='deepseek',model='test',operation='analysis.generate',attempt=1,state='started')
+            provider='openai',model='gpt-6-luna',operation='analysis.generate',attempt=1,state='started')
         s.add(call); s.flush(); call_id = call.id
     assert publication(engine).fail(lease,ErrorBody(code='timeout',message='Timeout',requestId=str(lease.job_id)))
     with unit_of_work(engine) as s:

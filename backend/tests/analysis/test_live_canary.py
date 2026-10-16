@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 
 
-@pytest.mark.skipif(os.environ.get('FITCHECK_RUN_LLM_CANARY')!='1' or not os.environ.get('FITCHECK_DEEPSEEK_API_KEY'),
+@pytest.mark.skipif(os.environ.get('FITCHECK_RUN_LLM_CANARY')!='1' or not os.environ.get('OPEN_AI_KEY'),
     reason='Live LLM canary requires explicit opt-in and provider key')
 def test_live_anonymized_analysis_canary():
     from fitcheck_backend.llm.litellm_adapter import LiteLlmAdapter
@@ -23,7 +23,7 @@ def test_live_anonymized_analysis_canary():
             return key
         def finish(self,key,**fields): self.rows[key].update(fields)
     async def run():
-        adapter=LiteLlmAdapter(os.environ['FITCHECK_DEEPSEEK_API_KEY'])
+        adapter=LiteLlmAdapter(os.environ['OPEN_AI_KEY'])
         policy=analysis_policy()
         context=OperationContext(uuid4(),None,uuid4(),policy,CallBudget(8,time.monotonic()+120,time.monotonic))
         ledger=CanaryLedger()

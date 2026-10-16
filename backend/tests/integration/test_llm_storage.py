@@ -15,8 +15,8 @@ def attempt(owner_id, job_id=None):
     from fitcheck_backend.storage.provider_repository import ProviderAttempt
     return ProviderAttempt(owner_id=owner_id, job_id=job_id, operation_id=uuid4(),
         physical_attempt=1, semantic_attempt=1, transport_attempt=1, operation='analysis.generate',
-        provider='deepseek', model='deepseek-v4-flash', prompt_version='prompt.v1',
-        schema_version='fitcheck.analysis.v1', policy_version='policy.v1')
+        provider='openai', model='gpt-6-luna', prompt_version='prompt.v1',
+        schema_version='fitcheck.analysis.v1', policy_version='fitcheck.llm.policy.v2')
 
 
 def test_attempt_commits_survive_caller_rollback(engine, storage_factory):
@@ -33,7 +33,7 @@ def test_attempt_commits_survive_caller_rollback(engine, storage_factory):
     with unit_of_work(engine) as s:
         row = s.get(ProviderCall, call_id)
         assert (row.state, row.input_tokens, row.output_tokens, row.latency_ms) == ('failed', 12, 4, 31)
-        assert row.policy_version == 'policy.v1' and row.prompt_version == 'prompt.v1'
+        assert row.policy_version == 'fitcheck.llm.policy.v2' and row.prompt_version == 'prompt.v1'
         assert row.schema_version == 'fitcheck.analysis.v1'
         assert row.semantic_attempt == row.transport_attempt == row.attempt == 1
         assert row.cost == Decimal('0.001') and row.finished_at is not None

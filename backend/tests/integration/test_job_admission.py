@@ -67,9 +67,9 @@ def test_duplicate_ignores_changed_profile_memory_policy(engine, auth_components
         update_profile(s, owner.id, 1, FreelancerProfile.model_validate({**DATA['profile'], 'specialization': 'Changed'}))
         s.delete(s.get(Profile, owner.id))
     # Duplicate must not prepare new inputs or consume a new rate token.
-    monkeypatch.setattr(value.limiter, 'enforce', lambda *_: pytest.fail('duplicate consumed rate'))
-    monkeypatch.setattr('fitcheck_backend.jobs.admission.get_calibration', lambda *_: pytest.fail('duplicate refreshed memory'))
-    monkeypatch.setattr('fitcheck_backend.jobs.admission.execution_versions', lambda *_: pytest.fail('duplicate refreshed policy'))
+    monkeypatch.setattr(value.limiter, 'enforce', lambda *_, **__: pytest.fail('duplicate consumed rate'))
+    monkeypatch.setattr('fitcheck_backend.jobs.admission.get_calibration', lambda *_, **__: pytest.fail('duplicate refreshed memory'))
+    monkeypatch.setattr('fitcheck_backend.jobs.admission.execution_versions', lambda *_, **__: pytest.fail('duplicate refreshed policy'))
     assert start(value, owner).job_id == original.job_id
     with unit_of_work(engine) as s:
         assert s.get(Job, original.job_id).input == saved

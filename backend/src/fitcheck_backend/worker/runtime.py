@@ -22,7 +22,7 @@ class WorkerRuntime:
 
     async def start(self):
         self.health.clear()
-        if self.settings.deepseek_api_key is None or not self.settings.deepseek_api_key.get_secret_value().strip():
+        if self.settings.open_ai_key is None or not self.settings.open_ai_key.get_secret_value().strip():
             raise ValueError('Worker provider configuration unavailable')
         asyncio.get_running_loop().set_default_executor(ThreadPoolExecutor(max_workers=4,thread_name_prefix='fitcheck-db'))
         await asyncio.to_thread(check_schema,self.settings)
@@ -30,7 +30,7 @@ class WorkerRuntime:
         self.llm = LlmRuntime(self.settings,self.engine)
         metrics_environment = self.settings.metrics_environment if self.settings.metrics_enabled else None
         self.runner = WorkerRunner(JobQueue(self.engine,lease_seconds=self.worker_settings.lease_seconds,metrics_environment=metrics_environment),
-            FrozenJobExecutor(self.llm),JobPublication(self.engine,metrics_environment=metrics_environment),self.worker_settings,self.health)
+            FrozenJobExecutor(self.llm,model=self.settings.open_ai_model),JobPublication(self.engine,metrics_environment=metrics_environment),self.worker_settings,self.health)
         self.health.mark()
         return self.runner
 

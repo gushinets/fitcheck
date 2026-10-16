@@ -7,7 +7,7 @@ from fitcheck_backend.api.app import create_app
 
 def test_health_without_database_or_provider_secrets(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
-    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.delenv("OPEN_AI_KEY", raising=False)
     with TestClient(create_app(Settings())) as client:
         for path in ["/health/live", "/health/ready"]:
             response = client.get(path)

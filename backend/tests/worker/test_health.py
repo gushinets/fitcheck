@@ -25,7 +25,7 @@ def test_missing_key_startup_removes_previous_healthy_marker(tmp_path):
     from fitcheck_backend.worker.health import healthy
     from fitcheck_backend.config import Settings
     path = tmp_path/'health.json'
-    runtime = WorkerRuntime(Settings(_env_prefix='FITCHECK_WORKER_TEST_EMPTY_',deepseek_api_key=None),
+    runtime = WorkerRuntime(Settings(_env_prefix='FITCHECK_WORKER_TEST_EMPTY_',open_ai_key=None),
         WorkerSettings(health_path=str(path)))
     runtime.health.mark()
     assert healthy(path)

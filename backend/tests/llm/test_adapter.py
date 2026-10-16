@@ -7,8 +7,8 @@ from fitcheck_backend.config import Settings
 
 
 def test_key_configuration_is_optional_and_redacted():
-    assert Settings().deepseek_api_key is None
-    settings = Settings(deepseek_api_key='private-test-key')
+    assert Settings().open_ai_key is None
+    settings = Settings(open_ai_key='private-test-key')
     assert 'private-test-key' not in repr(settings)
 
 
@@ -38,10 +38,10 @@ def test_real_sdk_success_usage_and_close():
     def handler(request):
         body=json.loads(request.content)
         requests.append(body)
-        assert request.url.host=='api.deepseek.com'
-        assert body['model']=='deepseek-v4-flash' and body['response_format']=={'type':'json_object'}
-        assert body['thinking']=={'type':'disabled'} and body['max_tokens']==1200
-        return httpx.Response(200,json={'id':'test','object':'chat.completion','created':1,'model':'deepseek-v4-flash',
+        assert request.url.host=='api.openai.com'
+        assert body['model']=='gpt-6-luna' and body['response_format']=={'type':'json_object'}
+        assert body['reasoning_effort']=='none' and body['max_completion_tokens']==1200
+        return httpx.Response(200,json={'id':'test','object':'chat.completion','created':1,'model':'gpt-6-luna',
             'choices':[{'index':0,'message':{'role':'assistant','content':'{"ok":true}'},'finish_reason':'stop'}],
             'usage':{'prompt_tokens':12,'completion_tokens':4,'total_tokens':16}})
     async def run():
@@ -85,7 +85,7 @@ def test_real_sdk_gateway_respects_wait_and_remaining_deadline(deadline,want_cal
         requests.append(request)
         if len(requests)==1:
             return httpx.Response(429,headers={'Retry-After':'3'},json={'error':{'message':'retry later'}})
-        return httpx.Response(200,json={'id':'test','object':'chat.completion','created':1,'model':'deepseek-v4-flash',
+        return httpx.Response(200,json={'id':'test','object':'chat.completion','created':1,'model':'gpt-6-luna',
             'choices':[{'index':0,'message':{'role':'assistant','content':'{}'},'finish_reason':'stop'}],
             'usage':{'prompt_tokens':2,'completion_tokens':1,'total_tokens':3}})
     async def sleep(delay): delays.append(delay);now[0]+=delay

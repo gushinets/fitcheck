@@ -55,7 +55,7 @@ def test_service_uses_revision_memory_and_corrected_vacancy_without_publishing(p
     assert result.snapshot.profile.preferred_rate==50 and result.snapshot.profile_revision=='1'
     assert result.snapshot.vacancy==corrected and result.analysis.verdict_threshold==70
     assert result.snapshot.prompt_version=='fitcheck.analysis.prompt.v1'
-    assert result.snapshot.policy_version=='fitcheck.llm.policy.v1'
+    assert result.snapshot.policy_version=='fitcheck.llm.policy.v2'
     request=next(m['content'] for m in adapter.calls[0]['messages'] if m['role']=='user')
     assert 'Prefer small projects' in request and 'corrected_score' in request
     with unit_of_work(a.engine) as s:

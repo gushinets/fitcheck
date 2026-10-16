@@ -50,3 +50,5 @@ def test_frozen_execution_releases_db_during_http_and_recovery_gets_new_operatio
         rows = s.scalars(select(ProviderCall)).all()
         assert len(rows) == 4 and len({r.request_key.split(':')[0] for r in rows}) == 2
         assert {r.execution_token for r in rows} == {one.execution_token,two.execution_token}
+        assert {(r.provider, r.model, r.policy_version) for r in rows} == {
+            ('openai', 'gpt-6-luna', 'fitcheck.llm.policy.v2')}

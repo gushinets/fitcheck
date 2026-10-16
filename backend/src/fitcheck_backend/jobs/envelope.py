@@ -34,10 +34,10 @@ class SuggestionsEnvelope(DTO):
     versions: ExecutionVersions
 
 
-def execution_versions(job_type: str) -> ExecutionVersions:
+def execution_versions(job_type: str, *, model: str = 'gpt-6-luna') -> ExecutionVersions:
     if job_type not in {'analysis', 'skill_suggestions'}:
         raise JobError('invalid_request')
-    policy = analysis_policy() if job_type == 'analysis' else suggestion_policy()
+    policy = analysis_policy(model) if job_type == 'analysis' else suggestion_policy(model)
     return ExecutionVersions(provider=policy.provider, model=policy.model,
         promptVersion=PROMPT_VERSION if job_type == 'analysis' else SKILLS_PROMPT_VERSION,
         schemaVersion=policy.schema_version, policyVersion=policy.policy_version,
@@ -55,7 +55,7 @@ def decode_envelope(job_type: str, payload: dict) -> AnalysisEnvelope | Suggesti
         raise JobError('invalid_request') from None
 
 
-def validate_supported_versions(envelope: AnalysisEnvelope | SuggestionsEnvelope) -> None:
+def validate_supported_versions(envelope: AnalysisEnvelope | SuggestionsEnvelope, *, model: str = 'gpt-6-luna') -> None:
     job_type = 'analysis' if isinstance(envelope, AnalysisEnvelope) else 'skill_suggestions'
-    if envelope.versions != execution_versions(job_type):
+    if envelope.versions != execution_versions(job_type, model=model):
         raise JobError('service_unavailable')

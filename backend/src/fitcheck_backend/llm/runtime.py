@@ -12,10 +12,10 @@ from .policy import analysis_policy, suggestion_policy
 class LlmRuntime:
     """Worker-ready services; owns provider clients, not the injected DB engine."""
     def __init__(self, settings: Settings, engine):
-        key = settings.deepseek_api_key.get_secret_value() if settings.deepseek_api_key else None
+        key = settings.open_ai_key.get_secret_value() if settings.open_ai_key else None
         self.gateway = ProviderGateway(LiteLlmAdapter(key),ProviderLedger(engine))
-        self.analysis = AnalysisService(engine,AnalysisExecutor(self.gateway),analysis_policy())
-        self.suggestions = SkillSuggestionService(engine,SuggestionExecutor(self.gateway),suggestion_policy())
+        self.analysis = AnalysisService(engine,AnalysisExecutor(self.gateway),analysis_policy(settings.open_ai_model))
+        self.suggestions = SkillSuggestionService(engine,SuggestionExecutor(self.gateway),suggestion_policy(settings.open_ai_model))
 
     async def aclose(self):
         await self.gateway.adapter.aclose()

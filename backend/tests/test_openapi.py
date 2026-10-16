@@ -72,7 +72,7 @@ def test_security_idempotency_and_pagination():
 def test_export_is_deterministic_and_config_independent(monkeypatch):
     document = export_openapi(create_app(Settings()))
     monkeypatch.setenv('FITCHECK_PORT', 'invalid')
-    monkeypatch.setenv('DEEPSEEK_API_KEY','secret-should-not-appear')
+    monkeypatch.setenv('OPEN_AI_KEY','secret-should-not-appear')
     assert export_openapi(create_app(Settings(port=8000))) == document
     assert 'secret-should-not-appear' not in json.dumps(document)
 
