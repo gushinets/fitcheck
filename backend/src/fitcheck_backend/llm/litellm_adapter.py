@@ -30,6 +30,18 @@ litellm.failure_callback = []
 for name in ('LiteLLM', 'LiteLLM Router', 'LiteLLM Proxy'):
     logging.getLogger(name).disabled = True
 
+# OPENAI_LOG can enable SDK payload dumps independently of LiteLLM's no_log.
+# Disable existing SDK children too: a parent's disabled flag does not filter
+# propagated records or a child's own handlers. Contain future children at the
+# SDK root, including lastResort handling, without changing application logs.
+_sdk_logger = logging.getLogger('openai')
+_sdk_logger.handlers = [logging.NullHandler()]
+_sdk_logger.propagate = False
+_sdk_logger.disabled = True
+for name in tuple(logging.root.manager.loggerDict):
+    if name.startswith('openai.'):
+        logging.getLogger(name).disabled = True
+
 
 class LiteLlmAdapter:
     def __init__(self, api_key: str | None, *, transport: httpx.AsyncBaseTransport | None = None):

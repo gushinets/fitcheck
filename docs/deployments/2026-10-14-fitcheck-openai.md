@@ -71,8 +71,12 @@ historical deployment records and accounting rows remain unchanged.
    all three switches ON. Push reviewed `dev`, await CI success at the exact
    runtime SHA, and record the run URL. No fleet switch on a failed/stale CI run.
 2. On the existing API, set `FITCHECK_JOBS_ENABLED=false` and verify admission is
-   disabled while authenticated GET remains available. Preserve auth and metrics
-   state. Inspect **all nonterminal jobs**, grouped by frozen envelope provider,
+   disabled while authenticated GET remains available. Apply the environment
+   change using Dokploy **Reload**, retaining the pinned pre-migration API
+   runtime/image; record and verify the same old SHA/image before and after.
+   Do not use a deploy/rebuild of the newly pushed branch to disable admission.
+   If Reload cannot retain that pinned runtime, stop until it can be applied
+   safely. Preserve auth and metrics state. Inspect **all nonterminal jobs**, grouped by frozen envelope provider,
    model and policy version, with counts and timestamps only. Treat legacy or
    missing envelopes as incompatible until resolved; do not output task/profile
    payloads. Let the existing matching DeepSeek worker drain. Reinspect after
@@ -146,15 +150,33 @@ costs retain estimated/unversioned provenance. A downgrade refuses lossy narrowi
 
 Disable new admission before any rollback; disable metrics ingestion/collection
 if needed while preserving its stored observations. Inspect all nonterminal
-frozen versions again. Drain OpenAI jobs with the compatible OpenAI worker/key
-before restoring a matched previous website/API/worker fleet. If a drain cannot
-finish, retain the matching fleet/key and keep admission off; do not restore an
-old worker over incompatible queued OpenAI jobs. The same rule applies to old
-DeepSeek jobs during forward rollout. Restore each service's provider/model,
-registry, origins and metrics/startup configuration consistently. Retain GET,
-additive schema 0007, all domain/telemetry rows, immutable envelopes and costs.
-No database reset, job deletion, historical rewrite or populated-table downgrade
-is a rollback strategy. Record the final autodeploy state explicitly.
+frozen versions again. Before migration 0007, an abort retains the pinned old
+API/worker runtime and DeepSeek key against the unchanged pre-migration schema.
+If old jobs cannot drain, keep this matching fleet/key usable and admission off;
+do not proceed to migration. Re-enable only after verifying that retained fleet's
+schema, health and frozen-version compatibility.
+
+After 0007 is applied, **do not restore the old exact-head-0006 backend images**.
+Their API readiness requires its packaged schema head exactly, and their worker
+startup schema check cannot accept 0007. An additive migration does not make
+those images compatible. Keep admission disabled and retain the reviewed current
+0007-compatible API/worker runtime; if it is not running yet, start that reviewed
+compatible runtime and repair forward. Preserve authenticated GET on the
+schema-compatible API where healthy. Recovery is less immediate, and job
+admission can remain unavailable while repair is completed.
+
+A provider rollback after 0007 requires a separately reviewed artifact carrying
+0007 and the intended provider registry/transport. Validate its startup/schema
+checks against a disposable 0007 DB and compatibility with all intended frozen
+jobs before use. No such old-provider artifact is prepared or claimed usable
+here. Drain OpenAI jobs with the matching OpenAI worker/key before switching to
+any otherwise compatible artifact; if draining cannot finish, retain the matching
+runtime/key and admission off. The same frozen-job rule applies to DeepSeek work
+during forward rollout. Restore provider/model, registry, origins and
+metrics/startup configuration consistently only within a reviewed compatible
+fleet. Preserve 0007, all domain/telemetry rows, immutable envelopes and costs.
+Never bypass schema gates, reset/downgrade the DB, delete jobs or rewrite
+historical work to make old images boot. Record the final autodeploy state explicitly.
 
 ## External evidence still required
 

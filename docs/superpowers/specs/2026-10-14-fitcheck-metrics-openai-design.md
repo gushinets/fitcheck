@@ -281,8 +281,11 @@ exclude and remove that synthetic test partition afterward. Ordinary local or
 deployed telemetry verification makes no paid provider call.
 
 Before provider migration, disable new backend admission, inspect all nonterminal
-DeepSeek jobs and allow the current worker to drain them. If any remain, keep the
-old worker/key usable; do not discard jobs or reinterpret their frozen envelopes.
+DeepSeek jobs and allow the current worker to drain them. Apply admission-off
+using Reload on the existing API, retaining and verifying its pinned
+pre-migration SHA/image rather than rebuilding the newly pushed branch. If any
+jobs remain before 0007, abort and keep the old matching runtime/worker/key usable
+against its unchanged schema; do not discard jobs or reinterpret their frozen envelopes.
 Then deploy the OpenAI worker and admission registry consistently, verify schema,
 startup/model configuration and health, and re-enable admission. Switch current
 website routes and verify their configuration without printing keys. Configure
@@ -298,9 +301,16 @@ Merge/push and deployment follow existing user authorization. Do not send messag
 or Linear comments without a separate request.
 
 Rollback disables ingestion/new admission, preserves stored telemetry and domain
-data, and restores the matched website/API/worker provider configuration after
-draining incompatible jobs. Do not reset the database or downgrade populated
-tables. Return to the existing backlog only after this work's required checks
+data, and drains incompatible jobs with their matching worker/key. After 0007,
+old exact-head-0006 backend images cannot be restored directly: API readiness and
+worker startup schema gates reject that newer schema. Keep admission off and
+retain or start the reviewed current 0007-compatible runtime, then repair forward.
+A provider rollback requires a separately reviewed artifact supporting schema
+0007 and the intended frozen provider registry/transport, validated against a
+disposable 0007 DB and the intended jobs; none is prepared here. Recovery is less
+immediate and job admission may remain unavailable during repair. Retain 0007,
+all stored rows, envelopes and costs; never bypass schema gates, downgrade/reset
+the database, delete jobs or rewrite frozen work. Return to the existing backlog only after this work's required checks
 and deployment evidence are complete.
 
 ## Official model references

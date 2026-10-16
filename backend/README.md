@@ -136,6 +136,10 @@ backoff/Retry-After must fit the remaining time. Output caps are 1200 tokens for
 generation, 1000 for audit and 500 for suggestions. SDK retries/fallback are disabled;
 a per-attempt HTTP-send guard also blocks SDK-internal extra sends. Clients verify
 TLS, permit only the fixed provider destination and do not follow redirects.
+The Python provider boundary suppresses LiteLLM and OpenAI SDK payload logging,
+including SDK child loggers enabled by `OPENAI_LOG=debug`. FitCheck operational
+request, worker health and failure logs remain enabled; do not log provider
+messages, output, raw errors or keys for diagnostics.
 
 Basic skills are not professional strengths. The model selects unique allowed
 strength IDs; the server renders text and provenance. Currency comparisons retain
@@ -311,10 +315,22 @@ pushing provider changes; restore them only after controlled rollout evidence.
 Old DeepSeek job envelopes and ledger records remain immutable. Never send an
 old frozen job through the new OpenAI registry.
 
-Rollback: disable new admission, drain incompatible work with its matching worker
-and key before restoring a matched website/API/worker provider fleet; keep GET
-and additive schema/data. If draining cannot finish, stop the switch and retain
-the compatible fleet/key. Do not downgrade populated provider token columns or reset a DB.
+Before migration, disable admission on the existing API using Dokploy **Reload**
+with its pinned pre-migration runtime/image retained; verify the same SHA/image
+afterward. Do not rebuild the newly pushed branch to apply this environment change.
+If the drain fails before 0007, abort the switch and retain the old matching
+runtime, worker and key against its unchanged schema.
+
+After 0007, direct backend rollback to the old exact-head-0006 API/worker images
+is unavailable: the API readiness and worker startup schema gates reject 0007.
+Keep admission off and retain or start the reviewed current 0007-compatible
+runtime, then repair forward. A provider rollback requires a separately reviewed
+artifact supporting both schema 0007 and the intended frozen provider versions;
+none is prepared by this migration. Drain incompatible work with its matching
+worker/key before any fleet transition. Preserve GET on a schema-compatible API,
+0007, domain/telemetry rows, envelopes and costs. Recovery is less immediate and
+job admission can remain unavailable during repair. Never bypass schema checks,
+downgrade/reset the DB, delete jobs or rewrite frozen work to make old images boot.
 Paid canary requires a concrete approved spend cap and explicit opt-in; unit/integration tests use fake provider
 responses and disposable PostgreSQL, including claim/publish/recovery races.
 
