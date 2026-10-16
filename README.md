@@ -8,7 +8,7 @@ The website supports English and Russian with a manual RU / EN switch. Local acc
 
 - Node.js 22 or newer
 - pnpm 10
-- A DeepSeek API key with available balance
+- An OpenAI API key with access to `gpt-6-luna` and available balance
 
 ## Install and configure
 
@@ -20,12 +20,12 @@ cp .env.example .env.local
 Set the server-side key in `.env.local`:
 
 ```dotenv
-DEEPSEEK_API_KEY=your_server_side_key
-DEEPSEEK_MODEL=deepseek-v4-flash
+OPEN_AI_KEY=your_server_side_key
+OPEN_AI_MODEL=gpt-6-luna
 ALLOWED_ORIGINS=http://localhost:3000
 ```
 
-Never expose `DEEPSEEK_API_KEY` in a public environment variable or client-side source. FitCheck defaults to `deepseek-v4-flash`; set `DEEPSEEK_MODEL` only when intentionally changing the server-side analysis model.
+Keep `OPEN_AI_KEY` server-side; never use a `NEXT_PUBLIC_` alias or put it in client-side source. The exact allowlisted model is `OPEN_AI_MODEL=gpt-6-luna`; unsupported model values fail safely. Preserve the supplied credential rather than regenerating it.
 
 ## Run the website
 
@@ -60,7 +60,9 @@ FITCHECK_RUN_LIVE_EVAL=1 node --env-file=.env.local node_modules/vitest/vitest.m
 
 ## Deployment
 
-Deploy the Next.js application to a runtime that supports route handlers. Configure `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL`, and `ALLOWED_ORIGINS` with the production website origin, for example `https://fitcheck.example.com`.
+Deploy the Next.js application to a runtime that supports route handlers. Configure server-only `OPEN_AI_KEY`, exact `OPEN_AI_MODEL=gpt-6-luna`, and `ALLOWED_ORIGINS` with the production website origin, for example `https://fitcheck.example.com`.
+
+For the durable backend, configure the same `OPEN_AI_MODEL=gpt-6-luna` on API and worker. The API admission registry needs only the model; supply `OPEN_AI_KEY` only to the website and worker through server secret storage. Follow the rollout record before pushing provider changes: disable all three autodeploy switches, stop new backend admission, drain old frozen jobs, migrate and deploy the compatible API/worker before reopening admission and deploying the website.
 
 The login is intentionally local-only for product testing: there is no email confirmation, remote session, cross-device synchronization, subscription, or website account database. Clearing browser site data removes local FitCheck data. Use the profile page's **Delete local account** action to remove one account and all of its associated local data.
 
@@ -71,9 +73,12 @@ The bridge uses a 1500 ms deadline, refuses redirects, and returns safe delivery
 
 Telemetry setup, formulas, operator reports, retention, and limitations are documented
 in [backend metrics operations](backend/README.md#telemetry-and-operator-reports).
-The [development rollout record](docs/deployments/2026-10-14-fitcheck-metrics.md)
-distinguishes verified checks from pending deployment evidence. This rollout keeps
-DeepSeek and the existing model configuration; it does not enable OpenAI or paid tests.
+The [metrics development rollout record](docs/deployments/2026-10-14-fitcheck-metrics.md)
+preserves the previous deployment evidence. The separate
+[OpenAI rollout record](docs/deployments/2026-10-14-fitcheck-openai.md) tracks the
+matched website/API/worker transition and its pending external checks. Local
+implementation and mock tests do not establish live account/model access; paid
+tests require a concrete approved spend cap.
 
 `METRICS_CAMPAIGN_CODES` is a comma-separated allowlist of public dimension codes;
 mirror it in backend `FITCHECK_METRICS_CAMPAIGN_CODES` as a JSON array. Arbitrary UTM

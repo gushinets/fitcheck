@@ -116,10 +116,15 @@ returns up to ten unique skills. An optional job must belong to the owner and ha
 the matching job type. Neither service publishes an analysis nor changes job state;
 ANY-649 will call them from its durable worker. Public job routes remain planned.
 
-`FITCHECK_DEEPSEEK_API_KEY` is optional for API startup and required for provider
-calls. Missing key returns safe `service_unavailable` before DB/provider work.
-Provider/model/prompts are server-owned: initial policy uses DeepSeek
-`deepseek-v4-flash`, thinking disabled, JSON-object output, temperature zero.
+`OPEN_AI_KEY` is optional for API startup/admission and required in the worker
+for provider calls. Python settings use explicit `OPEN_AI_KEY` / `OPEN_AI_MODEL`
+aliases without the `FITCHECK_` prefix. Configure exact
+`OPEN_AI_MODEL=gpt-6-luna` on both API and worker; unsupported values fail safely.
+Missing key returns safe `service_unavailable` before DB/provider work.
+Provider/model/prompts are server-owned: active policy uses OpenAI `gpt-6-luna`,
+`fitcheck.llm.policy.v2`, `reasoning_effort=none`, JSON-object output and
+`max_completion_tokens`; temperature is omitted. The fixed destination is
+`https://api.openai.com/v1/chat/completions`.
 PydanticAI owns schema prompting/validation; the gateway owns HTTP and ledger.
 No request DTO accepts provider/model/system prompt or client calibration memory.
 
@@ -153,7 +158,7 @@ versioned Standard/global rate snapshot described below; no raw requests/respons
 are persisted in ledger or SDK telemetry.
 
 Deterministic mock/HTTP-transport tests use the real PydanticAI/LiteLLM adapters.
-Optional paid canary, from `backend/`, requires an explicitly supplied key and opt-in:
+Optional paid canary, from `backend/`, requires a concrete approved spend cap, an explicitly supplied key and opt-in:
 `FITCHECK_RUN_LLM_CANARY=1 uv run --locked pytest tests/analysis/test_live_canary.py -q`.
 It uses only anonymized fixtures and in-process metrics; PostgreSQL accounting is
 tested separately on disposable PG. Without opt-in/key it is reported as skipped.
@@ -265,7 +270,8 @@ new requests are limited to 10/user/minute and 60/IP/15 minutes. Duplicates do
 not reserve another active slot or consume another rate token.
 
 Run migrations separately before API/worker rollout, then start the worker from
-`backend/` with the same database and a worker-only `FITCHECK_DEEPSEEK_API_KEY`:
+`backend/` with the same database, exact `OPEN_AI_MODEL=gpt-6-luna` on API
+and worker, and server-only `OPEN_AI_KEY` in the worker secret store:
 
 ```sh
 uv run --locked python -m fitcheck_backend.storage.migrate upgrade
@@ -298,9 +304,18 @@ UUIDs/execution tokens preserve repeat costs; unknown usage/cost remains null.
 Recovery marks stranded started calls unknown/process_lost and preserves already
 recorded successful usage. A late response cannot reverse that reconciliation.
 
-Rollback: disable new admission, drain/stop worker, keep GET and the additive
-schema/data. Do not downgrade populated provider token columns or reset a DB.
-Paid canary requires explicit opt-in; unit/integration tests use fake provider
+The [OpenAI rollout record](../docs/deployments/2026-10-14-fitcheck-openai.md)
+defines the ordered drain, 0007 migration, API registry, compatible worker,
+admission and website transition. Disable all three autodeploy switches before
+pushing provider changes; restore them only after controlled rollout evidence.
+Old DeepSeek job envelopes and ledger records remain immutable. Never send an
+old frozen job through the new OpenAI registry.
+
+Rollback: disable new admission, drain incompatible work with its matching worker
+and key before restoring a matched website/API/worker provider fleet; keep GET
+and additive schema/data. If draining cannot finish, stop the switch and retain
+the compatible fleet/key. Do not downgrade populated provider token columns or reset a DB.
+Paid canary requires a concrete approved spend cap and explicit opt-in; unit/integration tests use fake provider
 responses and disposable PostgreSQL, including claim/publish/recovery races.
 
 ## Retention policy
