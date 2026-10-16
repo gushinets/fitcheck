@@ -189,3 +189,171 @@ floor. Mixed backend registration/outcome provenance is explicit in coverage.
 Generic website failure causes and the success-publication rollback regression
 remain nonblocking follow-ups. The unexplained transient lease test record above
 is preserved without claiming a diagnosis.
+
+## Actual rollout evidence — 2026-10-15 (in progress)
+
+This section supersedes earlier pending statements only for the checks explicitly
+listed here. Ingestion, erasure, final development configuration and restoration
+of autodeploy remain acceptance gates.
+
+- Final correction `e2a7eae8b5362db2731b9859490d42181985651f` passed the full backend
+  suite: **669 passed, 1 skipped in 25.31s**. The single scoped rereview approved
+  both Important findings with no new Important/Critical issue. Local API image:
+  `sha256:4638d1ca9a63336ea9bb4bcb475e0f4f79b5bec2acb032a25f9830e40119e6e1`;
+  worker: `sha256:a75ecaab1157076f1053e422d39d17db048fa9fb04e97ad588b26e2971b17605`.
+  Packaged API CLI imports and reports head 0006 in a read-only, network-free container.
+- All three autodeploy switches were verified OFF before pushing. CI passed at
+  the exact correction commit: [run 38776070228](https://github.com/NikitaPotapovIt/fitcheck/actions/runs/38776070228).
+- The old live API reported head 0003 and no queued/running jobs. A temporary copy
+  of its packaged migration directory received the exact hash-checked committed
+  0004–0006 files. The existing migration connection/advisory-lock runner applied
+  them and visibly reported `MIGRATED 0003 -> 0006`. The identical adapter had first
+  passed a transactionally rolled-back disposable-schema test, preserving owner,
+  job and provider-call data and proving repeated invocation a no-op.
+- API Docker build completed remotely with image
+  `sha256:644b2dbba09355eb169ab9f7a87e4716a0a79259f8ed616b0649c55bcef550aa`.
+  External readiness returned HTTP 200 after the transient old-schema/new-schema
+  gap. API container `2cd0390d57c1` later confirmed head 0006, collector `test`,
+  independent database scope `development`, metrics enabled, auth/jobs disabled
+  and ingest credential present (boolean only). Readiness then returned
+  `{"status":"ok","stage":"foundation"}`.
+- Running API and worker (`dc16e0c60304`) each had exactly 115 packaged Python
+  source files with aggregate SHA-256
+  `c0018ab4fab3c0f7f1c4a84bfc324bb1421f41f200fe285b951dc5f6de7f35a2`, matching
+  the reviewed backend source. Worker health marker verification returned true.
+- User explicitly approved metrics secret transmission to the existing dev
+  recipients. Original API/website environment text matched before editing;
+  provider/origin settings were preserved. API and website test configurations
+  were saved; values were hidden afterward. No OpenAI credential was transmitted.
+- The first real bridge POST returned 403 before any named synthetic fact was
+  accepted. Exact public HTTPS origin was already allowlisted. This exposed an
+  internal Next URL/public Host mismatch at TLS termination. The narrow fix
+  `d2fec41112ec0aeeb866d400fe3ce84b04ed280a` retains mandatory canonical,
+  explicitly allowlisted Origin and checks the direct URL or exact public Host;
+  forwarded headers do not grant authority. Regression RED: 2 failed/8 passed;
+  GREEN: 10 passed, TypeScript/lint/diff clean, production build passed. Independent
+  scoped review approved spec and quality. Runtime acceptance is still pending.
+
+Additional execution rulings, in order:
+
+16. Add nullable independent retention floor and fixed backfill completion watermark
+    in additive 0006, preserving prior migration files — partial historical inserts
+    cannot prove continuous coverage or undo cleanup — cost if wrong: additional
+    maintenance metadata and conservative unavailable periods until a drain completes.
+17. Permit exact same-backend-account outcomes across observed/reconstructed
+    provenance, with explicit mixed coverage and source retention floors — cohorts
+    spanning collection inception otherwise lose known outcomes — cost if wrong:
+    additional provenance checks; website/account identities remain separate.
+18. Treat the newly reproduced proxy 403 as Task 8 runtime acceptance failure,
+    separate from the completed final-review correction wave — live bridge proof
+    is required to finish the task — cost if wrong: one additional narrow review
+    cycle; mandatory origin allowlisting and same-host checks remain enforced.
+
+### Real bridge acceptance — 2026-10-16
+
+The proxy correction passed [CI run 38783805404](https://github.com/NikitaPotapovIt/fitcheck/actions/runs/38783805404)
+at exact commit `d2fec41112ec0aeeb866d400fe3ce84b04ed280a` and was deployed to
+website container `c04a9d0e891f`. Both site and collector reported test scope;
+database scope remained development. No model calls were made.
+
+Container DNS resolved the API's public IPv4 address in 38 ms, but ordinary HTTPS
+to that address timed out at 10 seconds, including with IPv4-first resolution.
+The same public HTTPS hostname/SNI with normal certificate verification and
+lookup directed to the container's observed default gateway returned HTTP 200 in
+38 ms. A single container-local `/etc/hosts` mapping for
+`dev-fitcheck-api.dokploy.gcexp.ru` corrected this hairpin route. Other hosts and
+TLS verification were unchanged.
+
+Two identical synthetic `page_viewed` submissions through the public website each
+returned HTTP 202 with `delivered: true`. Aggregate database inspection found
+exactly one named event, solely in test scope. The operator report, bounded from
+the actual collection start, showed acquisition/direct/visitors = **1**, available.
+A preceding one-hour query correctly reported unavailable precollection coverage;
+the seven-day funnel had no mature cohort and a null ratio.
+
+The public website DELETE for that disposable visitor returned HTTP 202 with
+`delivered: true` and a rotated cookie. A follow-up database query found **zero**
+remaining named events. No development data was reset or deleted; no broad cleanup
+command or unscoped SQL deletion was used.
+
+API auth/jobs were restored and external readiness returned HTTP 200,
+`auth_storage`, database ready. Worker development metrics configuration was
+saved and reloaded. Website development configuration was saved with a startup
+prefix to make the tested host mapping survive container replacement, followed
+by its unchanged `pnpm run start`. Final replacement-container verification is
+still pending.
+
+19. Persist the one-host gateway route in the website's Nixpacks startup before
+    the original command — public-IP hairpin HTTPS timed out but the verified
+    gateway route delivered real events — cost if wrong: this deployment requires
+    Linux, a writable container hosts file and the host gateway's HTTPS listener;
+    future nonroot/multinode deployments must revalidate or replace this routing.
+    Rollback restores the original `NIXPACKS_START_CMD=pnpm run start` and redeploys.
+    The prefix derives the gateway from `/proc/net/route`, validates IPv4, refuses
+    conflicting existing hostname entries and only appends an absent entry. It
+    contains no credentials and does not change certificates, hostname or ports.
+
+### Persistent startup correction — 2026-10-16
+
+The inline startup experiment built but replacement containers exited with status
+0 and the site returned 502. The exact command-parsing cause was not established.
+Restoring the original start command and rebuilding restored HTTP 200. This
+supersedes the preceding pending inline-prefix configuration.
+
+Commit `12c99c574e2521b15c3bcaf2ad709946e1ed852b` replaces inline code with
+`ops/dokploy-website-start.sh` and an explicitly enabled gateway helper. Six
+fixture/integration tests passed, covering route/hosts validation and startup
+ordering, exec PID, exit propagation and helper-failure behavior. Independent
+spec/quality review approved the patch with no Important/Critical findings.
+The saved dev settings are `NIXPACKS_START_CMD=sh ops/dokploy-website-start.sh`
+and `FITCHECK_DOKPLOY_METRICS_GATEWAY=true`; other environment entries are
+preserved. CI and live replacement-container acceptance remain pending.
+
+[CI run 38895425350](https://github.com/NikitaPotapovIt/fitcheck/actions/runs/38895425350)
+completed successfully for the exact startup-script commit; manual website
+deployment was accepted. External API checks: readiness 200; unauthenticated
+POST `/internal/metrics/events` 401; GET `/internal/metrics/report` 404;
+unauthenticated GET `/v1/jobs/00000000-0000-0000-0000-000000000000` 401.
+The report remains an operator CLI, with no registered public read route.
+
+Replacement container `1103d3832668` stayed running. Its gateway flag was true,
+both installed startup scripts matched local SHA-256, and its automatic hosts
+entry pointed the single API hostname to `172.18.0.1`. No manual host edit was
+made to this container. Normal HTTPS fetch returned readiness 200 in 56 ms;
+website scope was development and both metrics secrets were present (boolean
+checks only).
+
+The subsequent real Chrome visit exposed `TypeError: Illegal invocation` at the
+metrics client default `setInterval` invocation. The page entered its client error
+fallback, so real development observation acceptance is still incomplete. A
+receiver-preserving timer correction and focused regression/review are underway.
+
+20. Correct the native timer receiver as a new Task 8 live acceptance failure —
+    Node fake timers did not establish Chrome startup — cost if wrong: another
+    focused implementation/review/deploy; injected timer contracts stay supported.
+
+The receiver correction is commit `868d3b7b488dd5c76ebaf6f06b95be3b96bc6166`.
+A receiver-sensitive regression reproduced the failure before the change. All
+four default native timer functions now bind `globalThis`; injected timers keep
+their receiver. The final focused run passed 25 tests, TypeScript and scoped
+ESLint; independent spec/quality review approved with no Important/Critical
+findings. Runtime acceptance awaits its CI and website deployment.
+
+### Final metrics acceptance — 2026-10-16
+
+[CI run 38896482162](https://github.com/NikitaPotapovIt/fitcheck/actions/runs/38896482162)
+passed at exact commit `868d3b7b488dd5c76ebaf6f06b95be3b96bc6166`. Dokploy
+website deployment completed; replacement container `377b0dcd8b20` was running.
+The real Chrome page rendered the Russian landing and local-account form. One
+ordinary visit, without registration or a model request, changed development
+`website_client/page_viewed` count from **0 to 1**. The operator report bounded
+from the actual development collection start returned acquisition/visitors
+**1**, available. API remained schema **0006**, development collector/database
+scope, metrics/auth/jobs enabled. Worker health and scope were already verified.
+
+This completes metrics Tasks 1–8, including real test-scope delivery/deduplication,
+scoped erasure, restricted collector access and actual development observation.
+No paid model call or provider migration was performed. DeepSeek remains active
+until the separate OpenAI migration plan completes its matched fleet rollout.
+Autodeploy was held off during the controlled rollout and is restored after the
+final documentation push; the following provider rollout must control it again.
