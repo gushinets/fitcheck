@@ -2,7 +2,7 @@
 import { expect, it, vi } from 'vitest'
 import OpenAI from 'openai'
 import { createWebsiteOperation } from './operations'
-import { recordProviderCall, summarizeDeepSeek, createProviderAttemptSink } from './provider'
+import { recordProviderCall, summarizeDeepSeek, summarizeOpenAI, createProviderAttemptSink } from './provider'
 const context = () => createWebsiteOperation({ visitorId: '11111111-1111-4111-8111-111111111111', environment: 'test', name: 'analysis', now: Date.now })
 it('test_collector_down_preserves_analysis_response_and_original_error', async () => {
   const sink = { start: vi.fn(() => new Promise<void>(() => {})), finish: vi.fn().mockRejectedValue(new Error('secret')) }
@@ -42,4 +42,8 @@ it('drops contradictory supplied subdivisions only when their totals are known',
   expect(summarizeDeepSeek({usage:{prompt_tokens:2,completion_tokens:1,prompt_cache_hit_tokens:3,completion_tokens_details:{reasoning_tokens:2}}},'deepseek-v4-flash')).toMatchObject({
     inputTokens:2,outputTokens:1,cachedInputTokens:null,reasoningTokens:null,cost:null,costBasis:'unknown',
   })
+})
+it('OpenAI usage ignores DeepSeek-only cache fields and preserves unknown cost',()=>{
+  expect(summarizeOpenAI({usage:{prompt_tokens:12,completion_tokens:4,prompt_cache_hit_tokens:9,prompt_tokens_details:{cached_tokens:3},completion_tokens_details:{reasoning_tokens:0}}},'gpt-6-luna')).toMatchObject({model:'gpt-6-luna',inputTokens:12,outputTokens:4,cachedInputTokens:3,reasoningTokens:0,cost:null,costBasis:'unknown'})
+  expect(summarizeOpenAI({},'gpt-6-luna')).toMatchObject({inputTokens:null,outputTokens:null,cachedInputTokens:null,reasoningTokens:null,cost:null,costBasis:'unknown'})
 })

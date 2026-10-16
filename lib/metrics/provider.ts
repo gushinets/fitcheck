@@ -18,11 +18,11 @@ function failureCode(error:unknown) {
   if(error instanceof OpenAI.APIConnectionTimeoutError || value?.status === 408 || value?.name === 'AbortError' || value?.name === 'APIConnectionTimeoutError' || value?.code === 'ETIMEDOUT') return 'timeout'
   return 'upstream'
 }
-export async function recordProviderCall<T>(options:{context:OperationContext;purpose:ProviderAttempt['purpose'];ordinal:number;send:()=>Promise<T>;summarize:(result:T)=>ProviderUsage;sink:ProviderAttemptSink;model?:string}):Promise<T> {
+export async function recordProviderCall<T>(options:{context:OperationContext;purpose:ProviderAttempt['purpose'];ordinal:number;send:()=>Promise<T>;summarize:(result:T)=>ProviderUsage;sink:ProviderAttemptSink;model?:string;provider?:ProviderAttempt['provider'];policyVersion?:string}):Promise<T> {
   const {context,sink}=options
   const call:ProviderAttempt={callId:randomUUID(),operationId:context.operationId,subjectId:context.visitorId,
-    purpose:options.purpose,ordinal:options.ordinal,provider:'deepseek',model:options.model ?? 'deepseek-v4-flash',
-    promptVersion:'website.v1',policyVersion:'grounding.v1',startedAt:new Date(context.now()).toISOString(),state:'started',costBasis:'unknown'}
+    purpose:options.purpose,ordinal:options.ordinal,provider:options.provider ?? 'deepseek',model:options.model ?? 'deepseek-v4-flash',
+    promptVersion:'website.v1',policyVersion:options.policyVersion ?? 'grounding.v1',startedAt:new Date(context.now()).toISOString(),state:'started',costBasis:'unknown'}
   safelySend(sink,'start',call)
   let result:T
   try {result=await options.send()} catch(error) {
@@ -46,4 +46,11 @@ export function summarizeDeepSeek(response:unknown,model:string):ProviderUsage {
   const reasoning=tokens(usage?.completion_tokens_details?.reasoning_tokens)
   return {model,inputTokens:input,outputTokens:output,cachedInputTokens:input !== null && cached !== null && cached > input ? null:cached,
     cacheWriteTokens:null,reasoningTokens:output !== null && reasoning !== null && reasoning > output ? null:reasoning,cost:null,currency:null,costBasis:'unknown',rateVersion:null}
+}
+
+// OpenAI has no DeepSeek cache-hit extension. Reuse the validated standard fields.
+export function summarizeOpenAI(response:unknown,model:string):ProviderUsage {
+  const value = response as {usage?:{prompt_tokens?:number;completion_tokens?:number;prompt_tokens_details?:{cached_tokens?:number};completion_tokens_details?:{reasoning_tokens?:number}}} | null
+  const usage = value?.usage
+  return summarizeDeepSeek({usage:usage ? {prompt_tokens:usage.prompt_tokens,completion_tokens:usage.completion_tokens,prompt_tokens_details:usage.prompt_tokens_details,completion_tokens_details:usage.completion_tokens_details} : undefined},model)
 }

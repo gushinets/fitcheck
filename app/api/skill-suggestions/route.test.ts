@@ -23,8 +23,9 @@ afterEach(() => {
 })
 
 describe("POST /api/skill-suggestions route", () => {
-  it("reports missing DeepSeek configuration without calling a provider", async () => {
-    vi.stubEnv("DEEPSEEK_API_KEY", "")
+  it("reports missing OpenAI configuration without calling a provider", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "obsolete-key")
+    vi.stubEnv("OPEN_AI_KEY", "")
     vi.stubEnv("ALLOWED_ORIGINS", allowedOrigin)
 
     const response = await POST(request())
@@ -35,8 +36,9 @@ describe("POST /api/skill-suggestions route", () => {
     })
   })
 
-  it("rejects a foreign origin before reporting missing DeepSeek configuration", async () => {
-    vi.stubEnv("DEEPSEEK_API_KEY", "")
+  it("rejects a foreign origin before reporting missing OpenAI configuration", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "obsolete-key")
+    vi.stubEnv("OPEN_AI_KEY", "")
     vi.stubEnv("ALLOWED_ORIGINS", allowedOrigin)
 
     const response = await POST(request("https://evil.example"))
@@ -47,10 +49,12 @@ describe("POST /api/skill-suggestions route", () => {
     })
   })
 
-  it("uses the environment-selected DeepSeek model", async () => {
+  it("uses the environment-selected OpenAI model", async () => {
     let requestedBody: Record<string, unknown> = {}
-    vi.stubEnv("DEEPSEEK_API_KEY", "test-deepseek-key")
-    vi.stubEnv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+    vi.stubEnv("DEEPSEEK_API_KEY", "obsolete-key")
+    vi.stubEnv("DEEPSEEK_MODEL", "obsolete-model")
+    vi.stubEnv("OPEN_AI_KEY", "test-openai-key")
+    vi.stubEnv("OPEN_AI_MODEL", "gpt-6-luna")
     vi.stubEnv("ALLOWED_ORIGINS", allowedOrigin)
     vi.stubGlobal(
       "fetch",
@@ -61,7 +65,7 @@ describe("POST /api/skill-suggestions route", () => {
             id: "generation-test",
             object: "chat.completion",
             created: 0,
-            model: "deepseek-v4-flash",
+            model: "gpt-6-luna",
             choices: [
               {
                 index: 0,
@@ -86,7 +90,7 @@ describe("POST /api/skill-suggestions route", () => {
     const response = await POST(request())
 
     expect(response.status).toBe(200)
-    expect(requestedBody).toMatchObject({ model: "deepseek-v4-flash" })
+    expect(requestedBody).toMatchObject({ model: "gpt-6-luna" })
     await expect(response.json()).resolves.toEqual({
       skills: ["Python", "FastAPI"],
     })
@@ -136,4 +140,16 @@ describe("OPTIONS /api/skill-suggestions", () => {
       error: "origin_not_allowed",
     })
   })
+})
+
+it.each(["", "gpt-6.1-luna", "deepseek-v4-flash", " gpt-6-luna", "gpt-6-luna "])("rejects unsupported model %s before HTTP", async model => {
+  vi.stubEnv("OPEN_AI_KEY", "test-key")
+  vi.stubEnv("OPEN_AI_MODEL", model)
+  vi.stubEnv("ALLOWED_ORIGINS", allowedOrigin)
+  const fetcher = vi.fn()
+  vi.stubGlobal("fetch",fetcher)
+  const response = await POST(request())
+  expect(response.status).toBe(503)
+  expect(await response.json()).toEqual({error:"server_not_configured"})
+  expect(fetcher).not.toHaveBeenCalled()
 })

@@ -2,9 +2,11 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest"
 import OpenAI from "openai"
-import { createDeepSeekSkillSuggestionTransport } from "./deepseek"
+import { createOpenAISkillSuggestionTransport } from "./openai"
 
 afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllEnvs()
   vi.unstubAllGlobals()
 })
 
@@ -13,8 +15,8 @@ const request = {
   locale: "en" as const,
 }
 
-describe("DeepSeek skill suggestion transport", () => {
-  it("sends a JSON chat completion through the direct DeepSeek API", async () => {
+describe("OpenAI skill suggestion transport", () => {
+  it("sends a JSON chat completion through the direct OpenAI API", async () => {
     let requestedUrl = ""
     let requestedBody: Record<string, unknown> = {}
 
@@ -29,7 +31,7 @@ describe("DeepSeek skill suggestion transport", () => {
             id: "generation-test",
             object: "chat.completion",
             created: 0,
-            model: "deepseek-v4-flash",
+            model: "gpt-6-luna",
             choices: [
               {
                 index: 0,
@@ -64,15 +66,15 @@ describe("DeepSeek skill suggestion transport", () => {
       }),
     )
 
-    const transport = createDeepSeekSkillSuggestionTransport({
-      apiKey: "test-deepseek-key",
+    const transport = createOpenAISkillSuggestionTransport({
+      apiKey: "test-openai-key",
     })
     const result = await transport(request)
 
-    expect(requestedUrl).toBe("https://api.deepseek.com/chat/completions")
+    expect(requestedUrl).toBe("https://api.openai.com/v1/chat/completions")
     expect(requestedBody).toMatchObject({
-      model: "deepseek-v4-flash",
-      max_tokens: 500,
+      model: "gpt-6-luna",
+      max_completion_tokens: 500,
       messages: [
         {
           role: "system",
@@ -86,8 +88,11 @@ describe("DeepSeek skill suggestion transport", () => {
         },
       ],
       response_format: { type: "json_object" },
-      thinking: { type: "disabled" },
+      reasoning_effort: "none",
     })
+    expect(requestedBody).not.toHaveProperty("temperature")
+    expect(requestedBody).not.toHaveProperty("thinking")
+    expect(requestedBody).not.toHaveProperty("max_tokens")
     expect(result).toEqual({ skills: ["Python", "FastAPI"] })
   })
 
@@ -102,7 +107,7 @@ describe("DeepSeek skill suggestion transport", () => {
             id: "generation-test",
             object: "chat.completion",
             created: 0,
-            model: "deepseek-v4-flash",
+            model: "gpt-6-luna",
             choices: [
               {
                 index: 0,
@@ -127,8 +132,8 @@ describe("DeepSeek skill suggestion transport", () => {
       }),
     )
 
-    const transport = createDeepSeekSkillSuggestionTransport({
-      apiKey: "test-deepseek-key",
+    const transport = createOpenAISkillSuggestionTransport({
+      apiKey: "test-openai-key",
     })
     await transport({ specialization: "Бэкенд-разработчик", locale: "ru" })
 
@@ -151,8 +156,8 @@ describe("DeepSeek skill suggestion transport", () => {
       "fetch",
       vi.fn().mockRejectedValue(new OpenAI.APIConnectionTimeoutError()),
     )
-    const transport = createDeepSeekSkillSuggestionTransport({
-      apiKey: "test-deepseek-key",
+    const transport = createOpenAISkillSuggestionTransport({
+      apiKey: "test-openai-key",
     })
 
     await expect(transport(request)).rejects.toMatchObject({ code: "timeout" })
@@ -168,8 +173,8 @@ describe("DeepSeek skill suggestion transport", () => {
         }),
       ),
     )
-    const transport = createDeepSeekSkillSuggestionTransport({
-      apiKey: "test-deepseek-key",
+    const transport = createOpenAISkillSuggestionTransport({
+      apiKey: "test-openai-key",
     })
 
     await expect(transport(request)).rejects.toMatchObject({
@@ -187,8 +192,8 @@ describe("DeepSeek skill suggestion transport", () => {
         }),
       ),
     )
-    const transport = createDeepSeekSkillSuggestionTransport({
-      apiKey: "test-deepseek-key",
+    const transport = createOpenAISkillSuggestionTransport({
+      apiKey: "test-openai-key",
     })
 
     await expect(transport(request)).rejects.toMatchObject({ code: "upstream" })
@@ -203,7 +208,7 @@ describe("DeepSeek skill suggestion transport", () => {
             id: "generation-test",
             object: "chat.completion",
             created: 0,
-            model: "deepseek-v4-flash",
+            model: "gpt-6-luna",
             choices: [
               {
                 index: 0,
@@ -227,8 +232,8 @@ describe("DeepSeek skill suggestion transport", () => {
         ),
       ),
     )
-    const transport = createDeepSeekSkillSuggestionTransport({
-      apiKey: "test-deepseek-key",
+    const transport = createOpenAISkillSuggestionTransport({
+      apiKey: "test-openai-key",
     })
 
     await expect(transport(request)).rejects.toMatchObject({
@@ -240,6 +245,20 @@ describe("DeepSeek skill suggestion transport", () => {
 it('disables hidden SDK retries at outbound send', async () => {
   const fetcher = vi.fn(async () => new Response(JSON.stringify({error:{message:'private'}}),{status:500,headers:{'content-type':'application/json'}}))
   vi.stubGlobal('fetch',fetcher)
-  await expect(createDeepSeekSkillSuggestionTransport({apiKey:'test-key'})(request)).rejects.toMatchObject({code:'upstream'})
+  await expect(createOpenAISkillSuggestionTransport({apiKey:'test-key'})(request)).rejects.toMatchObject({code:'upstream'})
   expect(fetcher).toHaveBeenCalledTimes(1)
+})
+
+it('records suggestion usage without awaiting an unavailable metrics sink', async () => {
+  const { createWebsiteOperation } = await import('@/lib/metrics/operations')
+  const operation = createWebsiteOperation({visitorId:'11111111-1111-4111-8111-111111111111',environment:'test',name:'suggestions'})
+  const sink = {start:vi.fn(()=>new Promise<void>(()=>{})),finish:vi.fn().mockRejectedValue(new Error('private-collector-error'))}
+  vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({
+    id:'completion-skills',object:'chat.completion',created:0,model:'gpt-6-luna',
+    choices:[{index:0,finish_reason:'stop',message:{role:'assistant',content:'{"skills":["Python"]}'}}],
+    usage:{prompt_tokens:12,completion_tokens:4,prompt_tokens_details:{cached_tokens:3},completion_tokens_details:{reasoning_tokens:0}},
+  }),{headers:{'content-type':'application/json'}})))
+  await expect(createOpenAISkillSuggestionTransport({apiKey:'test-key',operation,attemptSink:sink})(request)).resolves.toEqual({skills:['Python']})
+  expect(sink.start).toHaveBeenCalledWith(expect.objectContaining({provider:'openai',model:'gpt-6-luna',purpose:'skills.generate',ordinal:1,operationId:operation.operationId}))
+  expect(sink.finish).toHaveBeenCalledWith(expect.objectContaining({provider:'openai',model:'gpt-6-luna',state:'succeeded',inputTokens:12,outputTokens:4,cachedInputTokens:3,reasoningTokens:0,cost:null,costBasis:'unknown'}))
 })

@@ -1,6 +1,7 @@
+import { isSupportedOpenAIModel } from "@/lib/openai/client"
 import { after } from "next/server"
 import { beginWebsiteOperation } from "@/lib/metrics/operations"
-import { createDeepSeekSkillSuggestionTransport } from "@/lib/skill-suggestions/deepseek"
+import { createOpenAISkillSuggestionTransport } from "@/lib/skill-suggestions/openai"
 import { corsHeaders, createSkillSuggestionsHandler, json } from "./handler"
 
 function allowedOrigins() {
@@ -18,16 +19,17 @@ export async function POST(request: Request) {
     return json({ error: "origin_not_allowed" }, 403)
   }
 
-  const apiKey = process.env.DEEPSEEK_API_KEY
-  if (!apiKey) return json({ error: "server_not_configured" }, 503)
+  const apiKey = process.env.OPEN_AI_KEY
+  if (!apiKey || !isSupportedOpenAIModel(process.env.OPEN_AI_MODEL)) return json({ error: "server_not_configured" }, 503)
 
   const operation = beginWebsiteOperation(request, "suggestions", after)
   const handler = createSkillSuggestionsHandler({
     allowedOrigins: origins,
-    transport: createDeepSeekSkillSuggestionTransport({
+    transport: createOpenAISkillSuggestionTransport({
       apiKey,
-      model: process.env.DEEPSEEK_MODEL,
-      metrics: operation ?? undefined,
+      model: process.env.OPEN_AI_MODEL,
+      operation: operation?.context,
+      attemptSink: operation?.sink,
     }),
   })
   const response = await handler(request)

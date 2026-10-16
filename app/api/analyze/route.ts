@@ -1,6 +1,7 @@
+import { isSupportedOpenAIModel } from "@/lib/openai/client"
 import { after } from "next/server"
 import { beginWebsiteOperation } from "@/lib/metrics/operations"
-import { createDeepSeekTransport } from "@/lib/analysis/deepseek"
+import { createOpenAITransport } from "@/lib/analysis/openai"
 import { corsHeaders, createAnalyzeHandler, json } from "./handler"
 
 function allowedOrigins() {
@@ -11,15 +12,16 @@ function allowedOrigins() {
 }
 
 export async function POST(request: Request) {
-  const apiKey = process.env.DEEPSEEK_API_KEY
-  if (!apiKey) return json({ error: "server_not_configured" }, 503)
+  const apiKey = process.env.OPEN_AI_KEY
+  if (!apiKey || !isSupportedOpenAIModel(process.env.OPEN_AI_MODEL)) return json({ error: "server_not_configured" }, 503)
   const operation = beginWebsiteOperation(request, "analysis", after)
   const handler = createAnalyzeHandler({
     allowedOrigins: allowedOrigins(),
-    transport: createDeepSeekTransport({
+    transport: createOpenAITransport({
       apiKey,
-      model: process.env.DEEPSEEK_MODEL,
-      metrics: operation ?? undefined,
+      model: process.env.OPEN_AI_MODEL,
+      operation: operation?.context,
+      attemptSink: operation?.sink,
     }),
   })
   const response = await handler(request)

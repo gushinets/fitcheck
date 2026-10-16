@@ -122,9 +122,11 @@ describe("POST /api/analyze", () => {
     await expect(response.json()).resolves.toEqual({ error: "analysis_rate_limit" })
   })
 
-  it("uses the server-only DeepSeek configuration", async () => {
-    vi.stubEnv("DEEPSEEK_API_KEY", "test-deepseek-key")
-    vi.stubEnv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+  it("uses the server-only OpenAI configuration", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "obsolete-key")
+    vi.stubEnv("DEEPSEEK_MODEL", "obsolete-model")
+    vi.stubEnv("OPEN_AI_KEY", "test-openai-key")
+    vi.stubEnv("OPEN_AI_MODEL", "gpt-6-luna")
     vi.stubEnv("OPENROUTER_API_KEY", "")
     vi.stubEnv("OPENAI_API_KEY", "")
     vi.stubEnv("ALLOWED_ORIGINS", allowedOrigin)
@@ -169,8 +171,9 @@ describe("POST /api/analyze", () => {
     })
   })
 
-  it("reports missing DeepSeek configuration instead of returning a mock", async () => {
-    vi.stubEnv("DEEPSEEK_API_KEY", "")
+  it("reports missing OpenAI configuration instead of returning a mock", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "obsolete-key")
+    vi.stubEnv("OPEN_AI_KEY", "")
     vi.stubEnv("OPENROUTER_API_KEY", "test-openrouter-key")
 
     const response = await POST(request(validBody))
@@ -180,4 +183,16 @@ describe("POST /api/analyze", () => {
       error: "server_not_configured",
     })
   })
+})
+
+it.each(["", "gpt-6.1-luna", "deepseek-v4-flash", " gpt-6-luna", "gpt-6-luna "])("rejects unsupported model %s before HTTP", async model => {
+  vi.stubEnv("OPEN_AI_KEY", "test-key")
+  vi.stubEnv("OPEN_AI_MODEL", model)
+  vi.stubEnv("ALLOWED_ORIGINS", allowedOrigin)
+  const fetcher = vi.fn()
+  vi.stubGlobal("fetch",fetcher)
+  const response = await POST(request(validBody))
+  expect(response.status).toBe(503)
+  expect(await response.json()).toEqual({error:"server_not_configured"})
+  expect(fetcher).not.toHaveBeenCalled()
 })

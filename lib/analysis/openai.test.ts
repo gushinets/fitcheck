@@ -4,21 +4,27 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import OpenAI from "openai"
 import { goAnalysis } from "@/lib/mock-data"
 import { defaultProfile, detectedJob } from "@/lib/mock-data"
-import { createDeepSeekTransport } from "./deepseek"
+import { createOpenAITransport } from "./openai"
 
 afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllEnvs()
   vi.unstubAllGlobals()
 })
 
-describe("DeepSeek analysis transport", () => {
+describe("OpenAI analysis transport", () => {
   it.each([true, false])("verifies report grounding using the original profile and task (%s)", async (supported) => {
     let auditInput = ""
     vi.stubGlobal("fetch", vi.fn(async (_input: unknown, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body))
+      expect(body).toMatchObject({model:"gpt-6-luna",max_completion_tokens:1000,reasoning_effort:"none",response_format:{type:"json_object"}})
+      expect(body).not.toHaveProperty("temperature")
+      expect(body).not.toHaveProperty("thinking")
+      expect(body).not.toHaveProperty("max_tokens")
       auditInput = body.messages[0].content + body.messages[1].content
       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ supported, unsupportedClaims: supported ? [] : ["Czech proficiency is not required for AI-generated CZ content"] }) } }] }), { status: 200, headers: { "content-type": "application/json" } })
     }))
-    const transport = createDeepSeekTransport({ apiKey: "test-key" })
+    const transport = createOpenAITransport({ apiKey: "test-key" })
     expect(transport.verifyGrounding).toBeTypeOf("function")
     const result = await transport.verifyGrounding!({ profile: defaultProfile, job: { ...detectedJob, description: "AI generation of product titles (EN/CZ – CZ required)" }, locale: "en", memory: [] }, goAnalysis)
     expect(result).toEqual({ supported, unsupportedClaims: supported ? [] : ["Czech proficiency is not required for AI-generated CZ content"] })
@@ -27,7 +33,7 @@ describe("DeepSeek analysis transport", () => {
     expect(auditInput).toContain("Backend Developer")
     expect(auditInput).toContain("unsupportedClaims")
   })
-  it("sends a JSON chat completion through the direct DeepSeek API", async () => {
+  it("sends a JSON chat completion through the direct OpenAI API", async () => {
     let requestedUrl = ""
     let requestedBody: Record<string, unknown> = {}
 
@@ -76,8 +82,8 @@ describe("DeepSeek analysis transport", () => {
       }),
     )
 
-    const transport = createDeepSeekTransport({
-      apiKey: "test-deepseek-key",
+    const transport = createOpenAITransport({
+      apiKey: "test-openai-key",
     })
     const result = await transport({} as never, {
       instructions: "System instructions",
@@ -85,11 +91,11 @@ describe("DeepSeek analysis transport", () => {
     })
 
     expect(requestedUrl).toBe(
-      "https://api.deepseek.com/chat/completions",
+      "https://api.openai.com/v1/chat/completions",
     )
     expect(requestedBody).toMatchObject({
-      model: "deepseek-v4-flash",
-      max_tokens: 1200,
+      model: "gpt-6-luna",
+      max_completion_tokens: 1200,
       messages: [
         {
           role: "system",
@@ -102,10 +108,11 @@ describe("DeepSeek analysis transport", () => {
       response_format: {
         type: "json_object",
       },
-      thinking: {
-        type: "disabled",
-      },
+      reasoning_effort: "none",
     })
+    expect(requestedBody).not.toHaveProperty("temperature")
+    expect(requestedBody).not.toHaveProperty("thinking")
+    expect(requestedBody).not.toHaveProperty("max_tokens")
     expect(result).toEqual(goAnalysis)
   })
 
@@ -114,8 +121,8 @@ describe("DeepSeek analysis transport", () => {
       "fetch",
       vi.fn().mockRejectedValue(new OpenAI.APIConnectionTimeoutError()),
     )
-    const transport = createDeepSeekTransport({
-      apiKey: "test-deepseek-key",
+    const transport = createOpenAITransport({
+      apiKey: "test-openai-key",
     })
 
     await expect(
@@ -134,11 +141,14 @@ it('test_analysis_audit_and_retry_are_three_calls_one_operation', async () => {
   const context = createWebsiteOperation({visitorId:'11111111-1111-4111-8111-111111111111',environment:'test',name:'analysis',now:Date.now})
   const responses = [ {...goAnalysis,strengths:['invalid-fact']}, {...goAnalysis,strengths:[]}, {supported:true,unsupportedClaims:[]} ]
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(responses.shift())}}],usage:{prompt_tokens:12,completion_tokens:4}}), {headers:{'content-type':'application/json'}})))
-  const transport = createDeepSeekTransport({apiKey:'test-key',metrics:{context,sink}})
+  const transport = createOpenAITransport({apiKey:'test-key',operation:context,attemptSink:sink})
   const result = await analyzeJob({profile:defaultProfile,job:detectedJob,locale:'en',memory:[]},transport)
   expect(result.strengths).toEqual([])
   expect(sink.start).toHaveBeenCalledTimes(3)
   expect(sink.finish).toHaveBeenCalledTimes(3)
+  for (const [call] of [...sink.start.mock.calls, ...sink.finish.mock.calls]) {
+    expect(call).toMatchObject({provider:"openai",model:"gpt-6-luna",policyVersion:"fitcheck.llm.policy.v2"})
+  }
   expect(sink.start.mock.calls.map(([call]) => [call.operationId,call.purpose,call.ordinal])).toEqual([
     [context.operationId,'analysis.generate',1],[context.operationId,'analysis.generate',2],[context.operationId,'analysis.audit',3],
   ])

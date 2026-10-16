@@ -1,6 +1,7 @@
-import { recordProviderCall, summarizeDeepSeek, type ProviderAttemptSink } from "@/lib/metrics/provider"
+import { recordProviderCall, summarizeOpenAI, type ProviderAttemptSink } from "@/lib/metrics/provider"
 import type { OperationContext } from "@/lib/metrics/operations"
 import OpenAI from "openai"
+import { createOpenAISender, isSupportedOpenAIModel } from "@/lib/openai/client"
 import type { SkillSuggestionTransport } from "./service"
 import { SkillSuggestionServiceError } from "./service"
 
@@ -17,25 +18,20 @@ const skillSuggestionJsonSchema = {
   required: ["skills"],
 } as const
 
-type DeepSeekChatCompletionParams =
-  OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming & {
-    thinking: { type: "disabled" }
-  }
-
 function mapProviderError(error: unknown): SkillSuggestionServiceError {
   if (error instanceof SkillSuggestionServiceError) return error
   if (error instanceof OpenAI.APIConnectionTimeoutError) {
     return new SkillSuggestionServiceError(
       "timeout",
-      "DeepSeek request timed out",
+      "OpenAI request timed out",
     )
   }
 
-  const candidate = error as { status?: number; code?: string; name?: string }
+  const candidate = (error ?? {}) as { status?: number; code?: string; name?: string }
   if (candidate.status === 429) {
     return new SkillSuggestionServiceError(
       "rate_limit",
-      "DeepSeek rate limit reached",
+      "OpenAI rate limit reached",
     )
   }
   if (
@@ -45,29 +41,26 @@ function mapProviderError(error: unknown): SkillSuggestionServiceError {
   ) {
     return new SkillSuggestionServiceError(
       "timeout",
-      "DeepSeek request timed out",
+      "OpenAI request timed out",
     )
   }
 
-  return new SkillSuggestionServiceError("upstream", "DeepSeek request failed")
+  return new SkillSuggestionServiceError("upstream", "OpenAI request failed")
 }
 
-export function createDeepSeekSkillSuggestionTransport(options: {
+export function createOpenAISkillSuggestionTransport(options: {
   apiKey: string
   model?: string
-  metrics?: {context:OperationContext; sink:ProviderAttemptSink}
+  operation?: OperationContext
+  attemptSink?: ProviderAttemptSink
 }): SkillSuggestionTransport {
-  const client = new OpenAI({
-    apiKey: options.apiKey,
-    baseURL: "https://api.deepseek.com",
-    timeout: 45_000,
-    maxRetries: 0,
-  })
-  const model = options.model ?? "deepseek-v4-flash"
+  const model = options.model ?? "gpt-6-luna"
+  if (!isSupportedOpenAIModel(model)) throw new SkillSuggestionServiceError("upstream", "Unsupported OpenAI configuration")
+  const complete = createOpenAISender(options.apiKey)
   let ordinal = 0
-  const send = (params: DeepSeekChatCompletionParams, purpose: "analysis.generate" | "analysis.audit" | "skills.generate") => options.metrics
-    ? recordProviderCall({context:options.metrics.context,sink:options.metrics.sink,purpose,ordinal:++ordinal,model,send:()=>client.chat.completions.create(params),summarize:r=>summarizeDeepSeek(r,model)})
-    : client.chat.completions.create(params)
+  const send = (params: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming, purpose: "analysis.generate" | "analysis.audit" | "skills.generate") => options.operation && options.attemptSink
+    ? recordProviderCall({context:options.operation,sink:options.attemptSink,provider:"openai",policyVersion:"fitcheck.llm.policy.v2",purpose,ordinal:++ordinal,model,send:()=>complete(params),summarize:r=>summarizeOpenAI(r,model)})
+    : complete(params)
 
   return async (request) => {
     const language = request.locale === "ru" ? "Russian" : "English"
@@ -75,7 +68,7 @@ export function createDeepSeekSkillSuggestionTransport(options: {
     try {
       const completionParams = {
         model,
-        max_tokens: 500,
+        max_completion_tokens: 500,
         messages: [
           {
             role: "system",
@@ -94,8 +87,8 @@ export function createDeepSeekSkillSuggestionTransport(options: {
           },
         ],
         response_format: { type: "json_object" },
-        thinking: { type: "disabled" },
-      } satisfies DeepSeekChatCompletionParams
+        reasoning_effort: "none",
+      } satisfies OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
 
       const response = await send(completionParams, "skills.generate")
       const output = response.choices[0]?.message.content

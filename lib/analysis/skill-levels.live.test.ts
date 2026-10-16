@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "vitest"
 import type { AnalysisRequest, SkillLevel } from "@/lib/types"
-import { createDeepSeekTransport } from "./deepseek"
+import { createOpenAITransport } from "./openai"
 import { analyzeJob } from "./service"
 
 // Explicit opt-in: this evaluation calls the real provider and consumes API credits.
@@ -10,9 +10,9 @@ const enabled = process.env.FITCHECK_RUN_LIVE_EVAL === "1"
 
 describe.skipIf(!enabled)("live skill proficiency scoring", () => {
   it("scores primary and confident n8n above basic and explains the basic-level risk", async () => {
-    const apiKey = process.env.DEEPSEEK_API_KEY
-    if (!apiKey) throw new Error("DEEPSEEK_API_KEY is required for the live evaluation")
-    const transport = createDeepSeekTransport({ apiKey, model: process.env.DEEPSEEK_MODEL })
+    const apiKey = process.env.OPEN_AI_KEY
+    if (!apiKey) throw new Error("OPEN_AI_KEY is required for the live evaluation")
+    const transport = createOpenAITransport({ apiKey, model: process.env.OPEN_AI_MODEL })
     const request: AnalysisRequest = {
       profile: {
         specialization: "Automation developer",

@@ -6,7 +6,7 @@ vi.mock('next/server',async importOriginal=>({...await importOriginal<typeof imp
 import { POST } from './route'
 afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals();callbacks.length=0})
 it.each([true,false])('server analysis success follows grounding validation (%s)',async supported=>{
-  vi.stubEnv('DEEPSEEK_API_KEY','private-key')
+  vi.stubEnv('OPEN_AI_KEY','private-key')
   vi.stubEnv('METRICS_COOKIE_SECRET','test-secret')
   vi.stubEnv('METRICS_ENVIRONMENT','test')
   vi.stubEnv('METRICS_BACKEND_URL','https://metrics.example')
@@ -15,7 +15,7 @@ it.each([true,false])('server analysis success follows grounding validation (%s)
   vi.stubGlobal('fetch',vi.fn(async (url,init)=>{
     if(String(url).startsWith('https://metrics.example')) {delivered.push(JSON.parse(init.body)); return new Response('{}')}
     const body=JSON.parse(init.body)
-    const audit=body.max_tokens===1000
+    const audit=body.max_completion_tokens===1000
     return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(audit ? {supported,unsupportedClaims:supported?[]:['invented claim']}:{...goAnalysis,strengths:[]})}}]}),{headers:{'content-type':'application/json'}})
   }))
   const response=await POST(new Request('https://app.test/api/analyze',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({profile:defaultProfile,job:detectedJob,locale:'en',memory:[]})}))
