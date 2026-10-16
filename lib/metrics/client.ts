@@ -21,7 +21,13 @@ const PULSE = 30000
 export function createMetricsClient(options: ClientOptions) {
   const now = options.now ?? Date.now
   const id = options.eventId ?? (() => crypto.randomUUID())
-  const timers = options.timers ?? { setTimeout, clearTimeout, setInterval, clearInterval }
+  // Browser-native timers require the global receiver when called through this object.
+  const timers = options.timers ?? {
+    setTimeout: globalThis.setTimeout.bind(globalThis),
+    clearTimeout: globalThis.clearTimeout.bind(globalThis),
+    setInterval: globalThis.setInterval.bind(globalThis),
+    clearInterval: globalThis.clearInterval.bind(globalThis),
+  }
   const doc = options.document ?? (typeof document === 'undefined' ? undefined : document)
   let queue: ClientEvent[] = []
   let session: string | undefined

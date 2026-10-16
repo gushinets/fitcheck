@@ -3,6 +3,33 @@ import { createMetricsClient } from './client'
 afterEach(() => vi.useRealTimers())
 const uuid = () => crypto.randomUUID()
 describe('browser telemetry', () => {
+  it.each(['default', 'injected'] as const)('preserves the receiver for all %s browser timers', async mode => {
+    // jsdom and fake timers accept arbitrary receivers; Chrome's native timers do not.
+    const injectedTimers = { setTimeout, clearTimeout, setInterval, clearInterval }
+    const receiver = mode === 'default' ? globalThis : injectedTimers
+    const timerNames = ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] as const
+    const spies = timerNames.map(name => {
+      const nativeTimer = receiver[name]
+      return vi.spyOn(receiver, name).mockImplementation(function (this: unknown, ...args: unknown[]) {
+        if (this !== receiver) throw new TypeError(`Illegal invocation: ${name}`)
+        return Reflect.apply(nativeTimer, globalThis, args)
+      })
+    })
+    let client: ReturnType<typeof createMetricsClient> | undefined
+    try {
+      const send = vi.fn().mockResolvedValue(true)
+      client = createMetricsClient({ send, eventId: uuid, timers: mode === 'injected' ? injectedTimers : undefined })
+      expect(client.track('page_viewed', {})).toBe(true)
+      await client.flush()
+      expect(client.stats().delivered).toBe(2)
+      expect(send).toHaveBeenCalledOnce()
+      client.dispose()
+      for (const spy of spies) expect(spy).toHaveBeenCalled()
+    } finally {
+      for (const spy of spies) spy.mockRestore()
+      client?.dispose()
+    }
+  })
   it('test_queue_bound_100_batch_20_retry_2_same_event_ids', async () => {
     vi.useFakeTimers()
     const send = vi.fn().mockResolvedValue(false)
