@@ -47,3 +47,10 @@ it('OpenAI usage ignores DeepSeek-only cache fields and preserves unknown cost',
   expect(summarizeOpenAI({usage:{prompt_tokens:12,completion_tokens:4,prompt_cache_hit_tokens:9,prompt_tokens_details:{cached_tokens:3},completion_tokens_details:{reasoning_tokens:0}}},'gpt-6-luna')).toMatchObject({model:'gpt-6-luna',inputTokens:12,outputTokens:4,cachedInputTokens:3,reasoningTokens:0,cost:null,costBasis:'unknown'})
   expect(summarizeOpenAI({},'gpt-6-luna')).toMatchObject({inputTokens:null,outputTokens:null,cachedInputTokens:null,reasoningTokens:null,cost:null,costBasis:'unknown'})
 })
+it('prices cache writes exactly and uses actual response tier',()=>{
+  const r={model:'gpt-6-luna',service_tier:'default',usage:{prompt_tokens:1,completion_tokens:0,prompt_tokens_details:{cached_tokens:0,cache_write_tokens:1},completion_tokens_details:{reasoning_tokens:0}}}
+  expect(summarizeOpenAI(r,'gpt-6-luna')).toMatchObject({cost:'0.000000125',currency:'USD',costBasis:'estimated',cacheWriteTokens:1,rateVersion:'openai.luna.2026-10-16',serviceTier:'default',processingRegion:'global',responseModel:'gpt-6-luna',costReason:null})
+  expect(summarizeOpenAI({...r,service_tier:'flex'},'gpt-6-luna')).toMatchObject({cost:null,costBasis:'unknown',costReason:'unsupported_service_tier'})
+  expect(summarizeOpenAI({...r,model:'another-model'},'gpt-6-luna')).toMatchObject({cost:null,costReason:'unsupported_model'})
+  expect(summarizeOpenAI({...r,usage:{...r.usage,prompt_tokens:true}},'gpt-6-luna')).toMatchObject({inputTokens:null,cost:null,costReason:'invalid_usage'})
+})

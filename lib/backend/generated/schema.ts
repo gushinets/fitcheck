@@ -1528,6 +1528,8 @@ export interface components {
              * @enum {string}
              */
             costBasis: "unknown" | "estimated" | "reported";
+            /** Costreason */
+            costReason?: string | null;
             /** Currency */
             currency?: ("USD" | "EUR" | "RUB") | null;
             /** Errorcode */
@@ -1549,6 +1551,8 @@ export interface components {
             outputTokens?: number | null;
             /** Policyversion */
             policyVersion: string;
+            /** Processingregion */
+            processingRegion?: string | null;
             /** Promptversion */
             promptVersion: string;
             /**
@@ -1565,6 +1569,10 @@ export interface components {
             rateVersion?: string | null;
             /** Reasoningtokens */
             reasoningTokens?: number | null;
+            /** Responsemodel */
+            responseModel?: string | null;
+            /** Servicetier */
+            serviceTier?: string | null;
             /**
              * Startedat
              * Format: date-time

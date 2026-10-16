@@ -2,8 +2,8 @@
 import logging
 import math
 import os
+import re
 from contextvars import ContextVar
-from decimal import Decimal, InvalidOperation
 from datetime import datetime, UTC
 from email.utils import parsedate_to_datetime
 
@@ -17,6 +17,7 @@ import litellm
 from .errors import LlmError, ProviderFailure
 from .policy import ProviderPolicy, resolve_model
 from .types import ProviderReply
+from .pricing import ProviderUsage, estimate_openai_cost, RATE_VERSION
 
 litellm.telemetry = False
 litellm.suppress_debug_info = True
@@ -35,6 +36,7 @@ class LiteLlmAdapter:
         self._api_key = api_key
         self._sends = ContextVar('fitcheck_provider_sends', default=None)
         self._retry_after = ContextVar('fitcheck_provider_retry_after', default=None)
+        self._usage_basis = ContextVar('fitcheck_provider_usage_basis', default=None)
         self.client = httpx.AsyncClient(transport=transport or httpx.AsyncHTTPTransport(retries=0),
             follow_redirects=False, event_hooks={'request':[self._guard_send], 'response':[self._capture_response]})
         self._sdk = AsyncOpenAI(api_key=api_key or 'unconfigured', base_url='https://api.openai.com/v1',
@@ -57,6 +59,21 @@ class LiteLlmAdapter:
     async def _capture_response(self, response):
         # LiteLLM can discard headers while mapping provider exceptions.
         # Capture only the retry delay, separately for each concurrent request.
+        if response.status_code == 200:
+            # Preserve only accounting fields before SDK/LiteLLM normalization,
+            # which can coerce invalid counts or discard optional cache writes.
+            try:
+                await response.aread()
+                value = response.json()
+                usage = value.get('usage') or {}
+                details = usage.get('prompt_tokens_details') or {}
+                output = usage.get('completion_tokens_details') or {}
+                self._usage_basis.set((ProviderUsage(usage.get('prompt_tokens'),usage.get('completion_tokens'),
+                    details.get('cached_tokens'),details.get('cache_write_tokens'),output.get('reasoning_tokens'),
+                    usage.get('total_tokens'),details.get('audio_tokens'),output.get('audio_tokens'),details.get('image_tokens')),
+                    value.get('model'),value.get('service_tier')))
+            except (ValueError, AttributeError, TypeError):
+                pass
         raw = response.headers.get('retry-after')
         if raw is None:
             return
@@ -93,6 +110,7 @@ class LiteLlmAdapter:
             raise LlmError('service_unavailable') from None
         token = self._sends.set([0])
         retry_token = self._retry_after.set(None)
+        usage_token = self._usage_basis.set(None)
         try:
             response = await litellm.acompletion(model=policy.gateway_model, api_key=self._api_key,
                 api_base='https://api.openai.com/v1', messages=messages, reasoning_effort='none',
@@ -101,21 +119,21 @@ class LiteLlmAdapter:
                 timeout=timeout, client=self._sdk, drop_params=False, caching=False,
                 mock_response=None, no_log=True)
             content = response.choices[0].message.content or ''
-            usage = getattr(response, 'usage', None)
-            def tokens(name):
-                number = getattr(usage, name, None)
-                return number if type(number) is int and number >= 0 else None
-            raw_cost = getattr(response, '_hidden_params', {}).get('response_cost')
-            cost = None
-            if raw_cost is not None and not isinstance(raw_cost, bool):
-                try:
-                    candidate = Decimal(str(raw_cost))
-                    if candidate.is_finite() and 0 <= candidate < Decimal('1e12'):
-                        cost = candidate
-                except (ValueError, InvalidOperation):
-                    pass
-            return ProviderReply(content, tokens('prompt_tokens'), tokens('completion_tokens'),
-                cost, 'USD' if cost is not None else None)
+            usage, model, tier = self._usage_basis.get() or (ProviderUsage(), None, None)
+            estimate = estimate_openai_cost(usage, model=model, rate_version=RATE_VERSION,
+                service_tier=tier, processing_region='global')
+            def count(value):
+                return value if type(value) is int and 0 <= value <= 100_000_000 else None
+            total, output = count(usage.input_tokens), count(usage.output_tokens)
+            cached, write, reasoning = count(usage.cached_input_tokens), count(usage.cache_write_tokens), count(usage.reasoning_tokens)
+            if total is not None and (cached or 0)+(write or 0)>total:
+                cached = write = None
+            if output is not None and reasoning is not None and reasoning>output:
+                reasoning = None
+            return ProviderReply(content,total,output,estimate.amount,estimate.currency,
+                cached,write,reasoning,estimate.basis,estimate.rate_version,estimate.reason,
+                tier if isinstance(tier,str) and re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9._:-]{0,39}',tier) else None,'global',
+                model if isinstance(model,str) and re.fullmatch(r'[a-z][a-z0-9._-]{0,199}',model) else None)
         except LlmError:
             raise
         except Exception as exc:
@@ -138,3 +156,4 @@ class LiteLlmAdapter:
         finally:
             self._sends.reset(token)
             self._retry_after.reset(retry_token)
+            self._usage_basis.reset(usage_token)

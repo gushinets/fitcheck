@@ -410,14 +410,18 @@ def attempt_metrics(out, ops):
         groups = defaultdict(list)
         for call in calls:
             key = (call.started_at.astimezone(zone).date().isoformat(), call.provider, call.model,
-                   call.purpose, call.state, call.currency or 'unknown', call.cost_basis)
+                   call.purpose, call.state, call.currency or 'unknown', call.cost_basis,
+                   call.rate_version or 'unknown', call.cost_reason or 'none',
+                   call.service_tier or 'unknown', call.processing_region or 'unknown', call.response_model or 'unknown')
             groups[key].append(call)
         for key, group in sorted(groups.items()):
-            dimensions = dims | dict(zip(('date', 'provider', 'model', 'operation', 'outcome', 'currency', 'cost_basis'), key))
+            dimensions = dims | dict(zip(('date', 'provider', 'model', 'operation', 'outcome', 'currency', 'cost_basis',
+                                         'rate_version', 'cost_reason', 'service_tier', 'processing_region', 'response_model'), key))
             amounts = [a.cost for a in group if priced(a)]
             out.add('ai_spend', dims=dimensions, sources=sources, reason=reason,
                     value=sum(amounts, Decimal(0)) if amounts else None, sample_count=len(group),
-                    coverage=coverage | {'priced_calls': len(amounts), 'observed_calls': len(group)})
+                    coverage=coverage | {'priced_calls': len(amounts), 'observed_calls': len(group),
+                        'unversioned_estimates': sum(a.cost_basis=='estimated' and a.rate_version is None for a in group)})
             for token in ('input_tokens', 'output_tokens', 'cached_input_tokens', 'cache_write_tokens', 'reasoning_tokens'):
                 samples = [getattr(a, token) for a in group if getattr(a, token) is not None]
                 out.add('ai_tokens', dims=dimensions | {'token_type': token}, sources=sources, reason=reason,

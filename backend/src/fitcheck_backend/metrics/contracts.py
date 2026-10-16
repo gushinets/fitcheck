@@ -75,10 +75,14 @@ class WebsiteAttempt(DTO):
     cached_input_tokens: TokenCount | None = None
     cache_write_tokens: TokenCount | None = None
     reasoning_tokens: TokenCount | None = None
-    cost: Annotated[Decimal, Field(ge=0, max_digits=20, decimal_places=8, allow_inf_nan=False)] | None = None
+    cost: Annotated[Decimal, Field(ge=0, max_digits=24, decimal_places=12, allow_inf_nan=False)] | None = None
     currency: Literal['USD', 'EUR', 'RUB'] | None = None
     cost_basis: Literal['unknown', 'estimated', 'reported'] = 'unknown'
     rate_version: Version | None = None
+    cost_reason: SafeCode | None = None
+    service_tier: Annotated[Version, Field(max_length=40)] | None = None
+    processing_region: Annotated[Version, Field(max_length=40)] | None = None
+    response_model: ModelName | None = None
 
     _utc = field_validator('started_at', 'finished_at')(utc)
 
@@ -99,7 +103,8 @@ class WebsiteAttempt(DTO):
             raise ValueError('Invalid cost coverage')
         if self.state == 'started' and any(value is not None for value in (
                 self.input_tokens, self.output_tokens, self.cost, self.error_code,
-                self.cached_input_tokens, self.cache_write_tokens, self.reasoning_tokens)):
+                self.cached_input_tokens, self.cache_write_tokens, self.reasoning_tokens,
+                self.rate_version, self.cost_reason, self.service_tier, self.processing_region, self.response_model)):
             raise ValueError('Started attempt cannot declare usage')
         cached = (self.cached_input_tokens or 0) + (self.cache_write_tokens or 0)
         if self.input_tokens is not None and cached > self.input_tokens:

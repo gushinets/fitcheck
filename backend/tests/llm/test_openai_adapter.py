@@ -163,3 +163,27 @@ def test_invalid_destination_blocked_before_transport(url):
             await adapter.aclose()
     asyncio.run(run())
 
+
+
+def test_adapter_prices_actual_sdk_cache_write_usage_and_actual_tier():
+    from decimal import Decimal
+    from fitcheck_backend.llm.litellm_adapter import LiteLlmAdapter
+    async def run(tier):
+        def handler(request):
+            value=json.loads(response().content)
+            value['service_tier']=tier
+            value['usage'].update(prompt_tokens=1,completion_tokens=0,total_tokens=1,
+                prompt_tokens_details={'cached_tokens':0,'cache_write_tokens':1},
+                completion_tokens_details={'reasoning_tokens':0})
+            return httpx.Response(200,json=value)
+        adapter=LiteLlmAdapter('fake-key',transport=httpx.MockTransport(handler))
+        try:
+            return await adapter.complete(messages=[{'role':'user','content':'JSON'}],policy=analysis_policy(),max_tokens=12,timeout=2)
+        finally:
+            await adapter.aclose()
+    result=asyncio.run(run('default'))
+    assert result.cost==Decimal('0.000000125') and result.cost_basis=='estimated'
+    assert result.cached_input_tokens==0 and result.cache_write_tokens==1 and result.reasoning_tokens==0
+    assert result.service_tier=='default' and result.rate_version=='openai.luna.2026-10-16'
+    result=asyncio.run(run('flex'))
+    assert result.cost is None and result.cost_reason=='unsupported_service_tier'

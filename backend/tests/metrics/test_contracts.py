@@ -110,3 +110,13 @@ def test_attempt_retains_partial_subdivisions_but_rejects_known_total_contradict
                     {'state': 'started', 'finishedAt': None}, {'cost': '0.01'}):
         with pytest.raises(ValidationError):
             WebsiteAttempt.model_validate(values | changes)
+
+
+def test_one_cache_write_cost_survives_dto_json_roundtrip():
+    from decimal import Decimal
+    value=WebsiteAttempt(callId=uuid4(),operationId=uuid4(),subjectId=uuid4(),purpose='analysis.generate',ordinal=1,
+        provider='openai',model='gpt-6-luna',promptVersion='p.v1',policyVersion='policy.v1',
+        startedAt='2026-10-16T10:00:00Z',finishedAt='2026-10-16T10:00:01Z',state='succeeded',
+        inputTokens=1,outputTokens=0,cachedInputTokens=0,cacheWriteTokens=1,cost=Decimal('0.000000125'),
+        currency='USD',costBasis='estimated',rateVersion='openai.luna.2026-10-16')
+    assert WebsiteAttempt.model_validate_json(value.model_dump_json()).cost==Decimal('0.000000125')

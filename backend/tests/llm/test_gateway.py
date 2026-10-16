@@ -88,3 +88,19 @@ def test_attempt_timeout_cancels_inflight_provider():
     with pytest.raises(LlmError) as result: asyncio.run(complete(gateway,context))
     assert result.value.code=='timeout' and cancelled==[True]
     assert next(iter(ledger.rows.values()))['state']=='failed'
+
+
+def test_rejected_attempt_retains_exact_usage_and_rate_provenance():
+    from fitcheck_backend.llm.types import ProviderReply
+    priced=ProviderReply('{}',1,0,Decimal('0.000000125'),'USD',cached_input_tokens=0,
+        cache_write_tokens=1,reasoning_tokens=0,cost_basis='estimated',rate_version='openai.luna.2026-10-16',
+        service_tier='default',processing_region='global',response_model='gpt-6-luna')
+    gateway,context,ledger,_=components([priced])
+    async def run():
+        result=await complete(gateway,context)
+        gateway.reject(result)
+    asyncio.run(run())
+    row=next(iter(ledger.rows.values()))
+    assert row['state']=='failed' and row['cost']==priced.cost
+    for name in ('cached_input_tokens','cache_write_tokens','reasoning_tokens','cost_basis','rate_version','service_tier','processing_region','response_model'):
+        assert row[name]==getattr(priced,name)

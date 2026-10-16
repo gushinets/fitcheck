@@ -47,7 +47,16 @@ class ProviderCall(IdentityMixin, CreatedMixin, Base):
     state: Mapped[str] = mapped_column(String(20))
     input_tokens: Mapped[int | None] = mapped_column(Integer)
     output_tokens: Mapped[int | None] = mapped_column(Integer)
-    cost: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))
+    cached_input_tokens: Mapped[int | None] = mapped_column(Integer)
+    cache_write_tokens: Mapped[int | None] = mapped_column(Integer)
+    reasoning_tokens: Mapped[int | None] = mapped_column(Integer)
+    cost_basis: Mapped[str | None] = mapped_column(String(20))
+    rate_version: Mapped[str | None] = mapped_column(String(120))
+    cost_reason: Mapped[str | None] = mapped_column(String(80))
+    service_tier: Mapped[str | None] = mapped_column(String(40))
+    processing_region: Mapped[str | None] = mapped_column(String(40))
+    response_model: Mapped[str | None] = mapped_column(String(200))
+    cost: Mapped[Decimal | None] = mapped_column(Numeric(24, 12))
     currency: Mapped[str | None] = mapped_column(String(3))
     error_code: Mapped[str | None] = mapped_column(String(120))
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
@@ -59,6 +68,8 @@ class ProviderCall(IdentityMixin, CreatedMixin, Base):
     latency_ms: Mapped[int | None] = mapped_column(Integer)
     execution_token: Mapped[UUID | None]
     __table_args__ = (
+        CheckConstraint("cached_input_tokens>=0 AND cache_write_tokens>=0 AND reasoning_tokens>=0 AND coalesce(cached_input_tokens,0)+coalesce(cache_write_tokens,0)<=input_tokens AND reasoning_tokens<=output_tokens", name="usage_details"),
+        CheckConstraint("cost_basis IS NULL OR (cost_basis IN ('unknown','estimated','reported') AND (cost IS NULL)=(cost_basis='unknown'))", name="cost_basis"),
         ForeignKeyConstraint(["job_id", "owner_id"], ["jobs.id", "jobs.owner_id"], deferrable=True, initially="IMMEDIATE"),
         CheckConstraint("job_id IS NULL OR owner_id IS NOT NULL", name="job_owner"),
         CheckConstraint("owner_id IS NOT NULL OR (job_id IS NULL AND request_key IS NULL)", name="anonymous"),

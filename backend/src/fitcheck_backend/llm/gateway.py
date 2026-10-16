@@ -17,7 +17,10 @@ class ProviderGateway:
         try:
             self.ledger.finish(result.call_id, state=state, input_tokens=reply.input_tokens,
                 output_tokens=reply.output_tokens, cost=reply.cost, currency=reply.currency,
-                latency_ms=result.latency_ms, error_code=error_code)
+                latency_ms=result.latency_ms, error_code=error_code,
+                **{key:getattr(reply,key) for key in ('cached_input_tokens','cache_write_tokens',
+                    'reasoning_tokens','cost_basis','rate_version','cost_reason','service_tier',
+                    'processing_region','response_model')})
         except Exception:
             raise LlmError('service_unavailable') from None
 
@@ -54,7 +57,7 @@ class ProviderGateway:
                 try:
                     call_id = await asyncio.shield(admission)
                     await asyncio.shield(asyncio.to_thread(self._finish,
-                        GatewayReply(ProviderReply('',None,None,None,None),call_id,0),'unknown','cancelled'))
+                        GatewayReply(ProviderReply('',None,None,None,None,cost_basis='unknown',cost_reason='missing_usage'),call_id,0),'unknown','cancelled'))
                 except Exception:
                     # Fenced failure publication also reconciles started rows
                     # if a database outage prevents this immediate settlement.
@@ -64,7 +67,7 @@ class ProviderGateway:
                 raise LlmError('service_unavailable') from None
             started = self.clock()
             failure = None
-            reply = ProviderReply('', None, None, None, None)
+            reply = ProviderReply('', None, None, None, None,cost_basis='unknown',cost_reason='missing_usage')
             try:
                 timeout = min(policy.attempt_seconds, context.budget.remaining())
                 async with asyncio.timeout(timeout):

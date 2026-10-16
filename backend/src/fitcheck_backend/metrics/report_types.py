@@ -50,7 +50,7 @@ def serializable(value):
     if isinstance(value, datetime):
         return value.isoformat()
     if isinstance(value, Decimal):
-        return float(value)
+        return format(value, 'f')
     if isinstance(value, dict):
         return {key: serializable(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
@@ -100,6 +100,11 @@ class Attempt:
     cost: Decimal | None = None
     currency: str | None = None
     cost_basis: str = 'unknown'
+    rate_version: str | None = None
+    cost_reason: str | None = None
+    service_tier: str | None = None
+    processing_region: str | None = None
+    response_model: str | None = None
     error_code: str | None = None
     execution_token: UUID | None = None
 

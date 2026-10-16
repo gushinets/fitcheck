@@ -148,8 +148,8 @@ record their respective schema versions. Start rows are separately committed bef
 network I/O; final metrics survive operation failures and do not hold a DB connection
 during requests. Ledger failures stop the operation. Validation failures retain usage
 while marking the call failed; a failure to finish a row leaves `started` for future
-reconciliation. Unknown tokens/cost remain null. Costs use available SDK pricing
-metadata and are estimates; no raw requests/responses, secrets or personal content
+reconciliation. Unknown tokens/cost remain null. Historical costs retain available SDK estimates. New OpenAI text costs use the
+versioned Standard/global rate snapshot described below; no raw requests/responses, secrets or personal content
 are persisted in ledger or SDK telemetry.
 
 Deterministic mock/HTTP-transport tests use the real PydanticAI/LiteLLM adapters.
@@ -318,9 +318,9 @@ Account deletion removes the ownership graph, including claimed guests' remainin
 ## Telemetry and operator reports
 
 Telemetry uses additive migrations `0004_metrics`, `0005_metrics_erasure`, and
-`0006_metrics_coverage`. Frozen `0001`–`0005` must not be rewritten. Apply all three before enabling the upgraded API
-and worker. The companion OpenAI pricing migration, if needed, uses next-free
-`0007`; telemetry rollout preserves the existing DeepSeek provider/model.
+`0006_metrics_coverage`. OpenAI accounting adds `0007_provider_usage_basis`;
+frozen `0001`–`0006` must not be rewritten. Apply the matching schema head
+before enabling the upgraded API and worker. Historical DeepSeek costs stay unchanged.
 See the [development rollout record](../docs/deployments/2026-10-14-fitcheck-metrics.md)
 for ordering, evidence, approved decisions and remaining live checks.
 
@@ -466,3 +466,28 @@ Disable collection by setting API/worker `FITCHECK_METRICS_ENABLED=false`, remov
 website bridge configuration and rebuilding/redeploying its static enabled props.
 Preserve migrations, domain data and accounting ledgers. Stop any operator cleanup
 schedule separately. Do not downgrade/reset the database as telemetry rollback.
+
+
+OpenAI token costs use `openai.luna.2026-10-16`, verified against the official
+[pricing](https://developers.openai.com/api/docs/pricing) and
+[Luna model](https://developers.openai.com/api/docs/models/gpt-6-luna) pages on
+2026-10-16: USD per million text tokens is 0.10 input, 0.01 cached input,
+0.125 cache writes and 0.50 output. Cached and written tokens are subdivisions
+of total input; completion tokens already include reasoning. The estimate uses
+integer nano-USD arithmetic; both ledgers store `NUMERIC(24,12)`, the website
+DTO accepts 12 decimal places and report JSON emits Decimal values as strings.
+A single cache-write token therefore stays exactly `0.000000125` USD.
+
+Only a known actual Standard tier (`default`), global processing and at most
+272,000 input text tokens are priced. Missing cache read/write counts or usage,
+invalid subdivisions, unsupported models/rate versions/tiers/regions and long
+context remain unpriced with an explicit reason. The response's actual tier
+can differ from the request. A missing count never means zero. Rate version,
+actual response model/tier, region and unknown reason remain optional accounting
+metadata; report spend groups include rate version/tier/region and reason.
+Old SDK costs remain `estimated` with no fabricated rate version, including
+historical DeepSeek rows. Neither estimate source is an invoice verification.
+Known spend and coverage retain failed generations, audit calls and retries;
+cost per success divides all observed cohort attempts by operation successes.
+Migration 0007 refuses a rollback if narrowing costs to eight decimal places
+would lose data.

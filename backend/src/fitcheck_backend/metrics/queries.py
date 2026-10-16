@@ -57,7 +57,8 @@ def load_snapshot(conn, options, backend_database_environment=None):
     if options.population in {'visitor', 'all'}:
         keys = ('call_id', 'operation_id', 'subject_id', 'purpose', 'provider', 'model', 'started_at',
                 'finished_at', 'state', 'input_tokens', 'output_tokens', 'cached_input_tokens',
-                'cache_write_tokens', 'reasoning_tokens', 'cost', 'currency', 'cost_basis', 'error_code')
+                'cache_write_tokens', 'reasoning_tokens', 'cost', 'currency', 'cost_basis', 'error_code',
+                'rate_version', 'cost_reason', 'service_tier', 'processing_region', 'response_model')
         for row in bounded(conn, select(*(getattr(WebsiteProviderAttempt, key) for key in keys)).where(
                 WebsiteProviderAttempt.environment == options.environment,
                 WebsiteProviderAttempt.started_at >= floor, WebsiteProviderAttempt.started_at < options.end)):
@@ -65,7 +66,8 @@ def load_snapshot(conn, options, backend_database_environment=None):
             # A snapshot taken later cannot reveal a terminal state before end.
             if values['finished_at'] is not None and values['finished_at'] >= options.end:
                 for key in ('finished_at', 'cost', 'currency', 'input_tokens', 'output_tokens',
-                            'cached_input_tokens', 'cache_write_tokens', 'reasoning_tokens', 'error_code'):
+                            'cached_input_tokens', 'cache_write_tokens', 'reasoning_tokens', 'error_code',
+                            'rate_version', 'cost_reason', 'service_tier', 'processing_region', 'response_model'):
                     values[key] = None
                 values.update(state='started', cost_basis='unknown')
             data.attempts.append(Attempt(source='website_server', **values))
@@ -73,7 +75,9 @@ def load_snapshot(conn, options, backend_database_environment=None):
         return data
     # SDK costs are estimates, even for historical calls with a successful state.
     keys = ('id', 'job_id', 'owner_id', 'operation', 'provider', 'model', 'created_at',
-            'finished_at', 'state', 'input_tokens', 'output_tokens', 'cost', 'currency', 'error_code', 'execution_token')
+            'finished_at', 'state', 'input_tokens', 'output_tokens', 'cost', 'currency', 'error_code', 'execution_token',
+            'cached_input_tokens', 'cache_write_tokens', 'reasoning_tokens', 'cost_basis', 'rate_version',
+            'cost_reason', 'service_tier', 'processing_region', 'response_model')
     for row in bounded(conn, select(*(getattr(ProviderCall, key) for key in keys)).where(
             ProviderCall.created_at >= floor, ProviderCall.created_at < options.end)):
         values = dict(row)
@@ -81,11 +85,15 @@ def load_snapshot(conn, options, backend_database_environment=None):
                          ('operation','purpose'), ('created_at','started_at')]:
             values[new] = values.pop(old)
         if values['finished_at'] is not None and values['finished_at'] >= options.end:
-            for key in ('finished_at', 'cost', 'currency', 'input_tokens', 'output_tokens', 'error_code'):
+            for key in ('finished_at', 'cost', 'currency', 'input_tokens', 'output_tokens', 'error_code',
+                        'cached_input_tokens', 'cache_write_tokens', 'reasoning_tokens', 'rate_version',
+                        'cost_reason', 'service_tier', 'processing_region', 'response_model'):
                 values[key] = None
-            values['state'] = 'started'
+            values.update(state='started', cost_basis='unknown')
         values['error_code'] = safe_code(values['error_code']) if values['error_code'] else None
-        data.attempts.append(Attempt(source='backend_server', cost_basis='estimated' if values['cost'] is not None else 'unknown', **values))
+        if values['cost_basis'] is None:
+            values['cost_basis'] = 'estimated' if values['cost'] is not None else 'unknown'
+        data.attempts.append(Attempt(source='backend_server', **values))
     # User is one-to-one with owner. Guest jobs never become registered people.
     statement = select(Job.id, Job.owner_id, Job.type, Job.created_at, Job.started_at,
         Job.finished_at, Job.status, Job.available_at, Job.attempts, Job.error['code'].as_string().label('error_code'))\

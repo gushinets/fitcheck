@@ -42,6 +42,15 @@ class ProviderReply:
     output_tokens: int | None
     cost: Decimal | None
     currency: str | None
+    cached_input_tokens: int | None = None
+    cache_write_tokens: int | None = None
+    reasoning_tokens: int | None = None
+    cost_basis: str | None = None
+    rate_version: str | None = None
+    cost_reason: str | None = None
+    service_tier: str | None = None
+    processing_region: str | None = None
+    response_model: str | None = None
 
 
 @dataclass(frozen=True)

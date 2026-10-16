@@ -54,7 +54,11 @@ class ProviderLedger:
 
     def finish(self, call_id: UUID, *, state: str, input_tokens: int | None,
             output_tokens: int | None, cost: Decimal | None, currency: str | None,
-            latency_ms: int, error_code: str | None) -> None:
+            latency_ms: int, error_code: str | None, cached_input_tokens: int | None = None,
+            cache_write_tokens: int | None = None, reasoning_tokens: int | None = None,
+            cost_basis: str | None = None, rate_version: str | None = None,
+            cost_reason: str | None = None, service_tier: str | None = None,
+            processing_region: str | None = None, response_model: str | None = None) -> None:
         if state not in {'succeeded', 'failed', 'unknown'}:
             raise ValueError('Invalid final state')
         with unit_of_work(self.engine) as session:
@@ -65,4 +69,8 @@ class ProviderLedger:
                 return
             row.state, row.input_tokens, row.output_tokens = state, input_tokens, output_tokens
             row.cost, row.currency, row.latency_ms = cost, currency, latency_ms
+            row.cached_input_tokens, row.cache_write_tokens = cached_input_tokens, cache_write_tokens
+            row.reasoning_tokens, row.cost_basis = reasoning_tokens, cost_basis
+            row.rate_version, row.cost_reason = rate_version, cost_reason
+            row.service_tier, row.processing_region, row.response_model = service_tier, processing_region, response_model
             row.error_code, row.finished_at = error_code, utcnow()

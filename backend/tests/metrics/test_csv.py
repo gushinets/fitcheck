@@ -16,3 +16,9 @@ def test_csv_formula_escaping_and_no_subject_ids():
     assert cells[0]['environment']=='test'
     assert 'subject_id' not in stream.getvalue()
     assert len(report.to_json()['rows'])==len(cells)
+
+
+def test_json_report_preserves_exact_decimal_money():
+    from decimal import Decimal
+    from fitcheck_backend.metrics.report_types import serializable
+    assert serializable({'value':Decimal('999999999999.000000125')}) == {'value':'999999999999.000000125'}

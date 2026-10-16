@@ -2711,6 +2711,18 @@
             "title": "Costbasis",
             "type": "string"
           },
+          "costReason": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z][a-z0-9_]{0,79}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Costreason"
+          },
           "currency": {
             "anyOf": [
               {
@@ -2798,6 +2810,19 @@
             "title": "Policyversion",
             "type": "string"
           },
+          "processingRegion": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,119}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processingregion"
+          },
           "promptVersion": {
             "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,119}$",
             "title": "Promptversion",
@@ -2844,6 +2869,31 @@
               }
             ],
             "title": "Reasoningtokens"
+          },
+          "responseModel": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z][a-z0-9._-]{0,199}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsemodel"
+          },
+          "serviceTier": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,119}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Servicetier"
           },
           "startedAt": {
             "format": "date-time",
