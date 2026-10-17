@@ -1,130 +1,155 @@
 # FitCheck development OpenAI rollout
 
-Prepared 2026-10-16. **Local implementation verified; external rollout pending.**
-This record covers the transition from the previously deployed DeepSeek fleet to
-OpenAI `gpt-6-luna`. It does not supersede historical evidence in the
-[metrics rollout record](2026-10-14-fitcheck-metrics.md) or claim a provider push,
-remote CI pass, image deployment, live 0007 migration or account/model access.
+Updated 2026-10-17. Reviewed runtime `d30b19b4612f403629197a000a47896abc04a221`
+is deployed to the existing development API, worker and website. All three use
+`OPEN_AI_MODEL=gpt-6-luna`. The supplied key is saved only in the website and
+worker server configuration, following the user's action-time approval. No key
+value is recorded here, in Git, or in public environment variables.
 
-## Verified local evidence
+The [preceding metrics rollout](2026-10-14-fitcheck-metrics.md) remains the record
+for metrics Tasks 1–8, including its twenty execution rulings and real-bridge
+acceptance evidence. This record covers the matched provider transition.
 
-| Scope | Evidence |
+## Review, source and CI
+
+Tasks 1–3 each passed independent specification/quality review. Whole-branch
+review found two Important issues: Python OpenAI SDK debug logging could disclose
+request content, and exact-head-0006 backend images cannot run against schema
+0007. One final fix wave in `d30b19b` addressed both. The single scoped rereview
+approved both fixes with no new findings; no unresolved Critical/Important finding
+is deferred. Operational logs remain enabled while provider SDK logs are isolated.
+
+[Runtime CI](https://github.com/NikitaPotapovIt/fitcheck/actions/runs/39039672986)
+passed both verify and backend jobs at the exact runtime SHA. All three Dokploy
+autodeploy switches were verified OFF before the provider push and remained OFF
+through the controlled rollout. Final restoration is recorded below after the
+deployment evidence is pushed.
+
+| Local validation | Result |
 | --- | --- |
-| Shared Python configuration, admission and worker boundary | Local commit `699a3a4`; independent task review approved spec and quality |
-| Website analysis/suggestions and server configuration | Local commit `1c8082b`; independent task review approved spec and quality |
-| Versioned usage/pricing, migration and contracts | Local commit `870c17e`; independent task review approved spec and quality |
-| Full backend at `870c17e` | 705 passed, 1 paid canary skipped, 25.53 seconds; guarded disposable PostgreSQL |
-| Full frontend at `870c17e` | 397 passed, 3 paid live tests skipped, 3.42 seconds |
-| Frontend validation at `870c17e` | Full ESLint, TypeScript and production webpack build passed |
-| Task 3 artifact/storage validation | OpenAPI and generated TypeScript drift checks, packaged-wheel migration head 0007 and migration/schema checks passed locally |
+| Final full backend, guarded disposable PostgreSQL | 707 passed, 1 paid canary skipped, 30.70 seconds |
+| Frontend | 397 passed, 3 paid live tests skipped, 3.42 seconds |
+| Frontend checks | Full ESLint, TypeScript and production webpack build passed |
+| Contracts/storage | OpenAPI/generated TypeScript drift, packaged wheel head 0007 and Alembic schema checks passed |
+| Installed SDK boundary | Mock transports exercised real LiteLLM/OpenAI SDKs, exact destination/params, one-send limits, cancellation, concurrent isolation and safe errors |
+| Final SDK logging regression | Fresh subprocess DEBUG-before-import cases: 2 RED failures → 18 focused/89 covering passes |
 
-The ignored root `.env.local` already has exact `OPEN_AI_MODEL=gpt-6-luna`;
-root changed the model assignment only and preserved credential values. No key
-value belongs in this record or Git. Provider tests exercised installed SDKs with
-mock transports and documented usage-shaped fixtures. No paid generation ran.
+The full backend emitted one Pydantic body-alias warning in unchanged concurrent
+profile tests. A focused rerun with all markers and warnings as errors passed
+(1 test, 0.46 seconds); the warning was not reproduced, its cause is unproven,
+and it did not block the approved final review.
 
-Root additionally verified all three Dokploy autodeploy switches ON → OFF for
-this provider rollout on 2026-10-16, without changing environment/admission.
-An actual Alembic drift check against explicitly guarded disposable `fitcheck_test`
-at head 0007 reported “No new upgrade operations detected.” Local API/worker
-Docker builds at `870c17e` were running at preparation time; no completed build
-or digest is claimed here. No provider push had occurred.
+Final local images built from `d30b19b`:
 
-Fresh whole-branch review, final runtime/documentation SHAs, both final backend
-image builds, final diff checks and all external gates below remain to be recorded
-by the rollout operator. Individual task approval is not whole-branch approval.
+| Image | Config/image ID | Manifest-list digest |
+| --- | --- | --- |
+| `fitcheck-openai-api:20261017` | `sha256:e6ccf6e783b7a31c61305dd5291d32c597cea2591b11658a788b7f904e35a8c4` | `sha256:46a04062e7618d955c61eae8e26a7bb48e1b0ed63a38853379142bf88fcedf5e` |
+| `fitcheck-openai-worker:20261017` | `sha256:7d579d7154baa487c35bfa95a5fa2f90bad002929d0f74109152e3f3b9c1158e` | `sha256:e9af21f222caa443d3f471f43592377abb13bae6ba2f6e2c9abcf29398e24019` |
 
-## Server configuration to prepare
+Both packaged probes passed with `--read-only --network none`, schema head 0007,
+OpenAI/Luna/policy-v2 and no provider key. These are local image identities;
+Dokploy builds its own remote images, verified by deployment SHA and source hashes.
 
-| Recipient | Required provider configuration |
+## Executed migration and fleet transition
+
+The old API received `FITCHECK_JOBS_ENABLED=false` through **Reload**, retaining
+the pinned pre-migration runtime. Container `02701b499a78` reported schema 0006,
+DeepSeek policy, auth/metrics enabled, both collection/database scopes development,
+and no nonterminal jobs (`[]`). Its 115-file Python source manifest was
+`c0018ab4fab3c0f7f1c4a84bfc324bb1421f41f200fe285b951dc5f6de7f35a2`.
+The drained old worker was stopped before migration; the UI showed Start.
+
+A pinned additive migration adapter used the installed migration runner's advisory
+lock and transaction. It verified all frozen 0001–0006 migration hashes, verified
+new 0007 SHA256 `88cba73d3fdfb463d4559771ab3c946b1a79b3af4a837c9f7c2061afa04ca745`,
+refused nonterminal jobs, and upgraded a temporary copy of the migration directory
+without modifying the installed old package. Command SHA256:
+`41300b09be23a0eab2396d0c570824879bdb9a967bfbdbc55268179d317c281c`.
+Before remote use, a disposable transactional schema proved drain refusal,
+0006→0007, repeated no-op and row/cost preservation, then rolled back.
+
+Observed live output:
+
+```text
+MIGRATED 0006 -> 0007 ROW_COUNTS_PRESERVED True HISTORICAL_COSTS_PRESERVED True
+```
+
+Owner, job, provider-call, journal and website-attempt row counts and both ledger
+cost sums were checked atomically. No reset, downgrade, queued-job rewrite or
+historical cost rewrite occurred. The new API's packaged runner subsequently
+reported **No new upgrade operations detected**.
+
+API deployed first with admission off, worker second, then admission was restored
+and website deployed last. Each Dokploy deployment completed at exact `d30b19b`.
+
+| Service | Observed runtime evidence |
 | --- | --- |
-| Website | Supplied `OPEN_AI_KEY` in server secret storage; `OPEN_AI_MODEL=gpt-6-luna` |
-| API | `OPEN_AI_MODEL=gpt-6-luna` for admission; no provider key required |
-| Worker | Same supplied `OPEN_AI_KEY` in server secret storage; `OPEN_AI_MODEL=gpt-6-luna` |
+| API | Initial new container `c2dc7a97cd22`; after admission Reload `6e5a67b31746`: schema and packaged head 0007, model `gpt-6-luna`, provider key absent, jobs/auth/metrics true, both scopes development |
+| Worker | Initial new container `64edcc1e7b5a`; after obsolete-env removal Reload `428a870ccd7f`: health true, packaged head 0007, model `gpt-6-luna`, provider key present, policy provider openai, both scopes development, no nonterminal jobs |
+| Website | Initial new container `16fd42ec9606`: model `gpt-6-luna`, provider key present, metrics bridge/cookie keys present, development scope and correct collector destination; source hashes matched local runtime |
 
-Do not regenerate the supplied key, expose it in browser/public variables, print
-settings or raw provider errors, or include it in evidence. Unsupported model
-values fail safely. Transfer the key only through supported secret configuration;
-if the access mechanism requires action-time confirmation, request it when the
-concrete recipients and changes are ready to apply. Credential transfer has not
-been performed for this migration.
+Both new backend packages had exactly 116 non-migration Python files and source
+manifest SHA256 `bbaaf5c5e81d252f07b68073327394b57785c144e4103380c426bb5946464615`,
+matching the local runtime. Website source SHA256 checks matched:
 
-Preserve database/auth/origin and metrics configuration on every service. In
-particular, retain development collection scope and independent database scope,
-bridge/cookie credentials and campaign allowlists. Preserve the website's tested
-`NIXPACKS_START_CMD=sh ops/dokploy-website-start.sh` and
-`FITCHECK_DOKPLOY_METRICS_GATEWAY=true`; the startup helper maintains the verified
-single-host metrics gateway route after container replacement. Replacing the
-startup command can break collector reachability. Recheck the route and normal
-certificate-verified HTTPS after deployment without exposing credentials.
+| File | SHA256 |
+| --- | --- |
+| `lib/analysis/openai.ts` | `c3c9ca83e9a848c345b48e4545e0015b00ee8b6e1006b5be1539a173102d7819` |
+| `lib/skill-suggestions/openai.ts` | `fa6624e22139c76cebe9bf6cae2e8fa878502d1d74a196dd9c416b947cc034f1` |
+| `lib/metrics/pricing.ts` | `cfa478b8889fbbc5b571180c7a5fd1186d8e7236edb870198a3a0daf68bf8604` |
+| `ops/dokploy-website-start.sh` | `0735b90b01589a676b253bfedbfd7b13fa46ce6c0842a75f3301967b66a9f3b8` |
 
-Keep obsolete deployed DeepSeek credentials available to the old fleet while
-frozen work is draining. Remove obsolete active variables only after successful
-OpenAI startup/configuration verification and a safe drain/rollback decision;
-historical deployment records and accounting rows remain unchanged.
+## Health, telemetry and coverage
 
-## Planned controlled rollout — not executed
+API loopback checks after admission restoration: readiness 200, anonymous POST
+`/v1/analysis-jobs` 401, anonymous POST `/internal/metrics/events` 401,
+`/internal/metrics/report` 404. There is no public cross-account report endpoint.
 
-1. Finish whole-branch review and final local checks/image builds. Record exact
-   runtime commit and image identifiers. Verify **website, API and worker
-   autodeploy OFF before pushing provider code**; the metrics predecessor restored
-   all three switches ON. Push reviewed `dev`, await CI success at the exact
-   runtime SHA, and record the run URL. No fleet switch on a failed/stale CI run.
-2. On the existing API, set `FITCHECK_JOBS_ENABLED=false` and verify admission is
-   disabled while authenticated GET remains available. Apply the environment
-   change using Dokploy **Reload**, retaining the pinned pre-migration API
-   runtime/image; record and verify the same old SHA/image before and after.
-   Do not use a deploy/rebuild of the newly pushed branch to disable admission.
-   If Reload cannot retain that pinned runtime, stop until it can be applied
-   safely. Preserve auth and metrics state. Inspect **all nonterminal jobs**, grouped by frozen envelope provider,
-   model and policy version, with counts and timestamps only. Treat legacy or
-   missing envelopes as incompatible until resolved; do not output task/profile
-   payloads. Let the existing matching DeepSeek worker drain. Reinspect after
-   draining. If incompatible work remains, stop the switch and retain the old
-   worker/key; never delete, mutate or reinterpret those jobs to force zero.
-3. With admission still off and the old worker drained/stopped, use the approved
-   migration runner and target database secret to apply additive
-   `0007_provider_usage_basis` from the observed head. Use the established storage
-   runner (`python -m fitcheck_backend.storage.migrate upgrade`), then its `check`
-   command. Record runner identity, observed before/after head, success and drift
-   result without secrets. The predecessor's last verified remote head was 0006;
-   reread it rather than assuming it remains so. Preserve 0001–0006, domain rows,
-   historical costs and telemetry. Do not reset or downgrade the database.
-4. Prepare/save the server configurations above through supported secret stores.
-   Deploy the new **API registry first**, retaining `FITCHECK_JOBS_ENABLED=false`.
-   Verify exact runtime SHA, schema 0007, readiness, model `gpt-6-luna`, auth and
-   telemetry scope. Inspect credential presence only as booleans; the API should
-   not receive the provider key. Do not enable admission yet.
-5. Deploy the matching **worker** with `OPEN_AI_MODEL=gpt-6-luna` and supplied
-   server key. Verify exact runtime SHA/image, schema, process/health marker,
-   key-present boolean and registry/policy compatibility
-   (`openai`, `gpt-6-luna`, `fitcheck.llm.policy.v2`). Confirm no incompatible
-   nonterminal job remains. Startup and mocked boundary evidence suffice for
-   this gate; do not create a paid job as a health check.
-6. Only after compatibility is confirmed, restore API admission to its intended
-   enabled state. Verify external readiness and anonymous job rejection without
-   executing a model request. Preserve authenticated read and ownership checks.
-7. Deploy the **website last**, with matching exact model/key and preserved
-   origin/metrics/startup settings. Verify the exact runtime SHA, normal page
-   rendering, configuration booleans and collector reachability. Use mock or
-   disposable test-scope evidence for OpenAI provider/model attribution, attempt
-   accounting and unknown-cost coverage; label fixtures as synthetic. Do not
-   present a mock as a live OpenAI response or contaminate development cohorts.
-8. Append actual migration, CI, images, configuration/health and report evidence.
-   Remove obsolete active DeepSeek variables only after the preceding gates pass.
-   Commit/push final reviewed documentation and verify its CI as applicable.
-   Restore all three autodeploy switches to their intended ON state only after
-   the controlled rollout and final documentation push; verify and record each
-   state. Do not leave an accidental automatic partial-fleet transition enabled.
+Website retained `NIXPACKS_START_CMD=sh ops/dokploy-website-start.sh` and
+`FITCHECK_DOKPLOY_METRICS_GATEWAY=true`. Certificate-verified HTTPS from the
+replacement website container to the configured collector returned readiness 200
+(58 ms initially, 57 ms after Reload); no TLS verification bypass was used.
+Chrome rendered the ordinary development landing page without generating an
+analysis or suggestion. The persisted development page-view count increased
+**1 → 2**; the bounded operator acquisition report returned one visitor with
+availability true (the same retained browser identity, so no new visitor was invented).
 
-The operator report remains CLI-only; there is no public cross-account report
-endpoint. Use `python -m fitcheck_backend.metrics report` with explicit start/end,
-`--timezone Europe/Moscow`, `--environment test` for synthetic fixtures and the
-appropriate `--population visitor|account|all`, writing to an operator-selected file.
-Select a bounded interval with proven coverage and no future end. Record aggregate
-provider/model/purpose/outcome/basis/coverage findings without personal content.
-Recheck unauthenticated collector access rejection and absence of a public report
-route. Actual development observation should use an ordinary non-paid page visit.
+Synthetic accounting proof comes from the guarded disposable tests, **not a live
+OpenAI response**. Backend and website attempts both retained OpenAI/Luna and
+`openai.luna.2026-10-16` attribution, cache-write cost `0.000000125` exactly,
+separate rows without fanout, and failed-generation/audit costs in successful
+operation expenses (`0.000000375` across three calls). Shared Python/TypeScript
+fixtures cover 22 known/unknown usage cases. Missing counts, unsupported actual
+tier/model/context and transport failures without usage remain unknown with
+coverage/reasons. Historical DeepSeek costs stay estimated/unversioned and unchanged.
+No synthetic attempt was inserted into the development cohort for this proof.
+
+Obsolete active DeepSeek variables were removed from ignored `.env.local` and
+Dokploy website/worker configuration only after OpenAI startup checks. The supplied
+OpenAI key was preserved. Worker replacement reports zero DeepSeek variables.
+Nixpacks embeds build environment into its image: a website Reload still exposed
+two old variables, so a fresh image build was started with the cleaned configuration;
+the clean-image deployment completed at `d30b19b`, container `92cb5c3b1c05`.
+It reports **zero DeepSeek variables**, model `gpt-6-luna`, key present, preserved
+metrics/startup flags and certificate-verified collector readiness 200 (58 ms).
+Historical deployment records are retained.
+
+## Rulings I made
+
+1. Widen ledger cost precision to `NUMERIC(24,12)` and serialize operator-report
+   Decimal money as decimal strings. One cache-write token costs `0.000000125`,
+   which the old precision cannot preserve. Tradeoff: additive migration and
+   operator consumers must accept strings; product result contracts stay unchanged,
+   and downgrade refuses lossy narrowing.
+2. Preserve schema 0007 and reject direct rollback to exact-head-0006 backend
+   images. Their startup/readiness gates cannot accept 0007. Provider rollback
+   needs a separately reviewed 0007-compatible artifact; otherwise keep admission
+   off and repair forward. Tradeoff: recovery is less immediate and admission may
+   remain unavailable during repair; no data/schema bypass or historical rewrite.
+
+The predecessor's twenty rulings are preserved in the linked metrics record.
+No deferred review finding remains; live account/model access, response quality
+and invoice verification remain explicit untested coverage, not review approval.
 
 ## Pricing and compatibility
 
@@ -178,20 +203,17 @@ fleet. Preserve 0007, all domain/telemetry rows, immutable envelopes and costs.
 Never bypass schema gates, reset/downgrade the DB, delete jobs or rewrite
 historical work to make old images boot. Record the final autodeploy state explicitly.
 
-## External evidence still required
+## Limits and finalization
 
-Pending: whole-branch approval; final local image/diff evidence; provider push and
-exact-SHA CI; final autodeploy restoration; remote job inspection/drain;
-secret-store transfer authorization/application; migration runner and live head
-0007/drift; matching API/worker/website images and SHAs; external health, model and
-configuration booleans; anonymous rejection; synthetic provider attribution and
-report coverage; replacement-container metrics routing; final docs push and
-restored switches. No remote/provider step is marked complete here.
+No paid OpenAI request or live canary was run. Actual key/account access to the
+model, live response compatibility, grounding quality and billing remain
+unverified by startup/mock checks. All four opt-in paid tests remained skipped.
+A live canary requires separate approval of a concrete spending cap.
 
-Actual key/account access, live response compatibility, grounding quality and
-billing are **unverified** by these mock/startup checks. All optional paid tests
-remain skipped. A live canary requires a separately approved concrete spend cap
-before execution; record its status and limits if subsequently authorized.
+External HTTPS readiness also returned status ok with database ready. Deployment
+evidence is ready to push; restoration of the three intended autodeploy ON states
+follows that push and will be recorded separately. No completed restoration is
+claimed by this checkpoint.
 
 ## Official sources checked during implementation
 
@@ -201,19 +223,3 @@ before execution; record its status and limits if subsequently authorized.
 
 These are the official URLs verified in Tasks 1–3 on 2026-10-16. This preparation
 pass did not refetch them or make any provider request.
-
-## Additional local build evidence
-
-Both local Docker builds at source `870c17e` subsequently completed:
-
-| Image | Config/image ID | Manifest-list digest |
-| --- | --- | --- |
-| `fitcheck-openai-api:20261016` | `sha256:913a46867f8773771134413d7beb89f1c43a7dd1f00fe60309121b189557c27c` | `sha256:6aa7a090935ce43de4790fda7ee20baa90cbe284d0e9bd822328e5e59e90b44d` |
-| `fitcheck-openai-worker:20261016` | `sha256:a5ada6ad5987d82321eb667d909f7e42a402750cc380da2bd721d5a706fee5ba` | `sha256:fefd37ed47a123b681dfc8c49306c01d3bc59f35dc5d59629cc03e2f3fdf9b0a` |
-
-Each image ran its packaged Python imports/policy/schema probe with `--read-only
---network none`, exit 0: schema head **0007**, provider **openai**, model
-**gpt-6-luna**, policy **fitcheck.llm.policy.v2**, no provider key supplied. API
-probe imported the metrics CLI; worker probe imported its runtime. No provider
-or database connection was made by these probes. These are local image checks,
-not remote deployment or account access proof.
