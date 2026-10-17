@@ -1,7 +1,7 @@
 from ..analysis.types import AnalysisInput
 from ..contracts.resources import AnalysisSnapshot
 from ..llm.context import operation_context
-from .envelope import decode_envelope, validate_supported_versions, AnalysisEnvelope
+from .envelope import decode_envelope, validate_supported_versions, ANALYSIS_ENVELOPES
 
 
 class FrozenJobExecutor:
@@ -13,10 +13,11 @@ class FrozenJobExecutor:
     async def execute(self, lease):
         envelope = decode_envelope(lease.type, lease.input)
         validate_supported_versions(envelope, model=self.model)
-        service = self.runtime.analysis if isinstance(envelope, AnalysisEnvelope) else self.runtime.suggestions
+        service = self.runtime.analysis if isinstance(envelope, ANALYSIS_ENVELOPES) else self.runtime.suggestions
         context = operation_context(lease.owner_id, lease.job_id, service.policy, lease.execution_token)
+        if hasattr(envelope,'limits'):context.budget.max_calls=envelope.limits.calls
         context.budget.remaining()
-        if isinstance(envelope, AnalysisEnvelope):
+        if isinstance(envelope, ANALYSIS_ENVELOPES):
             req, versions = envelope.request, envelope.versions
             value = AnalysisInput(envelope.profile, req.vacancy, req.locale, envelope.memory)
             snapshot = AnalysisSnapshot(profileRevision=req.profile_revision, profile=envelope.profile,

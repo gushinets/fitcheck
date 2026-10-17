@@ -55,7 +55,7 @@ def test_guest_and_unverified_account_rejected(profile_http):
     with unit_of_work(a.engine) as s: s.get(User,issued.principal.user_id).email_verified_at = None
     assert c.post('/v1/analysis-jobs',json=body(),headers=h).status_code == 403
     c.cookies.clear()
-    assert c.post('/v1/analysis-jobs',json={**body(),'mode':'guest'},headers=h).status_code == 401
+    assert c.post('/v1/analysis-jobs',json=dict(mode='guest',vacancy=DATA['vacancy'],profile=DATA['profile'],locale='en'),headers=h).status_code == 401
 
 
 def test_csrf_required(profile_http):

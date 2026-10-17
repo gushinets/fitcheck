@@ -2,7 +2,7 @@ from datetime import UTC,timedelta
 from decimal import Decimal
 from sqlalchemy import select,func
 from sqlalchemy.dialects.postgresql import insert
-from .models import Owner,Guest,Job,ProviderCall,BudgetWindow,CallReservation
+from .models import Owner,Guest,Job,ProviderCall,BudgetWindow,CallReservation,GuestSessionRow,AuthSession,User
 from ..quotas.errors import QuotaError
 
 
@@ -15,6 +15,19 @@ class BudgetRepository:
         guest=self.s.scalar(select(Guest).where(Guest.owner_id==owner.id)) if owner.kind=='guest' else None
         if owner.kind=='guest' and (guest is None or guest.expires_at<=now or guest.claimed_by_user_id is not None):
             raise QuotaError('budget_exceeded')
+        candidate=self.s.get(Job,attempt.job_id) if attempt.job_id else None
+        frozen=candidate.input if candidate else {}
+        session_id=frozen.get('sessionId')
+        if session_id:
+            from uuid import UUID
+            model=GuestSessionRow if owner.kind=='guest' else AuthSession
+            session_row=self.s.scalar(select(model).where(model.id==UUID(session_id)).with_for_update())
+            if session_row is None or session_row.revoked_at is not None or session_row.expires_at<=now:
+                raise QuotaError('budget_exceeded')
+            if owner.kind=='guest' and session_row.owner_id!=owner.id:raise QuotaError('budget_exceeded')
+            if owner.kind=='user':
+                user=self.s.get(User,session_row.user_id)
+                if user is None or user.owner_id!=owner.id or user.email_verified_at is None:raise QuotaError('budget_exceeded')
         job=None
         if attempt.job_id is not None:
             job=self.s.scalar(select(Job).where(Job.id==attempt.job_id).with_for_update())

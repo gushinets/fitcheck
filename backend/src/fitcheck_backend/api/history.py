@@ -8,7 +8,7 @@ from ..contracts.resources import AnalysisResource, HistoryPage, FeedbackRespons
 from ..contracts.openapi import ERRORS, SECURITY
 from .dependencies import required_runtime, verified_principal, validate_account_mutation, client_ip, resolve_identity
 from .errors import ErrorEnvelope, ApiError
-from .jobs import idempotency, mutation as job_mutation
+from .jobs import idempotency
 
 router = APIRouter(dependencies=[Depends(required_runtime)],
     responses={status: {'model': ErrorEnvelope, 'description': code} for status, code in ERRORS.items()})
@@ -71,8 +71,9 @@ def update_application_status(request: Request, analysis_id: AnalysisId,
 
 @router.post('/v1/analyses/{analysisId}/reanalyses', status_code=202, response_model=JobReference,
     operation_id='reanalyze', openapi_extra=metadata(True))
-def reanalyze(request: Request, analysis_id: AnalysisId, principal=Depends(job_mutation), key=Depends(idempotency)):
+def reanalyze(request: Request, analysis_id: AnalysisId, principal=Depends(mutation), key=Depends(idempotency)):
     runtime = required_runtime(request)
+    if not runtime.settings.jobs_enabled:raise ApiError(503,'service_unavailable','Service unavailable')
     value = runtime.jobs.reanalyze(principal=principal, analysis_id=analysis_id,
         idempotency_key=key, client_ip=client_ip(request), clock=runtime.clock)
     return JobReference(jobId=str(value.job_id))

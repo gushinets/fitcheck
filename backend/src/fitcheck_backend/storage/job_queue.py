@@ -27,6 +27,8 @@ def safe_job_error(job_id, code='service_unavailable'):
 
 
 def fenced_job(session, lease):
+    owner=session.scalar(select(Owner.id).where(Owner.id==lease.owner_id).with_for_update())
+    if owner is None:return None
     job = session.scalar(select(Job).where(Job.id == lease.job_id, Job.owner_id == lease.owner_id)
         .with_for_update())
     if (job is None or job.type != lease.type or job.status != 'running'
@@ -48,8 +50,6 @@ class JobQueue:
                        if expired else [Job.status == 'queued', Job.available_at <= func.clock_timestamp()])
         order = Job.lease_expires_at if expired else Job.available_at
         statement = select(Job).where(*conditions).order_by(order, Job.id)
-        if self.metrics_environment is None:
-            return session.scalars(statement.limit(limit).with_for_update(skip_locked=True)).all()
         # Owner deletion locks owner before cascading jobs. Acquire the owner
         # key-share first, without waiting, before taking any candidate job lock.
         # A bounded scan can skip a busy owner without starving other owners.
@@ -58,7 +58,7 @@ class JobQueue:
         selected = []
         for job_id, owner_id in candidates:
             owner = session.scalar(select(Owner.id).where(Owner.id==owner_id)
-                .with_for_update(read=True, key_share=True, skip_locked=True))
+                .with_for_update(skip_locked=True))
             if owner is None:
                 continue
             job = session.scalar(statement.where(Job.id==job_id, Job.owner_id==owner_id)
@@ -79,6 +79,7 @@ class JobQueue:
             if job.attempts >= self.max_attempts:
                 job.status, job.finished_at = 'failed', now
                 job.error = safe_job_error(job.id)
+                finish_job(s,job,success=False,now=now)
                 append_job_finished(s, job, self.metrics_environment)
                 return None
             job.status, job.lease_token = 'running', uuid4()
@@ -116,5 +117,11 @@ class JobQueue:
                 else:
                     job.status, job.finished_at = 'failed', now
                     job.error = safe_job_error(job.id)
+                    finish_job(s,job,success=False,now=now)
                     append_job_finished(s, job, self.metrics_environment)
             return len(jobs)
+
+
+def finish_job(session,job,*,success,now):
+    from .quota_repository import QuotaRepository
+    return QuotaRepository(session).settle_job(job.id,success=success,now=now)

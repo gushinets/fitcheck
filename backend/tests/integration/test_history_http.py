@@ -124,9 +124,9 @@ def test_reanalysis_current_profile_frozen_memory_idempotency_and_previous_resul
     job_id = UUID(response.json()['jobId'])
     with unit_of_work(a.engine) as s:
         job = s.get(Job, job_id)
-        assert job.input['request']['profileRevision'] == '2'
+        assert job.input['profileRevision'] == '2'
         assert job.input['profile']['preferredRate'] == 70
-        assert 'url' not in job.input['request']['vacancy']
+        assert 'url' not in job.input['vacancy']
         assert job.input['memory'][0]['correctedScore'] == 40
     assert save(c, h, '2', preferredRate=80).status_code == 200
     replay = c.post(base + '/reanalyses', headers={**h, 'Idempotency-Key': 'reanalysis-1'})

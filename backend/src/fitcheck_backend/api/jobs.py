@@ -6,7 +6,7 @@ from ..contracts.resources import AnalysisStart,AccountAnalysisStart,SkillSugges
 from ..contracts.openapi import ERRORS,SECURITY
 from ..jobs.errors import JobError
 from .errors import ErrorEnvelope
-from .dependencies import required_runtime,verified_principal,validate_account_mutation,client_ip,resolve_identity
+from .dependencies import required_runtime,verified_principal,validate_account_mutation,client_ip,resolve_identity,validate_identity_mutation
 
 router = APIRouter(dependencies=[Depends(required_runtime)],
     responses={status:{'model':ErrorEnvelope,'description':code} for status,code in ERRORS.items()})
@@ -21,8 +21,9 @@ def metadata(mutation=False,access='account'):
     return value
 
 
-def mutation(request: Request,principal=Depends(verified_principal)):
-    validate_account_mutation(request,principal)
+def mutation(request: Request,principal=Depends(resolve_identity)):
+    validate_identity_mutation(request,principal)
+    if principal.mode=='guest' and not request.app.state.settings.guest_enabled:raise JobError('service_unavailable')
     if not request.app.state.settings.jobs_enabled: raise JobError('service_unavailable')
     return principal
 
@@ -39,17 +40,18 @@ def admitted(value):
 
 
 @router.post('/v1/analysis-jobs',status_code=202,response_model=JobAdmissionResource,
-    operation_id='startAnalysis',openapi_extra=metadata(True))
-def start_analysis(request: Request,body: AnalysisStart,principal=Depends(mutation),key=Depends(idempotency)):
-    if not isinstance(body.root,AccountAnalysisStart): raise JobError('forbidden')
-    return admitted(required_runtime(request).jobs.start_analysis(owner_id=principal.owner_id,
+    operation_id='startAnalysis',openapi_extra=metadata(True,access='identity'))
+def start_analysis(request: Request,body: AnalysisStart,key=Depends(idempotency)):
+    principal=resolve_identity(request,mode=body.root.mode)
+    mutation(request,principal)
+    return admitted(required_runtime(request).jobs.start_analysis(identity=principal,
         request=body.root,idempotency_key=key,client_ip=client_ip(request)))
 
 
 @router.post('/v1/skill-suggestion-jobs',status_code=202,response_model=JobAdmissionResource,
-    operation_id='startSkillSuggestions',openapi_extra=metadata(True))
+    operation_id='startSkillSuggestions',openapi_extra=metadata(True,access='identity'))
 def start_suggestions(request: Request,body: SkillSuggestionStart,principal=Depends(mutation),key=Depends(idempotency)):
-    return admitted(required_runtime(request).jobs.start_suggestions(owner_id=principal.owner_id,
+    return admitted(required_runtime(request).jobs.start_suggestions(identity=principal,
         request=body,idempotency_key=key,client_ip=client_ip(request)))
 
 

@@ -2,10 +2,10 @@ from pydantic import TypeAdapter
 from sqlalchemy import update, select
 from ..contracts.domain import Skill
 from ..contracts.resources import AnalysisSnapshot
-from ..jobs.envelope import decode_envelope, AnalysisEnvelope
+from ..jobs.envelope import decode_envelope, ANALYSIS_ENVELOPES
 from .models import VacancyRecord, AnalysisRecord, AnalysisAnnotation, ProviderCall, Owner
 from .payloads import encode_analysis, encode_snapshot
-from .job_queue import job_transaction, fenced_job, db_now
+from .job_queue import job_transaction, fenced_job, db_now, finish_job
 from ..metrics.lifecycle import append_job_finished
 
 
@@ -20,6 +20,7 @@ def _finish(session, job, *, status, output=None, error=None, metrics_environmen
     job.status, job.finished_at = status, now
     job.output, job.error = output, error
     job.lease_token, job.lease_expires_at = None, None
+    finish_job(session,job,success=status=='succeeded',now=now)
     append_job_finished(session, job, metrics_environment)
 
 
@@ -29,11 +30,6 @@ class JobPublication:
         self.metrics_environment = metrics_environment
 
     def _fenced_job(self, session, lease):
-        if self.metrics_environment is not None:
-            owner = session.scalar(select(Owner.id).where(Owner.id==lease.owner_id)
-                .with_for_update(read=True, key_share=True))
-            if owner is None:
-                return None
         return fenced_job(session, lease)
 
     def succeed_analysis(self, lease, result):

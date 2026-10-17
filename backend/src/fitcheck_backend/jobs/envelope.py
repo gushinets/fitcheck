@@ -1,5 +1,8 @@
 from copy import deepcopy
 from typing import Literal
+from uuid import UUID
+from decimal import Decimal
+from ..contracts.domain import Vacancy, Locale, Revision
 from pydantic import ValidationError, Field
 from ..contracts.domain import DTO, FreelancerProfile, text
 from ..contracts.resources import AccountAnalysisStart, SkillSuggestionStart
@@ -34,6 +37,39 @@ class SuggestionsEnvelope(DTO):
     versions: ExecutionVersions
 
 
+class FrozenLimits(DTO):
+    calls: int = Field(strict=True,ge=1,le=10000)
+    tokens: int = Field(strict=True,ge=1,le=100000000)
+    usd: Decimal = Field(gt=0,le=10000,allow_inf_nan=False)
+
+
+class AnalysisEnvelopeV2(DTO):
+    envelope_version: Literal[2]
+    mode: Literal['account','guest']
+    session_id: UUID | None = None
+    profile_revision: Revision
+    profile: FreelancerProfile
+    vacancy: Vacancy
+    locale: Locale
+    memory: list[CalibrationEntry] = Field(max_length=10)
+    versions: ExecutionVersions
+    limits: FrozenLimits
+
+    @property
+    def request(self):
+        return AccountAnalysisStart(mode='account',profileRevision=self.profile_revision,vacancy=self.vacancy,locale=self.locale)
+
+
+class SuggestionsEnvelopeV2(SuggestionsEnvelope):
+    envelope_version: Literal[2]
+    mode: Literal['account','guest']
+    session_id: UUID | None = None
+    limits: FrozenLimits
+
+
+ANALYSIS_ENVELOPES=(AnalysisEnvelope,AnalysisEnvelopeV2)
+
+
 def execution_versions(job_type: str, *, model: str = 'gpt-6-luna') -> ExecutionVersions:
     if job_type not in {'analysis', 'skill_suggestions'}:
         raise JobError('invalid_request')
@@ -47,6 +83,8 @@ def execution_versions(job_type: str, *, model: str = 'gpt-6-luna') -> Execution
 
 def decode_envelope(job_type: str, payload: dict) -> AnalysisEnvelope | SuggestionsEnvelope:
     kind = {'analysis': AnalysisEnvelope, 'skill_suggestions': SuggestionsEnvelope}.get(job_type)
+    if payload.get('envelopeVersion')==2:
+        kind={'analysis':AnalysisEnvelopeV2,'skill_suggestions':SuggestionsEnvelopeV2}.get(job_type)
     if kind is None:
         raise JobError('invalid_request')
     try:
@@ -56,6 +94,6 @@ def decode_envelope(job_type: str, payload: dict) -> AnalysisEnvelope | Suggesti
 
 
 def validate_supported_versions(envelope: AnalysisEnvelope | SuggestionsEnvelope, *, model: str = 'gpt-6-luna') -> None:
-    job_type = 'analysis' if isinstance(envelope, AnalysisEnvelope) else 'skill_suggestions'
+    job_type = 'analysis' if isinstance(envelope, ANALYSIS_ENVELOPES) else 'skill_suggestions'
     if envelope.versions != execution_versions(job_type, model=model):
         raise JobError('service_unavailable')

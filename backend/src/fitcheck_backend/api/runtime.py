@@ -41,7 +41,7 @@ class AuthRuntime:
         self.quota_policy = QuotaPolicy.from_settings(settings)
         self.quotas = QuotaService(self.engine,self.quota_policy,clock)
         self.extraction = ExtractionService(self.limiter,quotas=self.quotas)
-        self.jobs = JobAdmission(self.engine,self.limiter,model=settings.open_ai_model,metrics_environment=metrics_environment)
+        self.jobs = JobAdmission(self.engine,self.limiter,model=settings.open_ai_model,metrics_environment=metrics_environment,policy=self.quota_policy,clock=clock)
         self.guests = GuestSessions(self.engine,self.crypto,self.quota_policy,clock,self.limiter)
         self.job_status = JobStatusReader(self.engine,clock=clock)
         self.history = HistoryService(self.engine, clock, bytes.fromhex(settings.auth_secret.get_secret_value()))
