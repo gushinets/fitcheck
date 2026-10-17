@@ -26,31 +26,17 @@ class ProviderAttempt:
 
 
 class ProviderLedger:
-    def __init__(self, engine):
+    def __init__(self, engine, *, policy=None):
+        from ..quotas.policy import QuotaPolicy
+        from ..config import Settings
         self.engine = engine
+        self.policy = policy or QuotaPolicy.from_settings(Settings())
 
-    def start(self, attempt: ProviderAttempt) -> UUID:
+    def start(self, attempt: ProviderAttempt, *, bounds) -> UUID:
+        from .budget_repository import BudgetRepository
         with unit_of_work(self.engine) as session:
-            if session.get(Owner, attempt.owner_id) is None:
-                raise ValueError('Invalid owner ownership')
-            if attempt.job_id is not None:
-                job = session.scalar(select(Job).where(Job.id == attempt.job_id).with_for_update())
-                if job is None or job.owner_id != attempt.owner_id:
-                    raise ValueError('Invalid job ownership')
-                if attempt.execution_token is not None:
-                    now = session.scalar(select(func.clock_timestamp()))
-                    if (job.status != 'running' or job.lease_token != attempt.execution_token
-                            or job.lease_expires_at is None or job.lease_expires_at <= now):
-                        raise ValueError('Invalid execution lease')
-            row = ProviderCall(owner_id=attempt.owner_id, job_id=attempt.job_id,
-                request_key=f'{attempt.operation_id}:{attempt.physical_attempt}',
-                provider=attempt.provider, model=attempt.model, operation=attempt.operation,
-                attempt=attempt.physical_attempt, semantic_attempt=attempt.semantic_attempt,
-                transport_attempt=attempt.transport_attempt, prompt_version=attempt.prompt_version,
-                schema_version=attempt.schema_version, policy_version=attempt.policy_version,
-                execution_token=attempt.execution_token, state='started')
-            session.add(row); session.flush()
-            return row.id
+            now=session.scalar(select(func.clock_timestamp()))
+            return BudgetRepository(session).reserve(attempt,bounds,policy=self.policy,now=now)
 
     def finish(self, call_id: UUID, *, state: str, input_tokens: int | None,
             output_tokens: int | None, cost: Decimal | None, currency: str | None,
@@ -62,7 +48,20 @@ class ProviderLedger:
         if state not in {'succeeded', 'failed', 'unknown'}:
             raise ValueError('Invalid final state')
         with unit_of_work(self.engine) as session:
-            row = session.scalar(select(ProviderCall).where(ProviderCall.id == call_id).with_for_update())
+            from .budget_repository import BudgetRepository
+            from ..llm.types import ProviderReply
+            candidate=session.get(ProviderCall,call_id)
+            if candidate is None:raise ValueError('Provider call not found')
+            if candidate.owner_id is not None:
+                session.scalar(select(Owner).where(Owner.id==candidate.owner_id).with_for_update())
+            if candidate.job_id is not None:
+                session.scalar(select(Job).where(Job.id==candidate.job_id).with_for_update())
+            # Recovery's unknown rows retain their reservation even if a late reply arrives.
+            effective_state='unknown' if candidate.state=='unknown' else state
+            BudgetRepository(session).settle(call_id,reply=ProviderReply('',input_tokens,output_tokens,cost,currency,
+                cached_input_tokens,cache_write_tokens,reasoning_tokens,cost_basis,rate_version,cost_reason,
+                service_tier,processing_region,response_model),outcome=effective_state,now=utcnow())
+            row = session.scalar(select(ProviderCall).where(ProviderCall.id == call_id).with_for_update().execution_options(populate_existing=True))
             if row is None:
                 raise ValueError('Provider call not found')
             if row.state == 'unknown' and row.error_code == 'process_lost':

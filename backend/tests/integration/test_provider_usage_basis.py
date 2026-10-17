@@ -1,4 +1,5 @@
 """0007 preserves historical costs and stores sub-cent cache-write estimates exactly."""
+from fitcheck_backend.budgets.types import CallBounds
 from decimal import Decimal
 from uuid import uuid4
 
@@ -63,7 +64,7 @@ def test_failed_generation_and_audit_cost_in_successful_operation(engine,storage
         owner_id,job_id=owner.id,job.id
     ledger=ProviderLedger(engine)
     for ordinal,(purpose,state) in enumerate([('analysis.generate','failed'),('analysis.audit','failed'),('analysis.generate','succeeded')],1):
-        call_id=ledger.start(ProviderAttempt(owner_id,job_id,uuid4(),ordinal,1,1,purpose,'openai','gpt-6-luna','p.v1','s.v1','policy.v1'))
+        call_id=ledger.start(ProviderAttempt(owner_id,job_id,uuid4(),ordinal,1,1,purpose,'openai','gpt-6-luna','p.v1','s.v1','policy.v1'),bounds=CallBounds(100,100,Decimal('.001'),'openai.luna.2026-10-16'))
         ledger.finish(call_id,state=state,input_tokens=1,output_tokens=0,cost=Decimal('0.000000125'),currency='USD',
             latency_ms=1,error_code='invalid_output' if state=='failed' else None,cached_input_tokens=0,cache_write_tokens=1,
             reasoning_tokens=0,cost_basis='estimated',rate_version=RATE_VERSION,service_tier='default',processing_region='global',response_model='gpt-6-luna')

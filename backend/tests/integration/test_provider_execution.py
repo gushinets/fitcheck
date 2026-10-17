@@ -1,3 +1,4 @@
+from fitcheck_backend.budgets.types import CallBounds
 from dataclasses import replace
 from datetime import timedelta
 from uuid import uuid4
@@ -21,7 +22,7 @@ def attempt(owner_id, job_id, token=None):
 def test_execution_token_is_nullable_for_old_calls(engine, storage_factory):
     with unit_of_work(engine) as s:
         owner, _, job, *_ = storage_factory(s)
-    call = ProviderLedger(engine).start(attempt(owner.id, job.id))
+    call = ProviderLedger(engine).start(attempt(owner.id, job.id),bounds=CallBounds(100,100,Decimal('.001'),'openai.luna.2026-10-16'))
     with unit_of_work(engine) as s:
         assert s.get(ProviderCall, call).execution_token is None
 
@@ -33,7 +34,7 @@ def test_late_finish_preserves_process_lost(engine, storage_factory):
         job.lease_token = token = uuid4()
         job.lease_expires_at = utcnow() + timedelta(seconds=150)
     ledger = ProviderLedger(engine)
-    call = ledger.start(attempt(owner.id, job.id, token))
+    call = ledger.start(attempt(owner.id, job.id, token),bounds=CallBounds(100,100,Decimal('.001'),'openai.luna.2026-10-16'))
     with unit_of_work(engine) as s:
         row = s.get(ProviderCall, call)
         row.state, row.error_code, row.finished_at = 'unknown', 'process_lost', utcnow()
@@ -52,7 +53,7 @@ def test_stale_execution_cannot_start_provider_attempt(engine, storage_factory):
         job.lease_token = uuid4()
         job.lease_expires_at = utcnow() + timedelta(seconds=150)
     with pytest.raises(ValueError):
-        ProviderLedger(engine).start(attempt(owner.id, job.id, uuid4()))
+        ProviderLedger(engine).start(attempt(owner.id, job.id, uuid4()),bounds=CallBounds(100,100,Decimal('.001'),'openai.luna.2026-10-16'))
     with unit_of_work(engine) as s:
         assert s.scalars(select(ProviderCall)).all() == []
 

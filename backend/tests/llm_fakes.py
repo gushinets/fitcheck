@@ -10,7 +10,7 @@ class Ledger:
     def __init__(self):
         self.rows = {}
         self.fail_start = self.fail_finish = False
-    def start(self, attempt):
+    def start(self, attempt, *, bounds):
         if self.fail_start: raise RuntimeError('db key=secret')
         key = uuid4(); self.rows[key] = {'attempt':attempt,'state':'started'}
         return key

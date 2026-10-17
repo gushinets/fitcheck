@@ -1,6 +1,8 @@
 import asyncio
 import math
 import time
+from ..budgets.tokens import upper_call_bounds
+from ..quotas.errors import QuotaError
 from .errors import LlmError, ProviderFailure
 from .types import OperationContext, GatewayReply, ProviderReply
 from ..storage.provider_repository import ProviderAttempt
@@ -42,13 +44,14 @@ class ProviderGateway:
             'skill_suggestions':SKILLS_PROMPT_VERSION}.get(operation)
         if version is None or not 1 <= semantic_attempt <= policy.semantic_attempts:
             raise LlmError('invalid_output')
+        bounds=upper_call_bounds(messages=messages,response_schema=None,model=policy.model,max_output_tokens=max_tokens)
         for transport_attempt in range(1, policy.transport_attempts + 1):
             physical, remaining = context.budget.admit()
             admission = asyncio.create_task(asyncio.to_thread(self.ledger.start,ProviderAttempt(
                 context.owner_id,context.job_id,context.operation_id,physical,semantic_attempt,transport_attempt,
                 operation,policy.provider,policy.model,version,
                 policy.audit_schema_version if operation=='analysis.audit' else policy.schema_version,
-                policy.policy_version,execution_token=context.execution_token)))
+                policy.policy_version,execution_token=context.execution_token),bounds=bounds))
             try:
                 call_id = await asyncio.shield(admission)
             except asyncio.CancelledError:
@@ -63,6 +66,8 @@ class ProviderGateway:
                     # if a database outage prevents this immediate settlement.
                     pass
                 raise
+            except QuotaError:
+                raise LlmError('budget_exceeded') from None
             except Exception:
                 raise LlmError('service_unavailable') from None
             started = self.clock()

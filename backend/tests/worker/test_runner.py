@@ -110,9 +110,9 @@ def test_blocked_db_call_does_not_block_heartbeat_event_loop():
         releasing = Event()
         original = ledger.start
         observed = []
-        def blocking(attempt):
+        def blocking(attempt, *, bounds):
             observed.append(releasing.wait(timeout=0.2))
-            return original(attempt)
+            return original(attempt,bounds=bounds)
         ledger.start = blocking
         async def release():
             await asyncio.sleep(0)
@@ -157,10 +157,10 @@ def test_cancellation_during_ledger_admission_finalizes_without_http():
         gateway,context,ledger,adapter = components([reply()])
         entered,released,settled = Event(),Event(),Event()
         original = ledger.start
-        def start(attempt):
+        def start(attempt, *, bounds):
             entered.set()
             assert released.wait(1)
-            call_id = original(attempt)
+            call_id = original(attempt,bounds=bounds)
             settled.set()
             return call_id
         ledger.start = start
@@ -184,10 +184,10 @@ def test_deadline_during_ledger_admission_settles_before_job_failure():
         gateway,context,ledger,adapter = components([reply()])
         entered,released = Event(),Event()
         original = ledger.start
-        def start(attempt):
+        def start(attempt, *, bounds):
             entered.set()
             assert released.wait(1)
-            return original(attempt)
+            return original(attempt,bounds=bounds)
         ledger.start = start
         class Executor:
             task = None

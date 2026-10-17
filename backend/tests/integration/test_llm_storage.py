@@ -1,5 +1,6 @@
 from datetime import datetime, UTC
 from decimal import Decimal
+from fitcheck_backend.budgets.types import CallBounds
 from uuid import UUID, uuid4
 
 import pytest
@@ -26,7 +27,7 @@ def test_attempt_commits_survive_caller_rollback(engine, storage_factory):
     ledger = ProviderLedger(engine)
     with pytest.raises(RuntimeError):
         with unit_of_work(engine):
-            call_id = ledger.start(attempt(owner.id, job.id))
+            call_id = ledger.start(attempt(owner.id, job.id),bounds=CallBounds(100,100,Decimal('.001'),'openai.luna.2026-10-16'))
             ledger.finish(call_id, state='failed', input_tokens=12, output_tokens=4,
                 cost=Decimal('0.001'), currency='USD', latency_ms=31, error_code='invalid_output')
             raise RuntimeError('caller failed')
@@ -45,7 +46,7 @@ def test_ledger_rejects_foreign_job(engine, storage_factory):
         owner, *_ = storage_factory(s)
         _, _, foreign, *_ = storage_factory(s)
     with pytest.raises(ValueError, match='ownership'):
-        ProviderLedger(engine).start(attempt(owner.id, foreign.id))
+        ProviderLedger(engine).start(attempt(owner.id, foreign.id),bounds=CallBounds(100,100,Decimal('.001'),'openai.luna.2026-10-16'))
     with unit_of_work(engine) as s:
         assert s.scalars(select(ProviderCall)).all() == []
 

@@ -18,7 +18,7 @@ def test_live_anonymized_analysis_canary():
     # Canary metrics stay in process; persisted accounting is tested on disposable PG.
     class CanaryLedger:
         def __init__(self): self.rows={}
-        def start(self,attempt):
+        def start(self,attempt, *, bounds):
             key=uuid4();self.rows[key]={'attempt':attempt}
             return key
         def finish(self,key,**fields): self.rows[key].update(fields)
