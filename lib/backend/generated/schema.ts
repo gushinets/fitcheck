@@ -420,6 +420,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Start Import */
         post: operations["startImport"];
         delete?: never;
         options?: never;
@@ -434,6 +435,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get Import */
         get: operations["getImport"];
         put?: never;
         post?: never;
@@ -666,7 +668,8 @@ export interface components {
              * @default null
              */
             profileChanged: boolean | null;
-            snapshot: components["schemas"]["AnalysisSnapshot"];
+            /** Snapshot */
+            snapshot: components["schemas"]["AnalysisSnapshot"] | components["schemas"]["LegacyAnalysisSnapshot"];
         };
         /** AnalysisRunning */
         AnalysisRunning: {
@@ -982,11 +985,32 @@ export interface components {
             error: components["schemas"]["ErrorBody"];
             /** Importid */
             importId: string;
+            progress: components["schemas"]["ImportReport"];
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
             status: "failed";
+        };
+        /** ImportItemOutcome */
+        ImportItemOutcome: {
+            /**
+             * Externalid
+             * @default null
+             */
+            externalId: string | null;
+            /** Index */
+            index: number;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "imported" | "skipped" | "conflict" | "invalid";
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "created" | "identical" | "source_changed" | "invalid_record" | "invalid_profile" | "server_exists" | "absent";
         };
         /** ImportQueued */
         ImportQueued: {
@@ -1003,10 +1027,48 @@ export interface components {
             /** Importid */
             importId: string;
         };
+        /** ImportReport */
+        ImportReport: {
+            /**
+             * Conflictcount
+             * @default 0
+             */
+            conflictCount: number;
+            /**
+             * Importedcount
+             * @default 0
+             */
+            importedCount: number;
+            /**
+             * Invalidcount
+             * @default 0
+             */
+            invalidCount: number;
+            /** Items */
+            items?: components["schemas"]["ImportItemOutcome"][];
+            /**
+             * Preferencesoutcome
+             * @default null
+             */
+            preferencesOutcome: ("imported" | "skipped" | "conflict" | "invalid") | null;
+            /**
+             * Profileoutcome
+             * @default null
+             */
+            profileOutcome: ("imported" | "skipped" | "conflict" | "invalid") | null;
+            /**
+             * Skippedcount
+             * @default 0
+             */
+            skippedCount: number;
+            /** Totalcount */
+            totalCount: number;
+        };
         /** ImportRunning */
         ImportRunning: {
             /** Importid */
             importId: string;
+            progress: components["schemas"]["ImportReport"];
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -1021,6 +1083,7 @@ export interface components {
             importedCount: number;
             /** Importid */
             importId: string;
+            report: components["schemas"]["ImportReport"];
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -1122,85 +1185,49 @@ export interface components {
              */
             outcome: "succeeded" | "failed";
         };
-        /** LegacyFeedback */
-        LegacyFeedback: {
-            /** Correctedscore */
-            correctedScore: number;
+        /** LegacyAnalysisSnapshot */
+        LegacyAnalysisSnapshot: {
             /**
-             * Createdat
-             * Format: date-time
-             */
-            createdAt: string;
-            /** Note */
-            note?: string;
-        };
-        /** LegacyHistoryEntry */
-        LegacyHistoryEntry: {
-            analysis: components["schemas"]["FitAnalysis"];
-            /**
-             * Createdat
-             * Format: date-time
-             */
-            createdAt: string;
-            feedback?: components["schemas"]["LegacyFeedback"];
-            /** Id */
-            id: string;
-            job: components["schemas"]["Vacancy"];
-            /** Jobtitle */
-            jobTitle: string;
-            /** Score */
-            score: number;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "GO" | "NO_GO";
-            /** Timestamp */
-            timestamp: string;
-        };
-        /** LegacyImportRequest */
-        LegacyImportRequest: {
-            /** History */
-            history: components["schemas"]["LegacyHistoryEntry"][];
-            profile?: components["schemas"]["LegacyProfile"];
-            /**
-             * Version
+             * Evidenceprovenance
+             * @default unverified_legacy
              * @constant
              */
-            version: 1;
-        };
-        /** LegacyProfile */
-        LegacyProfile: {
+            evidenceProvenance: "unverified_legacy";
             /**
-             * Desiredmonthlyincome
-             * @deprecated
-             * @description Legacy import only; ignored, never persisted
+             * Locale
+             * @default null
              */
-            desiredMonthlyIncome?: unknown;
+            locale: ("en" | "ru") | null;
             /**
-             * Englishlevel
-             * @enum {string}
+             * Origin
+             * @default legacy_import
+             * @constant
              */
-            englishLevel: "Basic" | "Intermediate" | "Upper Intermediate" | "Advanced" | "Fluent";
-            /** Experienceyears */
-            experienceYears: number;
-            /** Preferredrate */
-            preferredRate: number;
+            origin: "legacy_import";
             /**
-             * Ratecurrency
-             * @enum {string}
+             * Policyversion
+             * @default null
              */
-            rateCurrency?: "USD" | "EUR" | "RUB";
-            /** Skilllevels */
-            skillLevels?: {
-                [key: string]: "primary" | "confident" | "basic";
-            };
-            /** Skills */
-            skills: string[];
-            /** Specialization */
-            specialization: string;
-            /** Workformats */
-            workFormats: ("remote" | "office" | "hybrid")[];
+            policyVersion: null;
+            /** @default null */
+            profile: components["schemas"]["FreelancerProfile"] | null;
+            /**
+             * Profilerevision
+             * @default null
+             */
+            profileRevision: null;
+            /**
+             * Promptversion
+             * @default null
+             */
+            promptVersion: null;
+            /**
+             * Schemaversion
+             * @default fitcheck.legacy-analysis.v1
+             * @constant
+             */
+            schemaVersion: "fitcheck.legacy-analysis.v1";
+            vacancy: components["schemas"]["Vacancy"];
         };
         /** LocaleProperties */
         LocaleProperties: {
@@ -1209,6 +1236,37 @@ export interface components {
              * @default null
              */
             locale: ("en" | "ru") | null;
+        };
+        /** LocalImportRequest */
+        LocalImportRequest: {
+            /** History */
+            history: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Locale
+             * @default null
+             */
+            locale: ("en" | "ru") | null;
+            /**
+             * Profile
+             * @default null
+             */
+            profile: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Source
+             * @constant
+             */
+            source: "website_indexeddb_v1";
+            /** Sourceuserid */
+            sourceUserId: string;
+            /**
+             * Version
+             * @constant
+             */
+            version: 1;
         };
         /** LoginCredentials */
         LoginCredentials: {
@@ -5042,19 +5100,20 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Identity-scoped atomic admission; same key/body replays, different body conflicts (409). */
                 "Idempotency-Key": string;
+                Origin: string;
+                "X-CSRF-Token"?: string;
             };
             path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LegacyImportRequest"];
+                "application/json": components["schemas"]["LocalImportRequest"];
             };
         };
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -5184,7 +5243,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -100,3 +100,32 @@ and accounting data and additive migrations; see the rollout record for rollback
 Guest sessions, successful-operation quotas and durable worker spending ceilings
 (ANY-651) are documented in [backend/README.md](backend/README.md#guest-sessions-and-quotas-any-651).
 Migration 0008 requires coordinated API/worker rollout; guest admission defaults off.
+
+Local account import (ANY-652) uses `WebsiteRepository.exportLocalData(selectedUserId)`
+plus `batchLocalExport(export, maxBytes)`. Export reads all selected-user history,
+not the50-row display window, and never deletes local data. It contains no local
+credentials or sessions. ANY-653 owns the user-facing server migration screens.
+
+POST `/v1/import-jobs` requires a verified server session, allowed Origin,
+`X-CSRF-Token` and `Idempotency-Key`; GET `/v1/import-jobs/{importId}` polls progress.
+Use the version1 format in [the shared fixture](contracts/fixtures/local-import-v1.json).
+A request accepts at most1000 history rows and the smaller of5MiB and
+`FITCHECK_API_BODY_MAX_BYTES` (default1MiB). Batch using that effective limit;
+never truncate rows. Imports share the account active-job cap without consuming
+analysis credits or LLM budgets.
+
+Existing server profile/preferences win conflicts. A source user's row ID and
+canonical content deduplicate within the target account; changed content reports
+a conflict. Reports distinguish imported/skipped/conflict/invalid row outcomes and
+separate profile/preferences outcomes. Same-key retries poll the original job;
+after terminal failure, resubmit with a new key to retain completed rows and
+resume via receipts. History deletion removes receipts, so a deliberate later
+import can restore those rows.
+
+Imported snapshots use `schemaVersion=fitcheck.legacy-analysis.v1` and
+`origin=legacy_import`; server revision/prompt/policy are null. Historical profile
+and locale may also be null, and evidence is marked `unverified_legacy`.
+Consumers must render these unknowns explicitly. Recalculation requires a current
+account profile and uses the historical locale when known, otherwise the current
+account preference (default `en`). Migration0009 requires coordinated API/worker
+rollout; see [the validation record](docs/deployments/2026-10-17-any-652-local-import.md).

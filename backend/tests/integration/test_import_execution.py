@@ -124,3 +124,44 @@ def test_exhausted_recovery_preserves_progress_and_concurrent_resubmission_dedup
         results=list(pool.map(lambda l:asyncio.run(executor(engine).execute(l)),[a,b]))
     assert sum(r.imported_count for r in results)==1
     with unit_of_work(engine) as s:assert s.scalar(select(func.count()).select_from(AnalysisRecord))==2
+
+
+def test_legacy_unknown_locale_reanalysis_uses_current_account_preferences(profile_http):
+    from test_profile_http import save
+    a,c,r,issued,h=profile_http;c.app.state.settings.jobs_enabled=True
+    assert save(c,h).status_code==200
+    assert c.put('/v1/preferences',headers=h,json={'locale':'ru'}).status_code==200
+    response=c.post('/v1/import-jobs',headers=h|{'Idempotency-Key':'legacy'},json=payload(history=[raw_row(profile=None)]))
+    lease=JobQueue(a.engine).claim();assert lease is not None
+    report=asyncio.run(executor(a.engine).execute(lease));assert JobPublication(a.engine).succeed_import(lease,report)
+    item=c.get('/v1/history').json()['items'][0]
+    assert item['snapshot']['profile'] is None and item['snapshot']['locale'] is None
+    result=c.post('/v1/analyses/'+item['analysisId']+'/reanalyses',headers=h|{'Idempotency-Key':'new'})
+    assert result.status_code==202,result.text
+    with unit_of_work(a.engine) as s:
+        new=s.scalar(select(Job).where(Job.type=='analysis'))
+        assert new.input['locale']=='ru'
+
+
+def test_shared_client_export_fixture_roundtrips_and_replays(profile_http):
+    import json
+    from pathlib import Path
+    a,c,r,issued,h=profile_http;c.app.state.settings.jobs_enabled=True
+    value=json.loads((Path(__file__).parents[3]/'contracts/fixtures/local-import-v1.json').read_text())
+    def run(key):
+        response=c.post('/v1/import-jobs',headers=h|{'Idempotency-Key':key},json=value)
+        assert response.status_code==202,response.text
+        lease=JobQueue(a.engine).claim();assert lease is not None
+        report=asyncio.run(executor(a.engine).execute(lease));assert JobPublication(a.engine).succeed_import(lease,report)
+        return c.get('/v1/import-jobs/'+response.json()['importId']).json()['report']
+    assert run('first')['importedCount']==1
+    assert c.get('/v1/profile').json()['profile']==value['profile']
+    assert c.get('/v1/preferences').json()=={'locale':'ru'}
+    item=c.get('/v1/history').json()['items'][0]
+    assert item['analysis']==value['history'][0]['analysis']
+    assert item['snapshot']['vacancy']['url']==value['history'][0]['job']['url']
+    assert item['snapshot']['evidenceProvenance']=='unverified_legacy'
+    assert item['feedback']=={'correctedScore':64,'note':'Старый отзыв'}
+    assert item['createdAt'].startswith('2025-01-01T00:00:00')
+    assert run('second')['skippedCount']==1
+    assert len(c.get('/v1/history').json()['items'])==1

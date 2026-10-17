@@ -180,7 +180,15 @@
             "title": "Profilechanged"
           },
           "snapshot": {
-            "$ref": "#/components/schemas/AnalysisSnapshot"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnalysisSnapshot"
+              },
+              {
+                "$ref": "#/components/schemas/LegacyAnalysisSnapshot"
+              }
+            ],
+            "title": "Snapshot"
           }
         },
         "required": [
@@ -1084,6 +1092,9 @@
             "title": "Importid",
             "type": "string"
           },
+          "progress": {
+            "$ref": "#/components/schemas/ImportReport"
+          },
           "status": {
             "const": "failed",
             "title": "Status",
@@ -1093,9 +1104,64 @@
         "required": [
           "importId",
           "status",
-          "error"
+          "error",
+          "progress"
         ],
         "title": "ImportFailed",
+        "type": "object"
+      },
+      "ImportItemOutcome": {
+        "additionalProperties": false,
+        "properties": {
+          "externalId": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Externalid"
+          },
+          "index": {
+            "minimum": 0,
+            "title": "Index",
+            "type": "integer"
+          },
+          "outcome": {
+            "enum": [
+              "imported",
+              "skipped",
+              "conflict",
+              "invalid"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "created",
+              "identical",
+              "source_changed",
+              "invalid_record",
+              "invalid_profile",
+              "server_exists",
+              "absent"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "index",
+          "outcome",
+          "reason"
+        ],
+        "title": "ImportItemOutcome",
         "type": "object"
       },
       "ImportQueued": {
@@ -1136,6 +1202,90 @@
         "title": "ImportReference",
         "type": "object"
       },
+      "ImportReport": {
+        "additionalProperties": false,
+        "properties": {
+          "conflictCount": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Conflictcount",
+            "type": "integer"
+          },
+          "importedCount": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Importedcount",
+            "type": "integer"
+          },
+          "invalidCount": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Invalidcount",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ImportItemOutcome"
+            },
+            "maxItems": 1000,
+            "title": "Items",
+            "type": "array"
+          },
+          "preferencesOutcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "imported",
+                  "skipped",
+                  "conflict",
+                  "invalid"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Preferencesoutcome"
+          },
+          "profileOutcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "imported",
+                  "skipped",
+                  "conflict",
+                  "invalid"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Profileoutcome"
+          },
+          "skippedCount": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Skippedcount",
+            "type": "integer"
+          },
+          "totalCount": {
+            "maximum": 1000,
+            "minimum": 0,
+            "title": "Totalcount",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "totalCount"
+        ],
+        "title": "ImportReport",
+        "type": "object"
+      },
       "ImportRunning": {
         "additionalProperties": false,
         "properties": {
@@ -1145,6 +1295,9 @@
             "title": "Importid",
             "type": "string"
           },
+          "progress": {
+            "$ref": "#/components/schemas/ImportReport"
+          },
           "status": {
             "const": "running",
             "title": "Status",
@@ -1153,7 +1306,8 @@
         },
         "required": [
           "importId",
-          "status"
+          "status",
+          "progress"
         ],
         "title": "ImportRunning",
         "type": "object"
@@ -1198,6 +1352,9 @@
             "title": "Importedcount",
             "type": "integer"
           },
+          "report": {
+            "$ref": "#/components/schemas/ImportReport"
+          },
           "status": {
             "const": "succeeded",
             "title": "Status",
@@ -1207,7 +1364,8 @@
         "required": [
           "importId",
           "status",
-          "importedCount"
+          "importedCount",
+          "report"
         ],
         "title": "ImportSucceeded",
         "type": "object"
@@ -1516,110 +1674,130 @@
         "title": "JobTerminalProperties",
         "type": "object"
       },
-      "LegacyFeedback": {
+      "LegacyAnalysisSnapshot": {
         "additionalProperties": false,
         "properties": {
-          "correctedScore": {
-            "maximum": 100,
-            "minimum": 0,
-            "title": "Correctedscore",
-            "type": "integer"
-          },
-          "createdAt": {
-            "format": "date-time",
-            "title": "Createdat",
+          "evidenceProvenance": {
+            "const": "unverified_legacy",
+            "default": "unverified_legacy",
+            "title": "Evidenceprovenance",
             "type": "string"
           },
-          "note": {
-            "maxLength": 500,
-            "minLength": 0,
-            "title": "Note",
-            "type": "string"
-          }
-        },
-        "required": [
-          "correctedScore",
-          "createdAt"
-        ],
-        "title": "LegacyFeedback",
-        "type": "object"
-      },
-      "LegacyHistoryEntry": {
-        "additionalProperties": false,
-        "properties": {
-          "analysis": {
-            "$ref": "#/components/schemas/FitAnalysis"
-          },
-          "createdAt": {
-            "format": "date-time",
-            "title": "Createdat",
-            "type": "string"
-          },
-          "feedback": {
-            "$ref": "#/components/schemas/LegacyFeedback"
-          },
-          "id": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Id",
-            "type": "string"
-          },
-          "job": {
-            "$ref": "#/components/schemas/Vacancy"
-          },
-          "jobTitle": {
-            "maxLength": 300,
-            "minLength": 1,
-            "title": "Jobtitle",
-            "type": "string"
-          },
-          "score": {
-            "maximum": 100,
-            "minimum": 0,
-            "title": "Score",
-            "type": "integer"
-          },
-          "status": {
-            "enum": [
-              "GO",
-              "NO_GO"
+          "locale": {
+            "anyOf": [
+              {
+                "enum": [
+                  "en",
+                  "ru"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Status",
+            "default": null,
+            "title": "Locale"
+          },
+          "origin": {
+            "const": "legacy_import",
+            "default": "legacy_import",
+            "title": "Origin",
             "type": "string"
           },
-          "timestamp": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Timestamp",
+          "policyVersion": {
+            "default": null,
+            "title": "Policyversion",
+            "type": "null"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FreelancerProfile"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "profileRevision": {
+            "default": null,
+            "title": "Profilerevision",
+            "type": "null"
+          },
+          "promptVersion": {
+            "default": null,
+            "title": "Promptversion",
+            "type": "null"
+          },
+          "schemaVersion": {
+            "const": "fitcheck.legacy-analysis.v1",
+            "default": "fitcheck.legacy-analysis.v1",
+            "title": "Schemaversion",
             "type": "string"
+          },
+          "vacancy": {
+            "$ref": "#/components/schemas/Vacancy"
           }
         },
         "required": [
-          "id",
-          "jobTitle",
-          "score",
-          "status",
-          "timestamp",
-          "createdAt",
-          "analysis",
-          "job"
+          "vacancy"
         ],
-        "title": "LegacyHistoryEntry",
+        "title": "LegacyAnalysisSnapshot",
         "type": "object"
       },
-      "LegacyImportRequest": {
+      "LocalImportRequest": {
         "additionalProperties": false,
         "properties": {
           "history": {
             "items": {
-              "$ref": "#/components/schemas/LegacyHistoryEntry"
+              "additionalProperties": true,
+              "type": "object"
             },
             "maxItems": 1000,
             "title": "History",
             "type": "array"
           },
+          "locale": {
+            "anyOf": [
+              {
+                "enum": [
+                  "en",
+                  "ru"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Locale"
+          },
           "profile": {
-            "$ref": "#/components/schemas/LegacyProfile"
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Profile"
+          },
+          "source": {
+            "const": "website_indexeddb_v1",
+            "title": "Source",
+            "type": "string"
+          },
+          "sourceUserId": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Sourceuserid",
+            "type": "string"
           },
           "version": {
             "const": 1,
@@ -1629,108 +1807,11 @@
         },
         "required": [
           "version",
+          "source",
+          "sourceUserId",
           "history"
         ],
-        "title": "LegacyImportRequest",
-        "type": "object"
-      },
-      "LegacyProfile": {
-        "additionalProperties": false,
-        "properties": {
-          "desiredMonthlyIncome": {
-            "deprecated": true,
-            "description": "Legacy import only; ignored, never persisted",
-            "title": "Desiredmonthlyincome"
-          },
-          "englishLevel": {
-            "enum": [
-              "Basic",
-              "Intermediate",
-              "Upper Intermediate",
-              "Advanced",
-              "Fluent"
-            ],
-            "title": "Englishlevel",
-            "type": "string"
-          },
-          "experienceYears": {
-            "maximum": 60,
-            "minimum": 0,
-            "title": "Experienceyears",
-            "type": "number"
-          },
-          "preferredRate": {
-            "maximum": 100000000,
-            "minimum": 0,
-            "title": "Preferredrate",
-            "type": "number"
-          },
-          "rateCurrency": {
-            "enum": [
-              "USD",
-              "EUR",
-              "RUB"
-            ],
-            "title": "Ratecurrency",
-            "type": "string"
-          },
-          "skillLevels": {
-            "additionalProperties": {
-              "enum": [
-                "primary",
-                "confident",
-                "basic"
-              ],
-              "type": "string"
-            },
-            "propertyNames": {
-              "maxLength": 80,
-              "minLength": 1
-            },
-            "title": "Skilllevels",
-            "type": "object"
-          },
-          "skills": {
-            "items": {
-              "maxLength": 80,
-              "minLength": 1,
-              "type": "string"
-            },
-            "maxItems": 50,
-            "minItems": 1,
-            "title": "Skills",
-            "type": "array"
-          },
-          "specialization": {
-            "maxLength": 120,
-            "minLength": 1,
-            "title": "Specialization",
-            "type": "string"
-          },
-          "workFormats": {
-            "items": {
-              "enum": [
-                "remote",
-                "office",
-                "hybrid"
-              ],
-              "type": "string"
-            },
-            "maxItems": 3,
-            "minItems": 1,
-            "title": "Workformats",
-            "type": "array"
-          }
-        },
-        "required": [
-          "specialization",
-          "skills",
-          "experienceYears",
-          "preferredRate",
-          "workFormats",
-          "englishLevel"
-        ],
-        "title": "LegacyProfile",
+        "title": "LocalImportRequest",
         "type": "object"
       },
       "LocaleProperties": {
@@ -7417,13 +7498,29 @@
         "operationId": "startImport",
         "parameters": [
           {
-            "description": "Identity-scoped atomic admission; same key/body replays, different body conflicts (409).",
             "in": "header",
             "name": "Idempotency-Key",
             "required": true,
             "schema": {
               "maxLength": 200,
               "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
               "type": "string"
             }
           }
@@ -7432,7 +7529,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/LegacyImportRequest"
+                "$ref": "#/components/schemas/LocalImportRequest"
               }
             }
           },
@@ -7447,7 +7544,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -7575,11 +7672,12 @@
             "webSession": []
           }
         ],
+        "summary": "Start Import",
         "x-fitcheck-cookie-mutation": {
           "csrfHeader": "X-CSRF-Token",
           "originRequired": true
         },
-        "x-fitcheck-implementation": "planned",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-652"
       }
     },
@@ -7592,8 +7690,8 @@
             "name": "importId",
             "required": true,
             "schema": {
-              "maxLength": 200,
-              "minLength": 1,
+              "format": "uuid",
+              "title": "Importid",
               "type": "string"
             }
           }
@@ -7607,7 +7705,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -7735,7 +7833,8 @@
             "webSession": []
           }
         ],
-        "x-fitcheck-implementation": "planned",
+        "summary": "Get Import",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-652"
       }
     },

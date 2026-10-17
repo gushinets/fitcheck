@@ -90,15 +90,15 @@ def test_profile_revision_required():
 
 
 def test_legacy_import_only_ignores_income():
-    result = LegacyImportRequest.model_validate({"version":1,"profile":{**DATA["profile"],"desiredMonthlyIncome":9000},"history":[]})
+    result = LegacyImportRequest.model_validate({"version":1,"source":"website_indexeddb_v1","sourceUserId":"local","profile":{**DATA["profile"],"desiredMonthlyIncome":9000},"history":[]})
     assert "desiredMonthlyIncome" not in result.model_dump_json(by_alias=True)
     with pytest.raises(ValidationError):
-        LegacyImportRequest.model_validate({"version":1,"profile":DATA["profile"],"history":[],"password":"local"})
+        LegacyImportRequest.model_validate({"version":1,"source":"website_indexeddb_v1","sourceUserId":"local","profile":DATA["profile"],"history":[],"password":"local"})
 
 
 def test_import_preserves_existing_feedback_timestamp():
     entry = {"id":"h1","jobTitle":"Dashboard","score":85,"status":"GO","timestamp":"Today","createdAt":"2026-10-11T10:00:00Z","analysis":DATA["analysis"],"job":DATA["vacancy"],"feedback":{"correctedScore":75,"note":"Scope uncertain","createdAt":"2026-10-11T10:05:00Z"}}
-    value = LegacyImportRequest.model_validate({"version":1,"history":[entry]})
+    value = LegacyImportRequest.model_validate({"version":1,"source":"website_indexeddb_v1","sourceUserId":"local","history":[entry]})
     assert value.model_dump(mode="json",by_alias=True,exclude_none=True)["history"][0]["feedback"]["createdAt"] == "2026-10-11T10:05:00Z"
 
 

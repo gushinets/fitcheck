@@ -4,7 +4,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from pydantic import ValidationError
 from ..contracts.resources import AccountAnalysisStart, GuestAnalysisStart, SkillSuggestionStart
 from ..storage.database import unit_of_work
-from ..storage.models import Owner, User, Job, AnalysisRecord
+from ..storage.models import Owner, User, Job, AnalysisRecord, Preference
 from ..storage.payloads import decode_snapshot, canonical_hash
 from ..auth.service import active_session
 from ..auth.access import require_verified
@@ -87,8 +87,10 @@ class JobAdmission:
                     current = get_profile(s, owner_id)
                     if current is None:
                         raise JobError('not_found')
+                    preferences=s.get(Preference,owner_id) if snapshot.locale is None else None
+                    locale=snapshot.locale or (preferences.locale if preferences else 'en')
                     request = AccountAnalysisStart(mode='account', vacancy=snapshot.vacancy,
-                        profileRevision=current.revision, locale=snapshot.locale)
+                        profileRevision=current.revision, locale=locale)
                 active = s.scalar(select(func.count()).select_from(Job).where(
                     Job.owner_id == owner_id, Job.type.in_(['analysis','skill_suggestions','import']),
                     Job.status.in_(['queued','running'])))

@@ -45,6 +45,13 @@ class LocalImportRequest(DTO):
     locale: Locale | None = None
     history: Annotated[list[dict], Field(max_length=1000)]
 
+    @field_validator('profile',mode='before')
+    @classmethod
+    def drop_legacy_income(cls,value):
+        if isinstance(value,dict):
+            value=value.copy();value.pop('desiredMonthlyIncome',None)
+        return value
+
     @model_validator(mode='after')
     def unique_ids(self):
         ids=[item['id'] for item in self.history if isinstance(item.get('id'),str)]

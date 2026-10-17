@@ -69,3 +69,19 @@ it("keeps the memory repository export consistent with IndexedDB",async()=>{
   const user=await repo.createUser({name:"A",email:"a@example.com",password:"password-123"})
   expect((await repo.exportLocalData(user.id)).history).toEqual([])
 })
+
+it("does not serialize nested objects masquerading as dates or feedback notes",()=>{
+  const value=exports.buildLocalExport("a",null,undefined,[
+    {id:"bad-date",createdAt:{password:"secret-date"},job:detectedJob,analysis:goAnalysis} as never,
+    {id:"bad-note",createdAt:"2025-01-01T00:00:00Z",job:detectedJob,analysis:goAnalysis,feedback:{correctedScore:50,note:{password:"secret-note"},createdAt:"2025-01-02T00:00:00Z"}} as never,
+  ])
+  expect(JSON.stringify(value)).not.toContain("secret")
+  expect(value.history.every(row=>row.invalid===true)).toBe(true)
+})
+
+it("produces the shared cross-language import fixture from stored local values",async()=>{
+  const {default:fixture}=await import("@/contracts/fixtures/local-import-v1.json")
+  const row=fixture.history[0]
+  const exported=exports.buildLocalExport(fixture.sourceUserId,fixture.profile,"ru",[{...row,userId:fixture.sourceUserId} as never])
+  expect(exported).toEqual(fixture)
+})

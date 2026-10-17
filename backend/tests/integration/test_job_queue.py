@@ -119,6 +119,6 @@ def test_recovery_scopes_started_calls_to_old_token(engine):
         assert calls[other_token].state == 'started'
 
 
-def test_import_jobs_are_not_claimed(engine):
+def test_import_jobs_are_claimed(engine):
     queued(engine, kind='import')
-    assert queue(engine).claim() is None
+    assert queue(engine).claim().type == 'import'
