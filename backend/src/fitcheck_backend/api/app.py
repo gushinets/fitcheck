@@ -8,6 +8,7 @@ from fitcheck_backend.api.auth import router as auth_router
 from fitcheck_backend.api.profiles import router as profiles_router
 from fitcheck_backend.api.extraction import router as extraction_router
 from fitcheck_backend.api.jobs import router as jobs_router
+from fitcheck_backend.api.guests import router as guests_router
 from fitcheck_backend.api.history import router as history_router
 from fitcheck_backend.api.runtime import AuthRuntime, MetricsRuntime
 from fitcheck_backend.api.metrics import router as metrics_router
@@ -44,6 +45,7 @@ def create_app(settings: Settings | None = None, *, auth_runtime: AuthRuntime | 
     app.include_router(profiles_router)
     app.include_router(extraction_router)
     app.include_router(jobs_router)
+    app.include_router(guests_router)
     app.include_router(history_router)
     app.include_router(metrics_router)
     original_openapi = app.openapi

@@ -16,6 +16,8 @@ from ..profiles.service import ProfileService
 from ..extraction.service import ExtractionService
 from ..jobs.admission import JobAdmission
 from ..jobs.status import JobStatusReader
+from ..quotas.policy import QuotaPolicy
+from ..guests.sessions import GuestSessions
 from ..history.service import HistoryService
 
 
@@ -37,7 +39,9 @@ class AuthRuntime:
         self.profiles = ProfileService(self.engine, clock, metrics_environment=metrics_environment)
         self.extraction = ExtractionService(self.limiter)
         self.jobs = JobAdmission(self.engine,self.limiter,model=settings.open_ai_model,metrics_environment=metrics_environment)
-        self.job_status = JobStatusReader(self.engine)
+        self.quota_policy = QuotaPolicy.from_settings(settings)
+        self.guests = GuestSessions(self.engine,self.crypto,self.quota_policy,clock,self.limiter)
+        self.job_status = JobStatusReader(self.engine,clock=clock)
         self.history = HistoryService(self.engine, clock, bytes.fromhex(settings.auth_secret.get_secret_value()))
 
     def close(self):

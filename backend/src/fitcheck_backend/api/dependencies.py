@@ -73,3 +73,33 @@ def validate_bootstrap(request: Request) -> None:
 def validate_account_mutation(request: Request, principal) -> None:
     validate_web_origin(request)
     validate_session_csrf(request, principal)
+
+
+from typing import Literal
+from ..guests.types import AccessIdentity
+from ..guests.sessions import guest_cookie_name
+
+
+def resolve_identity(request: Request, mode: Literal['account','guest'] | None = None):
+    runtime=required_runtime(request)
+    if mode is None:
+        mode='account' if cookie_name(runtime.settings) in request.cookies else 'guest'
+    if request.headers.getlist('authorization'):
+        raise AuthError('forbidden' if request.cookies else 'unauthenticated')
+    if mode=='guest':
+        return runtime.guests.resolve(request.cookies.get(guest_cookie_name(runtime.settings)))
+    principal=verified_principal(request)
+    issued=runtime.auth.session(request.cookies[cookie_name(runtime.settings)])
+    return AccessIdentity('account',principal.owner_id,principal.session_id,issued.expires_at,principal.user_id)
+
+
+def validate_identity_mutation(request: Request,identity):
+    runtime=required_runtime(request)
+    validate_web_origin(request)
+    if identity.mode=='account':
+        validate_session_csrf(request,verified_principal(request))
+    else:
+        values=request.headers.getlist('x-csrf-token')
+        token=request.cookies.get(guest_cookie_name(runtime.settings),'')
+        if len(values)!=1 or not hmac.compare_digest(values[0],runtime.guests.csrf(token)):
+            raise AuthError('forbidden')

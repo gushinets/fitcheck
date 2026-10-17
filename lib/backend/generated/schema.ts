@@ -384,6 +384,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Create Guest */
         post: operations["createGuestSession"];
         delete?: never;
         options?: never;
@@ -2120,7 +2121,9 @@ export interface operations {
     };
     getAnalysis: {
         parameters: {
-            query?: never;
+            query?: {
+                mode?: ("account" | "guest") | null;
+            };
             header?: never;
             path: {
                 analysisId: string;
@@ -4647,7 +4650,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -5296,7 +5299,9 @@ export interface operations {
     };
     getJob: {
         parameters: {
-            query?: never;
+            query?: {
+                mode?: ("account" | "guest") | null;
+            };
             header?: never;
             path: {
                 jobId: string;

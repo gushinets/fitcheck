@@ -27,10 +27,10 @@ class AuthRateLimiter:
     def __init__(self, engine: Engine, crypto: AuthCrypto, clock: Clock):
         self.engine, self.crypto, self.clock = engine, crypto, clock
 
-    def enforce(self, action: str, subjects: dict[str, str]) -> None:
+    def enforce(self, action: str, subjects: dict[str, str], *, rules=None) -> None:
         now = self.clock()
         rules = []
-        for subject, limit, seconds in POLICIES[action]:
+        for subject, limit, seconds in (rules if rules is not None else POLICIES[action]):
             if not subjects.get(subject):
                 raise AuthError('forbidden')
             scope = action + ':' + subject

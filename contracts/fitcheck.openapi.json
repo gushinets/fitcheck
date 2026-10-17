@@ -3643,6 +3643,26 @@
               "title": "Analysisid",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "account",
+                    "guest"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mode"
+            }
           }
         ],
         "responses": {
@@ -3780,6 +3800,9 @@
         "security": [
           {
             "webSession": []
+          },
+          {
+            "guestSession": []
           }
         ],
         "summary": "Get Analysis",
@@ -6809,7 +6832,6 @@
     "/v1/guest-sessions": {
       "post": {
         "operationId": "createGuestSession",
-        "parameters": [],
         "responses": {
           "201": {
             "content": {
@@ -6819,7 +6841,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -6943,8 +6965,12 @@
           }
         },
         "security": [],
-        "x-fitcheck-implementation": "planned",
-        "x-fitcheck-origin-policy": "Verify trusted Origin for browser mutations; use anti-CSRF bootstrap for cookie-producing flows",
+        "summary": "Create Guest",
+        "x-fitcheck-cookie-mutation": {
+          "csrfHeader": "X-CSRF-Token",
+          "originRequired": true
+        },
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-651"
       }
     },
@@ -7674,6 +7700,26 @@
               "title": "Jobid",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "account",
+                    "guest"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mode"
+            }
           }
         ],
         "responses": {
@@ -7811,6 +7857,9 @@
         "security": [
           {
             "webSession": []
+          },
+          {
+            "guestSession": []
           }
         ],
         "summary": "Get Job",

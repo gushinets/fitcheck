@@ -32,7 +32,7 @@ def test_complete_valid_contract_and_live_route_separation():
         assert set(document['paths'][path]) == methods
         for method in methods:
             operation = document['paths'][path][method]
-            implemented = operation['x-fitcheck-owner-task'] in {'ANY-645', 'ANY-646', 'ANY-647', 'ANY-649', 'ANY-650'}
+            implemented = method in app.openapi()['paths'].get(path,{})
             assert operation['x-fitcheck-implementation'] == ('implemented' if implemented else 'planned')
             assert operation['x-fitcheck-owner-task'].startswith('ANY-')
             ids.append(operation['operationId'])
@@ -41,7 +41,7 @@ def test_complete_valid_contract_and_live_route_separation():
             response = getattr(TestClient(app), method)(path.replace('{jobId}', 'j').replace('{analysisId}', 'a').replace('{importId}', 'i'))
             assert response.status_code == (503 if implemented else 404)
     assert len(ids) == len(set(ids))
-    assert set(app.openapi()['paths']) == {'/health/live','/health/ready', '/internal/metrics/events', '/internal/metrics/attempts', '/internal/metrics/visitors/{visitorId}'} | {p for p, methods in document['paths'].items() if any(m['x-fitcheck-owner-task'] in {'ANY-645', 'ANY-646', 'ANY-647', 'ANY-649', 'ANY-650'} for m in methods.values())}
+    assert set(app.openapi()['paths']) == {'/health/live','/health/ready', '/internal/metrics/events', '/internal/metrics/attempts', '/internal/metrics/visitors/{visitorId}'} | {p for p, methods in document['paths'].items() if any(m['x-fitcheck-implementation']=='implemented' for m in methods.values())}
     for path in ['/health/live','/health/ready']:
         assert document['paths'][path]['get']['x-fitcheck-implementation'] == 'implemented'
         assert document['paths'][path]['get']['responses'] == app.openapi()['paths'][path]['get']['responses']

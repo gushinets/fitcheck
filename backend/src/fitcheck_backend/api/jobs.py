@@ -6,14 +6,14 @@ from ..contracts.resources import AnalysisStart,AccountAnalysisStart,SkillSugges
 from ..contracts.openapi import ERRORS,SECURITY
 from ..jobs.errors import JobError
 from .errors import ErrorEnvelope
-from .dependencies import required_runtime,verified_principal,validate_account_mutation,client_ip
+from .dependencies import required_runtime,verified_principal,validate_account_mutation,client_ip,resolve_identity
 
 router = APIRouter(dependencies=[Depends(required_runtime)],
     responses={status:{'model':ErrorEnvelope,'description':code} for status,code in ERRORS.items()})
 
 
-def metadata(mutation=False):
-    value = {'x-fitcheck-owner-task':'ANY-649','x-fitcheck-implementation':'implemented','security':SECURITY['account']}
+def metadata(mutation=False,access='account'):
+    value = {'x-fitcheck-owner-task':'ANY-649','x-fitcheck-implementation':'implemented','security':SECURITY[access]}
     if mutation:
         value['x-fitcheck-cookie-mutation'] = {'originRequired':True,'csrfHeader':'X-CSRF-Token'}
         value['parameters'] = [{'name':'Origin','in':'header','required':True,'schema':{'type':'string'}},
@@ -53,6 +53,6 @@ def start_suggestions(request: Request,body: SkillSuggestionStart,principal=Depe
         request=body,idempotency_key=key,client_ip=client_ip(request)))
 
 
-@router.get('/v1/jobs/{jobId}',response_model=JobState,operation_id='getJob',openapi_extra=metadata())
-def get_job(request: Request,job_id: Annotated[UUID,Path(alias='jobId')],principal=Depends(verified_principal)):
-    return required_runtime(request).job_status.get(owner_id=principal.owner_id,job_id=job_id)
+@router.get('/v1/jobs/{jobId}',response_model=JobState,operation_id='getJob',openapi_extra=metadata(access='identity'))
+def get_job(request: Request,job_id: Annotated[UUID,Path(alias='jobId')],principal=Depends(resolve_identity)):
+    return required_runtime(request).job_status.get(owner_id=principal.owner_id,job_id=job_id,identity=principal)

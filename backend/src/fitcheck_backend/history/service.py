@@ -5,6 +5,8 @@ from sqlalchemy import delete, select, tuple_
 from sqlalchemy.exc import SQLAlchemyError
 
 from .cursor import HistoryCursor
+from ..guests.types import AccessIdentity
+from ..storage.guest_repository import require_identity
 from ..auth.access import require_verified
 from ..auth.errors import AuthError
 from ..auth.service import active_session
@@ -23,9 +25,13 @@ class HistoryService:
 
     @contextmanager
     def transaction(self, principal, *, mutation=False):
-        require_verified(principal)
+        if not isinstance(principal,AccessIdentity): require_verified(principal)
         try:
             with job_transaction(self.engine) as session:
+                if isinstance(principal,AccessIdentity):
+                    require_identity(session,principal,self.clock())
+                    yield session
+                    return
                 if mutation:
                     session.scalar(select(Owner).where(Owner.id == principal.owner_id).with_for_update())
                 repo = AuthRepository(session)

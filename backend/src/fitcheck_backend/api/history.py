@@ -6,7 +6,7 @@ from fastapi import APIRouter, Body, Depends, Path, Query, Request, Response
 from ..contracts.jobs import JobReference
 from ..contracts.resources import AnalysisResource, HistoryPage, FeedbackResponse, ApplicationStatus, ApplicationStatusUpdate
 from ..contracts.openapi import ERRORS, SECURITY
-from .dependencies import required_runtime, verified_principal, validate_account_mutation, client_ip
+from .dependencies import required_runtime, verified_principal, validate_account_mutation, client_ip, resolve_identity
 from .errors import ErrorEnvelope, ApiError
 from .jobs import idempotency, mutation as job_mutation
 
@@ -15,8 +15,8 @@ router = APIRouter(dependencies=[Depends(required_runtime)],
 AnalysisId = Annotated[UUID, Path(alias='analysisId')]
 
 
-def metadata(mutation=False):
-    value = {'x-fitcheck-owner-task': 'ANY-650', 'x-fitcheck-implementation': 'implemented', 'security': SECURITY['account']}
+def metadata(mutation=False,access='account'):
+    value = {'x-fitcheck-owner-task': 'ANY-650', 'x-fitcheck-implementation': 'implemented', 'security': SECURITY[access]}
     if mutation:
         value['x-fitcheck-cookie-mutation'] = {'originRequired': True, 'csrfHeader': 'X-CSRF-Token'}
         value['parameters'] = [{'name': 'Origin', 'in': 'header', 'required': True, 'schema': {'type': 'string'}},
@@ -30,8 +30,8 @@ def mutation(request: Request, principal=Depends(verified_principal)):
 
 
 @router.get('/v1/analyses/{analysisId}', response_model=AnalysisResource,
-    operation_id='getAnalysis', openapi_extra=metadata())
-def get_analysis(request: Request, analysis_id: AnalysisId, principal=Depends(verified_principal)):
+    operation_id='getAnalysis', openapi_extra=metadata(access='identity'))
+def get_analysis(request: Request, analysis_id: AnalysisId, principal=Depends(resolve_identity)):
     return required_runtime(request).history.get(principal, analysis_id)
 
 

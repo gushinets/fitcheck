@@ -6,15 +6,18 @@ from ..storage.models import Job, AnalysisRecord, AnalysisAnnotation, Profile
 from ..storage.history_repository import analysis_resource
 from ..storage.job_queue import job_transaction
 from .errors import JobError
+from ..storage.base import utcnow
+from ..storage.guest_repository import require_identity
 
 
 class JobStatusReader:
-    def __init__(self, engine):
-        self.engine = engine
+    def __init__(self, engine, *, clock=utcnow):
+        self.engine,self.clock = engine,clock
 
-    def get(self, *, owner_id, job_id):
+    def get(self, *, owner_id, job_id, identity=None):
         try:
             with job_transaction(self.engine) as s:
+                if identity is not None: require_identity(s,identity,self.clock())
                 row = s.execute(select(Job,AnalysisRecord,AnalysisAnnotation,Profile.current_revision)
                     .outerjoin(AnalysisRecord,and_(AnalysisRecord.job_id == Job.id,
                         AnalysisRecord.owner_id == Job.owner_id))
