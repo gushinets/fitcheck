@@ -34,10 +34,18 @@ class ProviderLedger:
         self.policy = policy or QuotaPolicy.from_settings(Settings())
 
     def start(self, attempt: ProviderAttempt, *, bounds) -> UUID:
-        from .budget_repository import BudgetRepository
-        with unit_of_work(self.engine) as session:
-            now=self.clock() if self.clock else session.scalar(select(func.clock_timestamp()))
-            return BudgetRepository(session).reserve(attempt,bounds,policy=self.policy,now=now)
+        from .budget_repository import BudgetRepository, BudgetWindowChanged
+        from ..quotas.errors import QuotaError
+        # A blocked daily-window lock can straddle midnight. Restart the whole
+        # transaction so new windows preserve the global lock ordering.
+        for _ in range(3):
+            try:
+                with unit_of_work(self.engine) as session:
+                    clock=self.clock or (lambda: session.scalar(select(func.clock_timestamp())))
+                    return BudgetRepository(session).reserve(attempt,bounds,policy=self.policy,now=clock(),clock=clock)
+            except BudgetWindowChanged:
+                continue
+        raise QuotaError('budget_exceeded')
 
     def finish(self, call_id: UUID, *, state: str, input_tokens: int | None,
             output_tokens: int | None, cost: Decimal | None, currency: str | None,
@@ -57,6 +65,9 @@ class ProviderLedger:
                 session.scalar(select(Owner).where(Owner.id==candidate.owner_id).with_for_update())
             if candidate.job_id is not None:
                 session.scalar(select(Job).where(Job.id==candidate.job_id).with_for_update())
+            # The initial read may predate a wait behind recovery or claim.
+            # Coordinating owner/job locks are held now; refresh before settling.
+            session.refresh(candidate)
             # Recovery's unknown rows retain their reservation even if a late reply arrives.
             effective_state='unknown' if candidate.state=='unknown' else state
             BudgetRepository(session).settle(call_id,reply=ProviderReply('',input_tokens,output_tokens,cost,currency,

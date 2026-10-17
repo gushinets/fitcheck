@@ -6,10 +6,14 @@ from .models import Owner,Guest,Job,ProviderCall,BudgetWindow,CallReservation,Gu
 from ..quotas.errors import QuotaError
 
 
+class BudgetWindowChanged(Exception):
+    """Retry admission from a new transaction after a daily boundary."""
+
+
 class BudgetRepository:
     def __init__(self,session):self.s=session
 
-    def reserve(self,attempt,bounds,*,policy,now):
+    def reserve(self,attempt,bounds,*,policy,now,clock=None):
         owner=self.s.scalar(select(Owner).where(Owner.id==attempt.owner_id).with_for_update())
         if owner is None:raise ValueError('Invalid owner ownership')
         guest=self.s.scalar(select(Guest).where(Guest.owner_id==owner.id)) if owner.kind=='guest' else None
@@ -17,6 +21,7 @@ class BudgetRepository:
             raise QuotaError('budget_exceeded')
         candidate=self.s.get(Job,attempt.job_id) if attempt.job_id else None
         frozen=candidate.input if candidate else {}
+        session_row=None
         session_id=frozen.get('sessionId')
         if session_id:
             from uuid import UUID
@@ -49,9 +54,18 @@ class BudgetRepository:
         for scope,key,begin,expiry,oid,lc,lt,lu in sorted(descriptors,key=lambda x:(x[0],x[1],x[2])):
             self.s.execute(insert(BudgetWindow).values(scope=scope,scope_key=key,window_start=begin,expires_at=expiry,owner_id=oid,limit_calls=lc,limit_tokens=lt,limit_usd=lu,calls=0,exposure_tokens=0,exposure_usd=0).on_conflict_do_nothing(index_elements=['scope','scope_key','window_start']))
             window=self.s.scalar(select(BudgetWindow).where(BudgetWindow.scope==scope,BudgetWindow.scope_key==key,BudgetWindow.window_start==begin).with_for_update().execution_options(populate_existing=True))
+            windows.append(window)
+        # Recheck time after EVERY potentially blocking graph/window lock and
+        # before any financial increment or provider row can commit.
+        fresh=clock() if clock else self.s.scalar(select(func.clock_timestamp()))
+        if guest is not None and guest.expires_at<=fresh:raise QuotaError('budget_exceeded')
+        if session_row is not None and session_row.expires_at<=fresh:raise QuotaError('budget_exceeded')
+        if job is not None and attempt.execution_token is not None and job.lease_expires_at<=fresh:
+            raise ValueError('Invalid execution lease')
+        if fresh.astimezone(UTC).date()!=start.date():raise BudgetWindowChanged()
+        for window in windows:
             if (window.calls+1>window.limit_calls or window.exposure_tokens+bounds.input_tokens+bounds.output_tokens>window.limit_tokens or window.exposure_usd+bounds.usd>window.limit_usd):
                 raise QuotaError('budget_exceeded')
-            windows.append(window)
         row=ProviderCall(owner_id=owner.id,job_id=attempt.job_id,request_key=f'{attempt.operation_id}:{attempt.physical_attempt}',provider=attempt.provider,model=attempt.model,operation=attempt.operation,attempt=attempt.physical_attempt,semantic_attempt=attempt.semantic_attempt,transport_attempt=attempt.transport_attempt,prompt_version=attempt.prompt_version,schema_version=attempt.schema_version,policy_version=attempt.policy_version,execution_token=attempt.execution_token,state='started')
         self.s.add(row);self.s.flush()
         for window in windows:

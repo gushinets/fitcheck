@@ -125,3 +125,42 @@ def test_claim_keeps_snapshot_and_deployment_exposure(profile_http):
         from fitcheck_backend.storage.models import ProviderCall
         assert all(p.owner_id is None and p.job_id is None for p in s.scalars(select(ProviderCall)))
         assert s.get(AnalysisRecord,identifier) is None
+
+
+@pytest.mark.parametrize('case',['expired_guest','unverified_account','missing_account','missing_guest'])
+def test_claim_rejects_unusable_sessions(profile_http,case):
+    from datetime import timedelta
+    from fitcheck_backend.storage.models import GuestSessionRow
+    a,c,r,h,_=ready(profile_http)
+    if case=='expired_guest':
+        with unit_of_work(a.engine) as s:s.scalar(select(GuestSessionRow)).expires_at=a.clock()-timedelta(seconds=1)
+        expected=401
+    elif case=='unverified_account':
+        with unit_of_work(a.engine) as s:s.get(User,profile_http[3].principal.user_id).email_verified_at=None
+        expected=403
+    else:
+        cookies={cookie.name:cookie.value for cookie in c.cookies.jar}
+        removed='__Host-fitcheck_session' if case=='missing_account' else '__Host-fitcheck_guest'
+        h={**h,'Cookie':'; '.join(name+'='+value for name,value in cookies.items() if name!=removed)}
+        expected=401
+    assert c.post('/v1/guest-claims',headers=h).status_code==expected
+
+
+def test_slow_guest_claim_proof_does_not_block_health(profile_http,monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    a,c,r,h,_=ready(profile_http)
+    entered,release=Event(),Event();original=r.guests.resolve
+    def slow(*args,**kwargs):
+        entered.set()
+        assert release.wait(5)
+        return original(*args,**kwargs)
+    monkeypatch.setattr(r.guests,'resolve',slow)
+    with ThreadPoolExecutor(2) as pool:
+        pending=pool.submit(c.post,'/v1/guest-claims',headers=h)
+        try:
+            assert entered.wait(3)
+            health=pool.submit(c.get,'/health/live')
+            assert health.result(timeout=2).status_code==200
+        finally:release.set()
+        assert pending.result(timeout=10).status_code==200

@@ -44,17 +44,37 @@ def test_expired_guest_cannot_send_again(profile_http):
 
 
 def test_queued_v1_account_job_survives_0008(engine):
+    import asyncio,json
+    from types import SimpleNamespace
+    from alembic import command
+    from fitcheck_backend.storage.migrate import migration_config,run_migrations
+    from fitcheck_backend.config import Settings
     from job_fixtures import account
     from analysis_fixtures import DATA
     from fitcheck_backend.jobs.envelope import AnalysisEnvelope,execution_versions
-    from fitcheck_backend.contracts.resources import AccountAnalysisStart,AnalysisSnapshot
-    from fitcheck_backend.analysis.service import AnalysisResult
-    from fitcheck_backend.contracts.domain import FitAnalysis
-    from fitcheck_backend.storage.models import QuotaReservation
+    from fitcheck_backend.jobs.execution import FrozenJobExecutor
+    from fitcheck_backend.contracts.resources import AccountAnalysisStart
+    from fitcheck_backend.storage.models import QuotaReservation,BudgetWindow,ProviderCall
+    from fitcheck_backend.analysis.service import AnalysisService
+    from fitcheck_backend.analysis.executor import AnalysisExecutor
+    from fitcheck_backend.llm.gateway import ProviderGateway
+    from fitcheck_backend.llm.policy import analysis_policy
+    from fitcheck_backend.llm.types import ProviderReply
+    from llm_fakes import Adapter
+    with engine.begin() as conn:command.downgrade(migration_config(conn),'0007')
     owner,_=account(engine)
     frozen=AnalysisEnvelope(envelopeVersion=1,request=AccountAnalysisStart(mode='account',profileRevision='1',vacancy=DATA['vacancy'],locale='en'),profile=DATA['profile'],memory=[],versions=execution_versions('analysis'))
-    with unit_of_work(engine) as s:s.add(Job(owner_id=owner.id,type='analysis',input=frozen.model_dump(mode='json',by_alias=True),request_hash='a'*64,idempotency_key='old'))
+    with unit_of_work(engine) as session:
+        session.add(Job(owner_id=owner.id,type='analysis',input=frozen.model_dump(mode='json',by_alias=True),request_hash='a'*64,idempotency_key='old'))
+    run_migrations(Settings(database_url=engine.url.render_as_string(hide_password=False)))
+    adapter=Adapter([ProviderReply(json.dumps({**DATA['analysis'],'strengths':['skill:0']}),12,4,None,None),ProviderReply('{"supported":true,"unsupportedClaims":[]}',8,2,None,None)])
+    runtime=SimpleNamespace(analysis=AnalysisService(engine,AnalysisExecutor(ProviderGateway(adapter,ProviderLedger(engine))),analysis_policy()))
     lease=JobQueue(engine).claim()
-    snapshot=AnalysisSnapshot(profileRevision='1',profile=frozen.profile,vacancy=frozen.request.vacancy,locale='en',promptVersion=frozen.versions.prompt_version,schemaVersion=frozen.versions.schema_version,policyVersion=frozen.versions.policy_version)
-    assert JobPublication(engine).succeed_analysis(lease,AnalysisResult(FitAnalysis.model_validate(DATA['analysis']),snapshot))
-    with unit_of_work(engine) as s:assert s.scalar(select(QuotaReservation)) is None
+    result=asyncio.run(FrozenJobExecutor(runtime).execute(lease))
+    assert JobPublication(engine).succeed_analysis(lease,result)
+    assert result.snapshot.profile_revision=='1' and result.snapshot.profile==frozen.profile
+    assert len(adapter.calls)==2
+    with unit_of_work(engine) as session:
+        assert session.scalar(select(QuotaReservation)) is None
+        assert session.scalar(select(BudgetWindow).where(BudgetWindow.scope=='job')).calls==2
+        assert len(session.scalars(select(ProviderCall)).all())==2
