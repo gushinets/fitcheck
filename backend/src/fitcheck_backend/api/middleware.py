@@ -7,7 +7,7 @@ from fitcheck_backend.api.errors import error_response
 
 logger = logging.getLogger("fitcheck.http")
 METHODS = {"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-HEADERS = {"content-type", "authorization", "x-csrf-token", "idempotency-key"}
+HEADERS = {"content-type", "authorization", "x-csrf-token", "x-guest-csrf-token", "idempotency-key"}
 
 
 class RequestBoundaryMiddleware:

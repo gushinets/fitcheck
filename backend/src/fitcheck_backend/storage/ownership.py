@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .base import utcnow
-from .models import Owner, User, Guest, Job, AnalysisRecord, VacancyRecord, AnalysisAnnotation, ProviderCall, QuotaReservation, ImportEntry
+from .models import Owner, User, Guest, Job, AnalysisRecord, VacancyRecord, AnalysisAnnotation, ProviderCall, QuotaReservation, ImportEntry, ExtractionReservation
 
 
 class OwnershipConflict(RuntimeError):
@@ -41,6 +41,8 @@ def transfer_guest_analyses(session: Session, guest_owner_id: UUID, user_owner_i
                 raise OwnershipConflict("Guest jobs are still active")
             if session.scalar(select(QuotaReservation.id).where(QuotaReservation.owner_id==guest_owner_id, QuotaReservation.status=="reserved").limit(1)) is not None:
                 raise OwnershipConflict("Guest quota reservations are still active")
+            if session.scalar(select(ExtractionReservation.id).where(ExtractionReservation.owner_id==guest_owner_id,ExtractionReservation.status=='reserved').limit(1)) is not None:
+                raise OwnershipConflict('Guest extraction is still active')
             analyses = session.scalars(select(AnalysisRecord).where(AnalysisRecord.owner_id==guest_owner_id).with_for_update()).all()
             vacancy_ids = {analysis.vacancy_id for analysis in analyses}
             session.execute(text(f"SET CONSTRAINTS {_TRANSFER_CONSTRAINTS} DEFERRED"))

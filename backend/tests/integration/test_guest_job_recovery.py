@@ -36,9 +36,11 @@ def test_expired_guest_cannot_send_again(profile_http):
     a,c,r,h,body=prepare(profile_http)
     result=c.post('/v1/analysis-jobs',json=body,headers=h);assert result.status_code==202,result.text
     lease=JobQueue(a.engine).claim()
+    ledger=ProviderLedger(a.engine,clock=a.clock)
+    ledger.start(attempt(lease.owner_id,lease.job_id,lease.execution_token),bounds=CallBounds(100,100,Decimal('.001'),'openai.luna.2026-10-16'))
     with unit_of_work(a.engine) as s:
-        row=s.scalar(select(GuestSessionRow).where(GuestSessionRow.owner_id==lease.owner_id));row.expires_at=utcnow()-timedelta(seconds=1)
-    with pytest.raises(QuotaError):ProviderLedger(a.engine).start(attempt(lease.owner_id,lease.job_id,lease.execution_token),bounds=CallBounds(100,100,Decimal('.001'),'openai.luna.2026-10-16'))
+        row=s.scalar(select(GuestSessionRow).where(GuestSessionRow.owner_id==lease.owner_id));row.expires_at=a.clock()-timedelta(seconds=1)
+    with pytest.raises(QuotaError):ledger.start(attempt(lease.owner_id,lease.job_id,lease.execution_token),bounds=CallBounds(100,100,Decimal('.001'),'openai.luna.2026-10-16'))
 
 
 def test_queued_v1_account_job_survives_0008(engine):

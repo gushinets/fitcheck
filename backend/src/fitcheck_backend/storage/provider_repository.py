@@ -26,16 +26,17 @@ class ProviderAttempt:
 
 
 class ProviderLedger:
-    def __init__(self, engine, *, policy=None):
+    def __init__(self, engine, *, policy=None, clock=None):
         from ..quotas.policy import QuotaPolicy
         from ..config import Settings
         self.engine = engine
+        self.clock=clock
         self.policy = policy or QuotaPolicy.from_settings(Settings())
 
     def start(self, attempt: ProviderAttempt, *, bounds) -> UUID:
         from .budget_repository import BudgetRepository
         with unit_of_work(self.engine) as session:
-            now=session.scalar(select(func.clock_timestamp()))
+            now=self.clock() if self.clock else session.scalar(select(func.clock_timestamp()))
             return BudgetRepository(session).reserve(attempt,bounds,policy=self.policy,now=now)
 
     def finish(self, call_id: UUID, *, state: str, input_tokens: int | None,
