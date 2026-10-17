@@ -15,6 +15,8 @@ import type {
   WebsiteSnapshot,
 } from "./types"
 
+import { buildLocalExport } from "./local-export"
+
 interface MemorySeed {
   users?: StoredLocalUser[]
   activeUserId?: string | null
@@ -68,6 +70,11 @@ export function createMemoryWebsiteRepository(
   }
 
   return {
+    async exportLocalData(selectedUserId) {
+      if(activeUserId!==selectedUserId || !users.has(selectedUserId))throw new Error("selection_changed")
+      return clone(buildLocalExport(selectedUserId,profiles.get(selectedUserId),preferences.get(selectedUserId),[...history.values()].filter(row=>row.userId===selectedUserId)))
+    },
+
     async createUser(input) {
       const parsed = localAccountSchema.parse(input)
       if ([...users.values()].some((user) => user.email === parsed.email)) {

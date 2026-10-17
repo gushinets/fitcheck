@@ -71,6 +71,7 @@ export interface WebsiteSnapshot {
 }
 
 export interface WebsiteRepository {
+  exportLocalData(selectedUserId: string): Promise<import("./local-export").LocalImportRequest>
   createUser(input: {
     name: string
     email: string

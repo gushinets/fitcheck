@@ -19,6 +19,8 @@ import type {
   WebsiteSnapshot,
 } from "./types"
 
+import { buildLocalExport } from "./local-export"
+
 const DEFAULT_DATABASE_NAME = "fitcheck-web"
 const DATABASE_VERSION = 1
 const HISTORY_LIMIT = 50
@@ -120,6 +122,20 @@ export function createWebsiteRepository(
   }
 
   return {
+    async exportLocalData(selectedUserId) {
+      const db=await database()
+      const transaction=db.transaction(["meta","users","profiles","preferences","history"],"readonly")
+      const done=transactionDone(transaction)
+      const sessionPromise=requestResult(transaction.objectStore("meta").get(ACTIVE_SESSION_KEY)) as Promise<MetaRecord | undefined>
+      const userPromise=requestResult(transaction.objectStore("users").get(selectedUserId))
+      const profilePromise=requestResult(transaction.objectStore("profiles").get(selectedUserId)) as Promise<StoredProfile | undefined>
+      const preferencesPromise=requestResult(transaction.objectStore("preferences").get(selectedUserId))
+      const historyPromise=requestResult(transaction.objectStore("history").index("userId").getAll(selectedUserId)) as Promise<WebHistoryEntry[]>
+      const [session,user,profile,preferences,history]=await Promise.all([sessionPromise,userPromise,profilePromise,preferencesPromise,historyPromise])
+      await done
+      if(!user || session?.value.userId!==selectedUserId)throw new Error("selection_changed")
+      return buildLocalExport(selectedUserId,profile?.profile,preferences?.locale,history.filter(row=>row.userId===selectedUserId))
+    },
     async createUser(input) {
       const parsed = localAccountSchema.parse(input)
       const db = await database()
