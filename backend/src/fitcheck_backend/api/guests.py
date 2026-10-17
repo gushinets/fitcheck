@@ -2,7 +2,7 @@ from fastapi import APIRouter,Depends,Request
 from fastapi.responses import JSONResponse
 from ..contracts.guests import GuestSession
 from ..contracts.openapi import ERRORS,SECURITY
-from ..auth.crypto import cookie_options
+from ..auth.crypto import cookie_options,TOKEN_PATTERN
 from ..auth.errors import AuthError
 from ..guests.sessions import guest_cookie_name
 from .errors import ErrorEnvelope
@@ -39,7 +39,7 @@ def claim_proofs(request: Request,account=Depends(verified_principal)):
     token=request.cookies.get(guest_cookie_name(runtime.settings),'')
     identity=runtime.guests.resolve(token,allow_claim_receipt=True)
     values=request.headers.getlist('x-guest-csrf-token')
-    if len(values)!=1 or not hmac.compare_digest(values[0],runtime.guests.csrf(token)):
+    if len(values)!=1 or TOKEN_PATTERN.fullmatch(values[0]) is None or not hmac.compare_digest(values[0],runtime.guests.csrf(token)):
         raise AuthError('forbidden')
     return account,identity
 

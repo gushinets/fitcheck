@@ -10,7 +10,7 @@ migration or admission toggle has been performed. Website UI remains ANY-579/653
 - Complete backend suite runs with production settings/provider keys removed,
   dotenv disabled, and worktree source explicitly selected. PostgreSQL 17 uses
   project `fitcheck-any651`, disposable `fitcheck_test`, localhost port 55464.
-- Full backend suite: 795 passed, 1 skipped (paid provider canary).
+- Full backend suite: 797 passed, 1 skipped (paid provider canary).
 - Frontend: 400 passed, 3 skipped; TypeScript, ESLint, OpenAPI and generated
   TypeScript drift checks passed. Production webpack build passed after allowing
   its existing Google Fonts download.
@@ -24,10 +24,10 @@ migration or admission toggle has been performed. Website UI remains ANY-579/653
 - A fresh whole-branch review found three Important issues, all reproduced
   RED and fixed in one pass: financial settlement after recovery, admission
   time after blocking locks, and synchronous proof I/O on the ASGI loop.
-  All 795 backend tests pass after those fixes. No Critical findings remain.
-  One Minor remains deferred: malformed non-ASCII guest CSRF headers may return
-  500 instead of 403; authorization is still denied. Normal browser-generated
-  tokens are ASCII. Add token-pattern validation in a follow-up.
+  All 797 backend tests pass after those fixes. No Critical findings remain.
+  The remaining Minor is also fixed: non-ASCII guest CSRF headers return403
+  through token-pattern validation before constant-time comparison. Both claim
+  and ordinary guest mutation paths have RED→GREEN regression tests.
 
 ## Deployment remains pending
 

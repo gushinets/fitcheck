@@ -164,3 +164,13 @@ def test_slow_guest_claim_proof_does_not_block_health(profile_http,monkeypatch):
             assert health.result(timeout=2).status_code==200
         finally:release.set()
         assert pending.result(timeout=10).status_code==200
+
+
+@pytest.mark.parametrize('operation',['claim','extraction'])
+def test_non_ascii_guest_csrf_is_forbidden(profile_http,operation):
+    _,c,_,headers,_=ready(profile_http)
+    if operation=='claim':
+        response=c.post('/v1/guest-claims',headers={**headers,'X-Guest-CSRF-Token':b'\xff'})
+    else:
+        response=c.post('/v1/extractions?mode=guest',json={'type':'text','text':'React developer'},headers={**headers,'X-CSRF-Token':b'\xff'})
+    assert response.status_code==403,response.text

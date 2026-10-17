@@ -101,5 +101,5 @@ def validate_identity_mutation(request: Request,identity):
     else:
         values=request.headers.getlist('x-csrf-token')
         token=request.cookies.get(guest_cookie_name(runtime.settings),'')
-        if len(values)!=1 or not hmac.compare_digest(values[0],runtime.guests.csrf(token)):
+        if len(values)!=1 or TOKEN_PATTERN.fullmatch(values[0]) is None or not hmac.compare_digest(values[0],runtime.guests.csrf(token)):
             raise AuthError('forbidden')
