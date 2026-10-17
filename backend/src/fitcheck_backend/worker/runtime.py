@@ -10,6 +10,7 @@ from ..jobs.execution import FrozenJobExecutor
 from .settings import WorkerSettings
 from .health import WorkerHealth
 from .runner import WorkerRunner
+from ..imports.execution import ImportExecutor
 
 
 class WorkerRuntime:
@@ -30,7 +31,7 @@ class WorkerRuntime:
         self.llm = LlmRuntime(self.settings,self.engine)
         metrics_environment = self.settings.metrics_environment if self.settings.metrics_enabled else None
         self.runner = WorkerRunner(JobQueue(self.engine,lease_seconds=self.worker_settings.lease_seconds,metrics_environment=metrics_environment),
-            FrozenJobExecutor(self.llm,model=self.settings.open_ai_model),JobPublication(self.engine,metrics_environment=metrics_environment),self.worker_settings,self.health)
+            FrozenJobExecutor(self.llm,model=self.settings.open_ai_model),JobPublication(self.engine,metrics_environment=metrics_environment),self.worker_settings,self.health,import_executor=ImportExecutor(self.engine))
         self.health.mark()
         return self.runner
 

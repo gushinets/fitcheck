@@ -3,14 +3,17 @@ import logging
 from ..api.errors import ErrorBody
 from ..jobs.errors import JobError
 from ..llm.errors import LlmError
+from sqlalchemy.exc import SQLAlchemyError
+from ..storage.import_repository import ImportLeaseLost
 
 logger = logging.getLogger('fitcheck.worker')
 
 
 class WorkerRunner:
-    def __init__(self,queue,executor,publication,settings,health):
+    def __init__(self,queue,executor,publication,settings,health,*,import_executor=None):
         self.queue,self.executor,self.publication = queue,executor,publication
         self.settings,self.health = settings,health
+        self.import_executor = import_executor
         self.stopping = asyncio.Event()
 
     def request_shutdown(self):
@@ -35,7 +38,8 @@ class WorkerRunner:
         await asyncio.sleep(self.settings.drain_seconds)
 
     async def process(self,lease):
-        execution = asyncio.create_task(self.executor.execute(lease))
+        executor=self.import_executor if lease.type=="import" else self.executor
+        execution = asyncio.create_task(executor.execute(lease))
         stop_heartbeat = asyncio.Event()
         heartbeat = asyncio.create_task(self._heartbeat(lease,stop_heartbeat))
         drain = asyncio.create_task(self._drain())
@@ -54,12 +58,23 @@ class WorkerRunner:
             except (JobError,LlmError) as exc:
                 error = ErrorBody(code=exc.code,message=exc.code.replace('_',' ').capitalize(),requestId=str(lease.job_id))
                 await asyncio.to_thread(self.publication.fail,lease,error)
+            except ImportLeaseLost:
+                return
+            except SQLAlchemyError:
+                if lease.type=='import':
+                    # Leave the lease for normal bounded queue recovery; committed
+                    # item outcomes survive a transient DB failure.
+                    return
+                error = ErrorBody(code='service_unavailable',message='Service unavailable',requestId=str(lease.job_id))
+                await asyncio.to_thread(self.publication.fail,lease,error)
             except Exception:
                 error = ErrorBody(code='service_unavailable',message='Service unavailable',requestId=str(lease.job_id))
                 await asyncio.to_thread(self.publication.fail,lease,error)
             else:
                 if lease.type == 'analysis':
                     await asyncio.to_thread(self.publication.succeed_analysis,lease,result)
+                elif lease.type=='import':
+                    await asyncio.to_thread(self.publication.succeed_import,lease,result)
                 else:
                     await asyncio.to_thread(self.publication.succeed_suggestions,lease,result)
         finally:

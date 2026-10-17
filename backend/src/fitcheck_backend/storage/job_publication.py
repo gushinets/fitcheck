@@ -76,6 +76,20 @@ class JobPublication:
         except _LostLease:
             return False
 
+    def succeed_import(self,lease,report):
+        from .import_repository import ImportRepository
+        if lease.type!='import':raise ValueError('Invalid publication type')
+        try:
+            with job_transaction(self.engine) as s:
+                job=self._fenced_job(s,lease)
+                if job is None:return False
+                saved=ImportRepository(s).report(job.id,job.owner_id)
+                if saved!=report or len(saved.items)!=saved.total_count:
+                    raise ValueError('Incomplete import report')
+                _finish(s,job,metrics_environment=self.metrics_environment,status='succeeded',output=saved.model_dump(mode='json'))
+                return True
+        except _LostLease:return False
+
     def fail(self, lease, error):
         try:
             with job_transaction(self.engine) as s:

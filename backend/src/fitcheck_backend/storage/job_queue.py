@@ -45,7 +45,7 @@ class JobQueue:
         self.metrics_environment = metrics_environment
 
     def _eligible_job(self, session, *, expired=False, limit=1):
-        conditions = [Job.type.in_(['analysis','skill_suggestions'])]
+        conditions = [Job.type.in_(['analysis','skill_suggestions','import'])]
         conditions += ([Job.status == 'running', Job.lease_expires_at <= func.clock_timestamp()]
                        if expired else [Job.status == 'queued', Job.available_at <= func.clock_timestamp()])
         order = Job.lease_expires_at if expired else Job.available_at
