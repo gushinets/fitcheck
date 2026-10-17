@@ -5,6 +5,7 @@ import math
 from uuid import uuid4
 from sqlalchemy import select, func, text, update
 from .database import unit_of_work
+from sqlalchemy.orm import defer
 from .models import Job, ProviderCall, Owner
 from ..jobs.types import JobLease
 from ..metrics.lifecycle import append_domain_event, append_job_finished, job_key, job_properties
@@ -26,11 +27,12 @@ def safe_job_error(job_id, code='service_unavailable'):
     return dict(code=code, message=code.replace('_',' ').capitalize(), requestId=str(job_id), details=[])
 
 
-def fenced_job(session, lease):
+def fenced_job(session, lease, *, load_input=True):
     owner=session.scalar(select(Owner.id).where(Owner.id==lease.owner_id).with_for_update())
     if owner is None:return None
-    job = session.scalar(select(Job).where(Job.id == lease.job_id, Job.owner_id == lease.owner_id)
-        .with_for_update())
+    query=select(Job).where(Job.id == lease.job_id, Job.owner_id == lease.owner_id).with_for_update()
+    if not load_input:query=query.options(defer(Job.input,raiseload=True))
+    job=session.scalar(query)
     if (job is None or job.type != lease.type or job.status != 'running'
             or job.lease_token != lease.execution_token or job.lease_expires_at <= db_now(session)):
         return None

@@ -17,7 +17,7 @@ class ImportRepository:
     def __init__(self,session):self.session=session
 
     def _job(self,lease):
-        job=fenced_job(self.session,lease)
+        job=fenced_job(self.session,lease,load_input=False)
         if job is None:raise ImportLeaseLost()
         return job
 
@@ -66,7 +66,7 @@ class ImportRepository:
         if previous:return ImportItemOutcome.model_validate(previous.outcome)
         digest=canonical_hash(row.model_dump(mode='json'))
         receipt=self.session.scalar(select(ImportEntry).where(ImportEntry.owner_id==lease.owner_id,
-            ImportEntry.source=='local_v1',ImportEntry.source_user_id==job.input['sourceUserId'],ImportEntry.external_id==row.id))
+            ImportEntry.source=='local_v1',ImportEntry.source_user_id==lease.input['sourceUserId'],ImportEntry.external_id==row.id))
         if receipt:
             outcome,reason=('skipped','identical') if receipt.content_hash==digest else ('conflict','source_changed')
         else:
@@ -80,7 +80,7 @@ class ImportRepository:
             self.session.add(AnalysisAnnotation(owner_id=lease.owner_id,analysis_id=record.id,
                 corrected_score=feedback.corrected_score if feedback else None,note=feedback.note if feedback else None,
                 feedback_created_at=feedback.created_at if feedback else None))
-            self.session.add(ImportEntry(owner_id=lease.owner_id,source='local_v1',source_user_id=job.input['sourceUserId'],
+            self.session.add(ImportEntry(owner_id=lease.owner_id,source='local_v1',source_user_id=lease.input['sourceUserId'],
                 external_id=row.id,content_hash=digest,analysis_id=record.id))
             outcome,reason='imported','created'
         value=ImportItemOutcome(index=index,externalId=row.id,outcome=outcome,reason=reason)
@@ -91,7 +91,7 @@ class ImportRepository:
         job=self._job(lease)
         previous=self._existing(lease,index)
         if previous:return ImportItemOutcome.model_validate(previous.outcome)
-        raw=job.input['history'][index]
+        raw=lease.input['history'][index]
         external_id=raw.get('id')
         if not isinstance(external_id,str) or not 1<=len(external_id.strip())<=200:external_id=None
         value=ImportItemOutcome(index=index,externalId=external_id,outcome='invalid',reason=reason)

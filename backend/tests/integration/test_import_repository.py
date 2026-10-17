@@ -88,3 +88,16 @@ def test_0009_upgrade_preserves_old_receipt_and_schema(engine,storage_factory):
         assert c.scalar(text('select version_num from alembic_version'))=='0009'
         assert c.scalar(text('select source_user_id from import_entries'))=='__pre_0009__'
     with unit_of_work(engine) as s:assert s.get(AnalysisRecord,identifier) is not None
+
+
+def test_item_fences_do_not_reload_complete_import_input(engine):
+    from sqlalchemy import event
+    lease=lease_for(engine)
+    statements=[]
+    def observe(conn,cursor,statement,parameters,context,executemany):statements.append(statement)
+    event.listen(engine,'before_cursor_execute',observe)
+    try:
+        with unit_of_work(engine) as s:repo(s).apply_row(lease,0,parse_import_row(raw_row()))
+    finally:event.remove(engine,'before_cursor_execute',observe)
+    job_reads=[sql.lower().split('from jobs')[0] for sql in statements if 'from jobs' in sql.lower()]
+    assert job_reads and all('jobs.input' not in sql for sql in job_reads)

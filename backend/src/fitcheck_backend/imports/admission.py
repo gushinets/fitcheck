@@ -1,6 +1,6 @@
 from sqlalchemy import select,func
 from pydantic import ValidationError
-from ..contracts.imports import parse_import_row,normalize_profile
+from ..contracts.imports import parse_import_row,normalize_profile,storage_safe,usable_external_id
 from ..contracts.domain import FreelancerProfile
 from ..contracts.jobs import ImportReference
 from ..storage.models import Job
@@ -11,14 +11,16 @@ from ..jobs.errors import JobError
 def sanitized_input(request):
     value=request.model_dump(mode='json')
     if request.profile is not None:
-        try:value['profile']=FreelancerProfile.model_validate(normalize_profile(request.profile)).model_dump(mode='json')
-        except ValidationError:value['profile']={}
+        try:
+            if not storage_safe(request.profile):raise ValueError('Invalid stored text')
+            value['profile']=FreelancerProfile.model_validate(normalize_profile(request.profile)).model_dump(mode='json')
+        except (ValidationError,ValueError):value['profile']={}
     rows=[]
     for raw in request.history:
         try:rows.append(parse_import_row(raw).model_dump(mode='json'))
         except ValidationError:
             external=raw.get('id')
-            rows.append({'id':external,'invalid':True} if isinstance(external,str) and 1<=len(external.strip())<=200 else {'invalid':True})
+            rows.append({'id':external.strip(),'invalid':True} if usable_external_id(external) else {'invalid':True})
     value['history']=rows
     return value
 

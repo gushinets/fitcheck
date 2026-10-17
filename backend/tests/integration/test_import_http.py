@@ -78,3 +78,26 @@ def test_concurrent_same_key_admission_and_foreign_owner(profile_http):
     with unit_of_work(a.engine) as s:s.get(User,other.principal.user_id).email_verified_at=a.clock()
     c.cookies.clear();c.cookies.set('__Host-fitcheck_session',other.token)
     assert c.get('/v1/import-jobs/'+identifier).status_code==404
+
+
+def test_normalized_duplicate_ids_rejected_before_job_creation(profile_http):
+    a,c,r,issued,h=profile_http;c.app.state.settings.jobs_enabled=True
+    response=c.post('/v1/import-jobs',headers=h|{'Idempotency-Key':'trim'},json=payload(history=[raw_row(id='row'),raw_row(id=' row ')]))
+    assert response.status_code==400,response.text
+    with unit_of_work(a.engine) as s:assert s.scalar(select(func.count()).select_from(Job))==0
+
+
+def test_jsonb_unsafe_rows_are_isolated_and_source_identity_rejected(profile_http):
+    from copy import deepcopy
+    a,c,r,issued,h=profile_http;c.app.state.settings.jobs_enabled=True
+    broken=raw_row(id='bad-content');broken['job']['description']='bad\x00content'
+    profile=deepcopy(broken['profile']);profile['specialization']='bad\x00profile'
+    response=c.post('/v1/import-jobs',headers=h|{'Idempotency-Key':'nul'},json=payload(profile=profile,history=[raw_row(),broken,raw_row(id='bad\x00id')]))
+    assert response.status_code==202,response.text
+    with unit_of_work(a.engine) as s:
+        job=s.scalar(select(Job));assert '\x00' not in str(job.input)
+        assert job.input['profile']=={}
+        assert job.input['history'][1]=={'id':'bad-content','invalid':True}
+        assert job.input['history'][2]=={'invalid':True}
+    bad_source=c.post('/v1/import-jobs',headers=h|{'Idempotency-Key':'nul-source'},json=payload(sourceUserId='bad\x00source'))
+    assert bad_source.status_code==400,bad_source.text

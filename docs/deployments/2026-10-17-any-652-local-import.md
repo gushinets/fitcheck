@@ -49,3 +49,33 @@ Never downgrade0009 to boot an old service: source-scoped receipts may share IDs
 that the older uniqueness cannot represent. Preserve domain/import accounting and
 use a compatible forward fix. Existing webhook TLS-chain repair remains separate;
 manual deployment is available without disabling certificate validation.
+
+## Final review and fixes
+
+Fresh whole-branch review found no Critical issues. Fixed the two Important input
+issues: identifiers are checked for duplicates after canonical trimming before
+admission; JSONB-incompatible strings are isolated as invalid row/profile data
+and an unusable source identity is rejected400. Both reproduced RED first.
+Regraded repeated whole-batch loading as Important because supported max-size
+imports could decode roughly10GiB: item fences now omit immutable input, consume
+the frozen lease and retain both expiry checks. A real-SQL regression reproduced
+RED and passed after the fix. Full backend suite after the single fix pass:
+818 passed,1 paid canary skipped. Frontend407 passed,3 skipped; type/lint and both
+contract drift checks passed again.
+
+Deferred minor: equivalent timestamp instants written using different UTC-offset
+strings produce different receipt hashes and report source_changed. The current
+exporter preserves original timestamp strings; this does not overwrite data or
+create duplicates. Canonical UTC hashing is a follow-up refinement.
+
+Reviewer exclusions were ruled explicitly: website sign-in/wizard/rendering is
+ANY-653 (cost: no migration screen until integration); live rollout is verified
+separately by the executor and the certificate repair remains outside scope
+(cost: old webhook TLS issue remains); drafts/passwords are not transferred
+(cost: drafts remain local and server authentication is required).
+
+Additional execution rulings: move Task6's review/rollout bullet after its local
+verification completion to satisfy the whole-branch review ordering (cost: ledger
+completion is not deployment evidence); classify repeated batch reads as Important
+and omit only the import fence's input column (cost: imports rely on the frozen
+lease rather than reloading immutable input).
