@@ -64,6 +64,7 @@ class RequestBoundaryMiddleware:
             # Consume at most the configured bound before any route sees bytes.
             limit = min(self.max_body_bytes, 32_768) if scope['path'].startswith('/internal/metrics/') else self.max_body_bytes
             chunks = []
+            if scope['path']=='/v1/import-jobs':limit=min(limit,5*1024*1024)
             size = 0
             while True:
                 part = await receive()

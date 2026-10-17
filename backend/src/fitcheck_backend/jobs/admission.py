@@ -90,7 +90,7 @@ class JobAdmission:
                     request = AccountAnalysisStart(mode='account', vacancy=snapshot.vacancy,
                         profileRevision=current.revision, locale=snapshot.locale)
                 active = s.scalar(select(func.count()).select_from(Job).where(
-                    Job.owner_id == owner_id, Job.type.in_(['analysis','skill_suggestions']),
+                    Job.owner_id == owner_id, Job.type.in_(['analysis','skill_suggestions','import']),
                     Job.status.in_(['queued','running'])))
                 if active >= self.policy.limits(mode).max_active_jobs:
                     raise JobError('rate_limited')

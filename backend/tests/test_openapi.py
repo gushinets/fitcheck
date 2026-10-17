@@ -118,7 +118,7 @@ def test_guest_contract_security_and_quota_errors():
     assert claim['x-fitcheck-cookie-mutation']['guestCsrfHeader']=='X-Guest-CSRF-Token'
     assert any(p['name']=='X-Guest-CSRF-Token' and p['required'] for p in claim['parameters'])
     assert paths['/v1/history']['get']['security']==[{'webSession':[]}]
-    assert paths['/v1/import-jobs']['post']['x-fitcheck-implementation']=='planned'
+    assert paths['/v1/import-jobs']['post']['x-fitcheck-implementation']=='implemented'
     assert any(p['name']=='mode' and p['in']=='query' for p in paths['/v1/quota']['get']['parameters'])
     assert paths['/v1/analysis-jobs']['post']['security']==[{'webSession':[]},{'guestSession':[]}]
     quota=document['components']['schemas']['OperationQuota']

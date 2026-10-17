@@ -11,6 +11,7 @@ from fitcheck_backend.api.jobs import router as jobs_router
 from fitcheck_backend.api.guests import router as guests_router
 from fitcheck_backend.api.quota import router as quota_router
 from fitcheck_backend.api.history import router as history_router
+from fitcheck_backend.api.imports import router as imports_router
 from fitcheck_backend.api.runtime import AuthRuntime, MetricsRuntime
 from fitcheck_backend.api.metrics import router as metrics_router
 from fitcheck_backend.contracts.openapi import security_schemes
@@ -49,6 +50,7 @@ def create_app(settings: Settings | None = None, *, auth_runtime: AuthRuntime | 
     app.include_router(guests_router)
     app.include_router(quota_router)
     app.include_router(history_router)
+    app.include_router(imports_router)
     app.include_router(metrics_router)
     original_openapi = app.openapi
     def documented_openapi():
