@@ -88,11 +88,12 @@ class AnalysisAnnotation(OwnedMixin, Base):
 class ImportEntry(OwnedMixin, CreatedMixin, IdentityMixin, Base):
     __tablename__ = "import_entries"
     source: Mapped[str] = mapped_column(String(20), default="local_v1")
+    source_user_id: Mapped[str] = mapped_column(String(200), default="__pre_0009__")
     external_id: Mapped[str] = mapped_column(String(200))
     content_hash: Mapped[str] = mapped_column(String(64))
     analysis_id: Mapped[UUID]
     __table_args__ = (
-        UniqueConstraint("owner_id", "source", "external_id"),
+        UniqueConstraint("owner_id", "source", "source_user_id", "external_id"),
         ForeignKeyConstraint(["analysis_id", "owner_id"], ["analyses.id", "analyses.owner_id"], deferrable=True, initially="IMMEDIATE", ondelete="CASCADE"),
         CheckConstraint("source='local_v1' AND content_hash ~ '^[0-9a-f]{64}$'", name="source_hash"),
     )
