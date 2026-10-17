@@ -142,6 +142,20 @@
             "title": "Createdat",
             "type": "string"
           },
+          "currentProfileRevision": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Currentprofilerevision"
+          },
           "feedback": {
             "anyOf": [
               {
@@ -152,6 +166,18 @@
               }
             ],
             "default": null
+          },
+          "profileChanged": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Profilechanged"
           },
           "snapshot": {
             "$ref": "#/components/schemas/AnalysisSnapshot"
@@ -3517,8 +3543,8 @@
             "name": "analysisId",
             "required": true,
             "schema": {
-              "maxLength": 200,
-              "minLength": 1,
+              "format": "uuid",
+              "title": "Analysisid",
               "type": "string"
             }
           }
@@ -3532,7 +3558,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -3658,12 +3684,10 @@
         "security": [
           {
             "webSession": []
-          },
-          {
-            "guestSession": []
           }
         ],
-        "x-fitcheck-implementation": "planned",
+        "summary": "Get Analysis",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-650"
       }
     },
@@ -3676,8 +3700,24 @@
             "name": "analysisId",
             "required": true,
             "schema": {
-              "maxLength": 200,
-              "minLength": 1,
+              "format": "uuid",
+              "title": "Analysisid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
               "type": "string"
             }
           }
@@ -3701,7 +3741,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -3829,11 +3869,12 @@
             "webSession": []
           }
         ],
+        "summary": "Update Application Status",
         "x-fitcheck-cookie-mutation": {
           "csrfHeader": "X-CSRF-Token",
           "originRequired": true
         },
-        "x-fitcheck-implementation": "planned",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-650"
       }
     },
@@ -3846,8 +3887,24 @@
             "name": "analysisId",
             "required": true,
             "schema": {
-              "maxLength": 200,
-              "minLength": 1,
+              "format": "uuid",
+              "title": "Analysisid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
               "type": "string"
             }
           }
@@ -3856,7 +3913,15 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/FeedbackResponse"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/FeedbackResponse"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
               }
             }
           },
@@ -3871,7 +3936,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -3999,11 +4064,12 @@
             "webSession": []
           }
         ],
+        "summary": "Update Feedback",
         "x-fitcheck-cookie-mutation": {
           "csrfHeader": "X-CSRF-Token",
           "originRequired": true
         },
-        "x-fitcheck-implementation": "planned",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-650"
       }
     },
@@ -4016,19 +4082,35 @@
             "name": "analysisId",
             "required": true,
             "schema": {
-              "maxLength": 200,
-              "minLength": 1,
+              "format": "uuid",
+              "title": "Analysisid",
               "type": "string"
             }
           },
           {
-            "description": "Identity-scoped atomic admission; same key/body replays, different body conflicts (409).",
             "in": "header",
             "name": "Idempotency-Key",
             "required": true,
             "schema": {
               "maxLength": 200,
               "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
               "type": "string"
             }
           }
@@ -4042,7 +4124,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -4170,11 +4252,12 @@
             "webSession": []
           }
         ],
+        "summary": "Reanalyze",
         "x-fitcheck-cookie-mutation": {
           "csrfHeader": "X-CSRF-Token",
           "originRequired": true
         },
-        "x-fitcheck-implementation": "planned",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-650"
       }
     },
@@ -6772,10 +6855,27 @@
     "/v1/history": {
       "delete": {
         "operationId": "clearHistory",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "204": {
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -6903,11 +7003,12 @@
             "webSession": []
           }
         ],
+        "summary": "Clear History",
         "x-fitcheck-cookie-mutation": {
           "csrfHeader": "X-CSRF-Token",
           "originRequired": true
         },
-        "x-fitcheck-implementation": "planned",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-650"
       },
       "get": {
@@ -6915,46 +7016,82 @@
         "parameters": [
           {
             "in": "query",
-            "name": "cursor",
-            "schema": {
-              "maxLength": 2000,
-              "minLength": 1,
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
             "name": "limit",
+            "required": false,
             "schema": {
               "default": 20,
               "maximum": 100,
               "minimum": 1,
+              "title": "Limit",
               "type": "integer"
             }
           },
           {
             "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
             "name": "verdict",
+            "required": false,
             "schema": {
               "enum": [
                 "GO",
                 "NO_GO"
               ],
+              "title": "Verdict",
               "type": "string"
             }
           },
           {
             "in": "query",
             "name": "applicationStatus",
+            "required": false,
             "schema": {
-              "enum": [
-                "not_applied",
-                "applied",
-                "replied",
-                "interview",
-                "rejected",
-                "hired"
+              "anyOf": [
+                {
+                  "enum": [
+                    "not_applied",
+                    "applied",
+                    "replied",
+                    "interview",
+                    "rejected",
+                    "hired"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
               ],
+              "title": "Applicationstatus"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "newest",
+              "enum": [
+                "newest",
+                "oldest"
+              ],
+              "title": "Sort",
               "type": "string"
             }
           }
@@ -6968,7 +7105,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -7096,7 +7233,8 @@
             "webSession": []
           }
         ],
-        "x-fitcheck-implementation": "planned",
+        "summary": "Get History",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-650"
       }
     },

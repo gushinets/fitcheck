@@ -92,6 +92,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get Analysis */
         get: operations["getAnalysis"];
         put?: never;
         post?: never;
@@ -109,6 +110,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        /** Update Application Status */
         put: operations["updateApplicationStatus"];
         post?: never;
         delete?: never;
@@ -125,6 +127,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        /** Update Feedback */
         put: operations["updateFeedback"];
         post?: never;
         delete?: never;
@@ -142,6 +145,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Reanalyze */
         post: operations["reanalyze"];
         delete?: never;
         options?: never;
@@ -394,9 +398,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get History */
         get: operations["getHistory"];
         put?: never;
         post?: never;
+        /** Clear History */
         delete: operations["clearHistory"];
         options?: never;
         head?: never;
@@ -645,8 +651,18 @@ export interface components {
              * Format: date-time
              */
             createdAt: string;
+            /**
+             * Currentprofilerevision
+             * @default null
+             */
+            currentProfileRevision: string | null;
             /** @default null */
             feedback: components["schemas"]["FeedbackUpdate"] | null;
+            /**
+             * Profilechanged
+             * @default null
+             */
+            profileChanged: boolean | null;
             snapshot: components["schemas"]["AnalysisSnapshot"];
         };
         /** AnalysisRunning */
@@ -2062,7 +2078,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2184,7 +2200,10 @@ export interface operations {
     updateApplicationStatus: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                Origin: string;
+                "X-CSRF-Token"?: string;
+            };
             path: {
                 analysisId: string;
             };
@@ -2196,7 +2215,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2318,7 +2337,10 @@ export interface operations {
     updateFeedback: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                Origin: string;
+                "X-CSRF-Token"?: string;
+            };
             path: {
                 analysisId: string;
             };
@@ -2326,11 +2348,11 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["FeedbackResponse"];
+                "application/json": components["schemas"]["FeedbackResponse"] | null;
             };
         };
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2453,8 +2475,9 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Identity-scoped atomic admission; same key/body replays, different body conflicts (409). */
                 "Idempotency-Key": string;
+                Origin: string;
+                "X-CSRF-Token"?: string;
             };
             path: {
                 analysisId: string;
@@ -2463,7 +2486,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -4695,9 +4718,10 @@ export interface operations {
     getHistory: {
         parameters: {
             query?: {
-                applicationStatus?: "not_applied" | "applied" | "replied" | "interview" | "rejected" | "hired";
-                cursor?: string;
+                applicationStatus?: ("not_applied" | "applied" | "replied" | "interview" | "rejected" | "hired") | null;
+                cursor?: string | null;
                 limit?: number;
+                sort?: "newest" | "oldest";
                 verdict?: "GO" | "NO_GO";
             };
             header?: never;
@@ -4706,7 +4730,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4828,13 +4852,16 @@ export interface operations {
     clearHistory: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                Origin: string;
+                "X-CSRF-Token"?: string;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;

@@ -16,6 +16,7 @@ from ..profiles.service import ProfileService
 from ..extraction.service import ExtractionService
 from ..jobs.admission import JobAdmission
 from ..jobs.status import JobStatusReader
+from ..history.service import HistoryService
 
 
 class AuthRuntime:
@@ -37,6 +38,7 @@ class AuthRuntime:
         self.extraction = ExtractionService(self.limiter)
         self.jobs = JobAdmission(self.engine,self.limiter,model=settings.open_ai_model,metrics_environment=metrics_environment)
         self.job_status = JobStatusReader(self.engine)
+        self.history = HistoryService(self.engine, clock, bytes.fromhex(settings.auth_secret.get_secret_value()))
 
     def close(self):
         if self._owns_engine:

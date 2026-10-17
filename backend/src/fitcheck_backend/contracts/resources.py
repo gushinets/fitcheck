@@ -102,6 +102,8 @@ class AnalysisResource(DTO):
     snapshot: AnalysisSnapshot
     feedback: FeedbackUpdate | None = None
     application_status: ApplicationStatus = "not_applied"
+    current_profile_revision: Revision | None = None
+    profile_changed: bool | None = None
 
 
 class HistoryPage(DTO):

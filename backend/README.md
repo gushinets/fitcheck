@@ -16,7 +16,7 @@ Settings use the FITCHECK_ prefix (see `.env.example`). Environment is dev/test/
 uv run pytest -q
 ```
 
-Storage and migrations are implemented in ANY-644, server authentication in ANY-645, profile/preferences/draft API in ANY-646, vacancy extraction in ANY-647 and the LLM gateway/services in ANY-648. Remaining tasks: durable jobs ANY-649, history ANY-650, guest quotas ANY-651, local import ANY-652, UI integration ANY-653 and production operations ANY-654. Current Next.js APIs and website remain active until integration.
+Storage and migrations are implemented in ANY-644, server authentication in ANY-645, profile/preferences/draft API in ANY-646, vacancy extraction in ANY-647 and the LLM gateway/services in ANY-648. Durable jobs ANY-649 and history ANY-650 are implemented. Remaining tasks: guest quotas ANY-651, local import ANY-652, UI integration ANY-653 and production operations ANY-654. Current Next.js APIs and website remain active until integration.
 
 The HTTP boundary generates X-Request-ID; client-supplied IDs are ignored. Errors are `{error:{code,message,requestId,details}}`; details contain field locations/codes only. Validation errors use 400, 404/405 share the envelope, unexpected exceptions use a safe 500. Actual body bytes are limited even without/trusting Content-Length; mutation bodies must use application/json. Logs contain request ID/method/path/status only; uvicorn access logging is disabled to avoid query logging.
 
@@ -463,8 +463,9 @@ unlinked calls and unresolved operation counts disclose missing coverage.
 No MRR/ARR, payment conversion, subscription churn, NRR/GRR, CAC/LTV, margin, sales,
 NPS/CSAT/CES or historical outcome conversion source exists. Rows state specific
 unavailability reasons. Corrected scores are not surveys. Backend application
-statuses are current snapshots, not historical transitions. Backend feedback awaits
-ANY-650; website account/backend identity linkage awaits explicit integration.
+statuses are current snapshots, not historical transitions. Backend feedback is stored by ANY-650 and participates in server calibration;
+feedback journal/report integration and website account/backend identity linkage
+remain separate integration work.
 
 ### Collection, deletion and retention
 
@@ -522,3 +523,51 @@ Known spend and coverage retain failed generations, audit calls and retries;
 cost per success divides all observed cohort attempts by operation successes.
 Migration 0007 refuses a rollback if narrowing costs to eight decimal places
 would lose data.
+
+## History API (ANY-650)
+
+Verified website accounts can read `GET /v1/history` and
+`GET /v1/analyses/{analysisId}`. History accepts `limit` (1–100, default 20),
+`verdict=GO|NO_GO`, `applicationStatus`, `sort=newest|oldest` (default newest),
+and an opaque `cursor`. Ordering is `(createdAt, analysisId)` in the selected
+direction. Signed cursors bind the owner, filters and order; changing those
+requires starting a new page sequence. The page size may change. Keyset paging
+works even if the boundary record is deleted. It is a live view: later inserts
+before the cursor are seen on refresh; changing filters/status during traversal
+requires refresh for a complete current view.
+
+Details and history include the original vacancy/optional URL, immutable profile
+snapshot/revision, result/date, nullable feedback and application status.
+`currentProfileRevision` and `profileChanged` compare the stored backend revision
+with the current one. `profileChanged=null` means no comparable revision exists
+(for example a transferred guest or legacy import); it is never guessed from a
+legacy revision string. Job polling uses the same resource representation.
+
+Cookie mutations require trusted Origin and CSRF:
+
+- `PUT /v1/analyses/{analysisId}/feedback`: `{ "correctedScore": 60, "note": "..." }`;
+  score is an integer 0–100, note is optional and at most 500 characters.
+  Send JSON `null` to clear feedback; an absent body is invalid.
+- `PUT /v1/analyses/{analysisId}/application-status`: `{ "applicationStatus": "applied" }`.
+  Allowed statuses are `not_applied`, `applied`, `replied`, `interview`, `rejected`,
+  `hired`. Users may correct any status to any other status, including reset.
+  Updating status preserves feedback and vice versa.
+- `POST /v1/analyses/{analysisId}/reanalyses`: requires `Idempotency-Key` and enabled
+  jobs. Returns 202 `{ "jobId": "..." }`. Atomically freezes the original vacancy
+  and locale with the current profile/revision and server calibration memory into
+  a new durable job; completion adds a new result and preserves the previous one.
+  A retry of the same key/source returns the same job even after profile changes;
+  use a new key for another attempt. Reusing the key for another source or ordinary
+  analysis conflicts. Existing admission rate/concurrency limits apply.
+- `DELETE /v1/history`: removes the owner's completed results, annotations and
+  unreferenced stored vacancies. Profile/revisions, active jobs and technical
+  accounting/admission records remain. A job completing after the clear can add a
+  new result. Deleted analysis detail and its completed job result return 404;
+  replaying an admission key cannot recreate an erased result.
+
+Feedback enters calibration memory for subsequent admissions; previously queued
+jobs retain their frozen memory. Requests recheck the active verified session
+inside the transaction. Mutations serialize with account deletion, profile
+updates and admissions; another owner's resource returns 404. Existing tables
+support this API, so no new database migration is needed. Website UI integration
+remains ANY-653 and related product tasks ANY-577/578/580.

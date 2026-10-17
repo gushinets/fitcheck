@@ -4,7 +4,11 @@ from sqlalchemy.exc import SQLAlchemyError
 from pydantic import ValidationError
 from ..contracts.resources import AccountAnalysisStart, SkillSuggestionStart
 from ..storage.database import unit_of_work
-from ..storage.models import Owner, User, Job
+from ..storage.models import Owner, User, Job, AnalysisRecord
+from ..storage.payloads import decode_snapshot, canonical_hash
+from ..auth.service import active_session
+from ..auth.access import require_verified
+from ..storage.auth_repository import AuthRepository
 from ..storage.job_repository import request_digest
 from ..storage.profile_repository import get_profile
 from ..storage.calibration_repository import get_calibration
@@ -29,14 +33,21 @@ class JobAdmission:
             idempotency_key: str, client_ip: str) -> AdmissionResult:
         return self._start(owner_id, 'skill_suggestions', request, idempotency_key, client_ip)
 
-    def _start(self, owner_id, kind, request, key, ip):
+    def reanalyze(self, *, principal, analysis_id, idempotency_key, client_ip, clock):
+        require_verified(principal)
+        return self._start(principal.owner_id, 'analysis', None, idempotency_key, client_ip,
+            analysis_id=analysis_id, principal=principal, clock=clock)
+
+    def _start(self, owner_id, kind, request, key, ip, *, analysis_id=None, principal=None, clock=None):
         if not isinstance(key, str) or not 1 <= len(key) <= 200:
             raise JobError('invalid_request')
         dto = AccountAnalysisStart if kind == 'analysis' else SkillSuggestionStart
         try:
-            request = dto.model_validate(request.model_dump(mode='json', by_alias=True))
-            payload = request.model_dump(mode='json', by_alias=True)
-            digest = request_digest(kind, payload)
+            if analysis_id is None:
+                request = dto.model_validate(request.model_dump(mode='json', by_alias=True))
+                payload = request.model_dump(mode='json', by_alias=True)
+            digest = (canonical_hash({'operation': 'reanalyze', 'analysisId': str(analysis_id)})
+                if analysis_id is not None else request_digest(kind, payload))
             with unit_of_work(self.engine) as s:
                 s.execute(text("SET LOCAL statement_timeout='5s'"))
                 s.execute(text("SET LOCAL lock_timeout='3s'"))
@@ -46,12 +57,27 @@ class JobAdmission:
                 user = s.scalar(select(User).where(User.owner_id == owner_id).with_for_update())
                 if user is None or user.email_verified_at is None:
                     raise JobError('forbidden')
+                if principal is not None:
+                    if user.id != principal.user_id:
+                        raise JobError('forbidden')
+                    active_session(AuthRepository(s), principal, clock())
                 existing = s.scalar(select(Job).where(Job.owner_id == owner_id,
                     Job.type == kind, Job.idempotency_key == key))
                 if existing is not None:
                     if existing.request_hash != digest:
                         raise JobError('conflict')
                     return AdmissionResult(existing.id, existing.type, existing.status)
+                if analysis_id is not None:
+                    original = s.scalar(select(AnalysisRecord).where(
+                        AnalysisRecord.id == analysis_id, AnalysisRecord.owner_id == owner_id))
+                    if original is None:
+                        raise JobError('not_found')
+                    snapshot = decode_snapshot(original.snapshot)
+                    current = get_profile(s, owner_id)
+                    if current is None:
+                        raise JobError('not_found')
+                    request = AccountAnalysisStart(mode='account', vacancy=snapshot.vacancy,
+                        profileRevision=current.revision, locale=snapshot.locale)
                 active = s.scalar(select(func.count()).select_from(Job).where(
                     Job.owner_id == owner_id, Job.type.in_(['analysis','skill_suggestions']),
                     Job.status.in_(['queued','running'])))
@@ -78,5 +104,5 @@ class JobAdmission:
                     domain_key=job_key(job.id,"admitted"), occurred_at=job.created_at,
                     properties={"jobType":job.type}, environment=self.metrics_environment)
                 return AdmissionResult(job.id, job.type, job.status)
-        except (SQLAlchemyError, ValidationError):
+        except (SQLAlchemyError, ValidationError, ValueError):
             raise JobError('service_unavailable') from None

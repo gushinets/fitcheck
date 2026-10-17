@@ -42,7 +42,7 @@ PLANNED_OPERATIONS = [
     OperationSpec("post", "/v1/skill-suggestion-jobs", "startSkillSuggestions", "ANY-649", j.JobAdmissionResource, r.SkillSuggestionStart, 202, "account", True),
     OperationSpec("post", "/v1/analysis-jobs", "startAnalysis", "ANY-649", j.JobAdmissionResource, r.AnalysisStart, 202, "account", True),
     OperationSpec("get", "/v1/jobs/{jobId}", "getJob", "ANY-649", j.JobState, access="account"),
-    OperationSpec("get", "/v1/analyses/{analysisId}", "getAnalysis", "ANY-650", r.AnalysisResource, access="identity"),
+    OperationSpec("get", "/v1/analyses/{analysisId}", "getAnalysis", "ANY-650", r.AnalysisResource, access="account"),
     OperationSpec("get", "/v1/history", "getHistory", "ANY-650", r.HistoryPage),
     OperationSpec("put", "/v1/analyses/{analysisId}/feedback", "updateFeedback", "ANY-650", r.FeedbackResponse, r.FeedbackResponse),
     OperationSpec("put", "/v1/analyses/{analysisId}/application-status", "updateApplicationStatus", "ANY-650", r.ApplicationStatusUpdate, r.ApplicationStatusUpdate),
