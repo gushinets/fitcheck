@@ -36,7 +36,9 @@ import hmac
 @router.post('/v1/guest-claims',response_model=GuestClaimResult,operation_id='claimGuestData',
     openapi_extra={'x-fitcheck-owner-task':'ANY-651','security':SECURITY['claim'],
         'x-fitcheck-cookie-mutation':{'originRequired':True,'csrfHeader':'X-CSRF-Token','guestCsrfHeader':'X-Guest-CSRF-Token'},
-        'parameters':[{'name':'X-Guest-CSRF-Token','in':'header','required':True,'schema':{'type':'string'}}]})
+        'parameters':[{'name':'Origin','in':'header','required':True,'schema':{'type':'string'}},
+            {'name':'X-CSRF-Token','in':'header','required':True,'schema':{'type':'string'}},
+            {'name':'X-Guest-CSRF-Token','in':'header','required':True,'schema':{'type':'string'}}]})
 async def claim_guest(request: Request,account=Depends(verified_principal),key=Depends(idempotency)):
     validate_account_mutation(request,account)
     if await request.body():

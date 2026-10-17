@@ -96,3 +96,7 @@ metrics form a separate population until explicit authenticated linking exists.
 To disable collection, remove the website bridge configuration and rebuild/deploy,
 and set backend `FITCHECK_METRICS_ENABLED=false` on API and worker. Preserve domain
 and accounting data and additive migrations; see the rollout record for rollback.
+
+Guest sessions, successful-operation quotas and durable worker spending ceilings
+(ANY-651) are documented in [backend/README.md](backend/README.md#guest-sessions-and-quotas-any-651).
+Migration 0008 requires coordinated API/worker rollout; guest admission defaults off.

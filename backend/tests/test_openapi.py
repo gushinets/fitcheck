@@ -105,3 +105,24 @@ def test_internal_metrics_contract_has_bridge_security_only():
             assert operation['x-fitcheck-internal'] is True
             assert 'x-fitcheck-cookie-mutation' not in operation
     assert document['components']['securitySchemes']['metricsBridge']['in'] == 'header'
+
+
+def test_guest_contract_security_and_quota_errors():
+    document=export_openapi(create_app(Settings()))
+    paths=document['paths']
+    for path,method in [('/v1/guest-sessions','post'),('/v1/guest-claims','post'),('/v1/quota','get')]:
+        assert paths[path][method]['x-fitcheck-implementation']=='implemented'
+    claim=paths['/v1/guest-claims']['post']
+    assert claim['operationId']=='claimGuestData'
+    assert claim['security']==[{'webSession':[],'guestSession':[]}]
+    assert claim['x-fitcheck-cookie-mutation']['guestCsrfHeader']=='X-Guest-CSRF-Token'
+    assert any(p['name']=='X-Guest-CSRF-Token' and p['required'] for p in claim['parameters'])
+    assert paths['/v1/history']['get']['security']==[{'webSession':[]}]
+    assert paths['/v1/import-jobs']['post']['x-fitcheck-implementation']=='planned'
+    assert any(p['name']=='mode' and p['in']=='query' for p in paths['/v1/quota']['get']['parameters'])
+    assert paths['/v1/analysis-jobs']['post']['security']==[{'webSession':[]},{'guestSession':[]}]
+    quota=document['components']['schemas']['OperationQuota']
+    assert quota['properties']['remaining']['minimum']==0
+    response=paths['/v1/analysis-jobs']['post']['responses']['429']
+    assert 'quota_exceeded' in response['description'] and 'budget_exceeded' in response['description']
+    assert response['content']['application/json']['schema']=={'$ref':'#/components/schemas/ErrorEnvelope'}

@@ -38,9 +38,9 @@ class SuggestionsEnvelope(DTO):
 
 
 class FrozenLimits(DTO):
-    calls: int = Field(strict=True,ge=1,le=10000)
-    tokens: int = Field(strict=True,ge=1,le=100000000)
-    usd: Decimal = Field(gt=0,le=10000,allow_inf_nan=False)
+    calls: int = Field(strict=True,ge=1,le=10000000)
+    tokens: int = Field(strict=True,ge=1,le=10000000)
+    usd: Decimal = Field(gt=0,le=1000000,allow_inf_nan=False)
 
 
 class AnalysisEnvelopeV2(DTO):

@@ -3085,7 +3085,7 @@
     },
     "securitySchemes": {
       "guestSession": {
-        "description": "Server-issued guest session, never a client-supplied guestId; separate dev HTTP cookie.",
+        "description": "Opaque Secure HttpOnly SameSite=Lax Path=/ cookie, no Domain; absolute 24-hour lifetime, separate dev HTTP cookie. Identity mutations require trusted Origin and the selected session CSRF.",
         "in": "cookie",
         "name": "__Host-fitcheck_guest",
         "type": "apiKey"
@@ -3262,7 +3262,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -3418,7 +3418,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -3576,7 +3576,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -3754,7 +3754,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -3940,7 +3940,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -4135,7 +4135,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -4323,7 +4323,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -4511,7 +4511,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -4557,6 +4557,9 @@
         "security": [
           {
             "webSession": []
+          },
+          {
+            "guestSession": []
           }
         ],
         "summary": "Start Analysis",
@@ -4670,7 +4673,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -4839,7 +4842,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -4995,7 +4998,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -5157,7 +5160,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -5311,7 +5314,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -5480,7 +5483,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -5625,7 +5628,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -5791,7 +5794,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -5953,7 +5956,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -6106,7 +6109,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -6253,7 +6256,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -6433,7 +6436,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -6630,7 +6633,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -6695,13 +6698,37 @@
         "operationId": "claimGuestData",
         "parameters": [
           {
-            "description": "Identity-scoped atomic admission; same key/body replays, different body conflicts (409).",
             "in": "header",
             "name": "Idempotency-Key",
             "required": true,
             "schema": {
               "maxLength": 200,
               "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Guest-CSRF-Token",
+            "required": true,
+            "schema": {
               "type": "string"
             }
           }
@@ -6715,7 +6742,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -6795,7 +6822,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -6844,11 +6871,13 @@
             "webSession": []
           }
         ],
+        "summary": "Claim Guest",
         "x-fitcheck-cookie-mutation": {
           "csrfHeader": "X-CSRF-Token",
+          "guestCsrfHeader": "X-Guest-CSRF-Token",
           "originRequired": true
         },
-        "x-fitcheck-implementation": "planned",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-651"
       }
     },
@@ -6944,7 +6973,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -7100,7 +7129,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -7330,7 +7359,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -7498,7 +7527,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -7658,7 +7687,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -7834,7 +7863,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -8003,7 +8032,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -8150,7 +8179,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -8295,7 +8324,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -8467,7 +8496,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -8616,7 +8645,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -8788,7 +8817,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -8950,7 +8979,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -9108,7 +9137,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -9275,7 +9304,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -9335,6 +9364,26 @@
       "post": {
         "operationId": "startSkillSuggestions",
         "parameters": [
+          {
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "account",
+                    "guest"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mode"
+            }
+          },
           {
             "in": "header",
             "name": "Idempotency-Key",
@@ -9462,7 +9511,7 @@
                 }
               }
             },
-            "description": "rate_limited"
+            "description": "rate_limited, quota_exceeded, budget_exceeded"
           },
           "500": {
             "content": {
@@ -9508,6 +9557,9 @@
         "security": [
           {
             "webSession": []
+          },
+          {
+            "guestSession": []
           }
         ],
         "summary": "Start Suggestions",

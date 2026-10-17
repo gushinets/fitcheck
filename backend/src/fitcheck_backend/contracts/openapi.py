@@ -6,7 +6,7 @@ from fitcheck_backend.api.errors import ErrorEnvelope
 from fitcheck_backend.contracts.operations import PLANNED_OPERATIONS, LEGACY_ERROR_STATUS
 
 ERRORS = {400: "invalid_request", 401: "unauthenticated", 403: "forbidden", 404: "not_found",
-          409: "conflict", 413: "body_too_large", 415: "unsupported_content_type", 429: "rate_limited",
+          409: "conflict", 413: "body_too_large", 415: "unsupported_content_type", 429: "rate_limited, quota_exceeded, budget_exceeded",
           500: "internal_error", 502: "upstream_failure", 503: "service_unavailable", 504: "timeout"}
 SECURITY = {
     "public": [], "web": [{"webSession": []}],
@@ -27,7 +27,7 @@ def security_schemes():
         'webSession': {'type':'apiKey','in':'cookie','name':'__Host-fitcheck_session',
                        'description':'Secure HttpOnly SameSite=Lax Path=/, no Domain; separate dev HTTP cookie. Cookie mutations require verified Origin and CSRF.'},
         'guestSession': {'type':'apiKey','in':'cookie','name':'__Host-fitcheck_guest',
-                         'description':'Server-issued guest session, never a client-supplied guestId; separate dev HTTP cookie.'},
+                         'description':'Opaque Secure HttpOnly SameSite=Lax Path=/ cookie, no Domain; absolute 24-hour lifetime, separate dev HTTP cookie. Identity mutations require trusted Origin and the selected session CSRF.'},
     }
 
 

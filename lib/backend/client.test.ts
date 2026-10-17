@@ -69,3 +69,26 @@ describe("backend transport", () => {
     expect(calls).toBe(1)
   })
 })
+
+it.each(["quota_exceeded", "budget_exceeded"])("preserves typed 429 %s without retrying", async (code) => {
+  let calls = 0
+  const client = createBackendClient({ baseUrl: "/backend/v1", fetch: async () => {
+    calls++
+    return Response.json({ error: { code, message: "Limit reached", requestId: "limit-1", details: [] } }, { status: 429 })
+  } })
+  await expect(client.request("analysis-jobs", { method: "POST", headers: { "X-CSRF-Token": "csrf", "Idempotency-Key": "demo" }, validate: success })).rejects.toMatchObject({ status: 429, code })
+  expect(calls).toBe(1)
+})
+
+it("forwards the guest selector and both claim proofs with cookies", async () => {
+  const requests: { url: string; init?: RequestInit }[] = []
+  const client = createBackendClient({ baseUrl: "/backend/v1", fetch: async (url, init) => {
+    requests.push({ url: String(url), init })
+    return Response.json({ status: "ok" })
+  } })
+  await client.request("quota?mode=guest", { validate: success })
+  await client.request("guest-claims", { method: "POST", headers: { "X-CSRF-Token": "account", "X-Guest-CSRF-Token": "guest", "Idempotency-Key": "claim" }, validate: success })
+  expect(requests[0].url).toBe("/backend/v1/quota?mode=guest")
+  expect(requests[1].init?.credentials).toBe("same-origin")
+  expect(new Headers(requests[1].init?.headers).get("X-Guest-CSRF-Token")).toBe("guest")
+})

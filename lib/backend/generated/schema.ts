@@ -368,6 +368,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Claim Guest */
         post: operations["claimGuestData"];
         delete?: never;
         options?: never;
@@ -1811,7 +1812,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -1943,7 +1944,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2073,7 +2074,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2205,7 +2206,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2342,7 +2343,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2479,7 +2480,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2613,7 +2614,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2749,7 +2750,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2879,7 +2880,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -3014,7 +3015,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -3143,7 +3144,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -3275,7 +3276,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -3407,7 +3408,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -3542,7 +3543,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -3670,7 +3671,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -3803,7 +3804,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -3935,7 +3936,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -4063,7 +4064,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -4199,7 +4200,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -4329,7 +4330,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -4466,7 +4467,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -4517,15 +4518,17 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Identity-scoped atomic admission; same key/body replays, different body conflicts (409). */
                 "Idempotency-Key": string;
+                Origin: string;
+                "X-CSRF-Token": string;
+                "X-Guest-CSRF-Token": string;
             };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4597,7 +4600,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -4725,7 +4728,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -4859,7 +4862,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -4988,7 +4991,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -5123,7 +5126,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -5253,7 +5256,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -5385,7 +5388,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -5513,7 +5516,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -5646,7 +5649,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -5774,7 +5777,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -5910,7 +5913,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6038,7 +6041,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6174,7 +6177,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6304,7 +6307,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6434,7 +6437,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6564,7 +6567,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6613,7 +6616,9 @@ export interface operations {
     };
     startSkillSuggestions: {
         parameters: {
-            query?: never;
+            query?: {
+                mode?: ("account" | "guest") | null;
+            };
             header: {
                 "Idempotency-Key": string;
                 Origin: string;
@@ -6700,7 +6705,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description rate_limited */
+            /** @description rate_limited, quota_exceeded, budget_exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;

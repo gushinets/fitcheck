@@ -571,3 +571,62 @@ inside the transaction. Mutations serialize with account deletion, profile
 updates and admissions; another owner's resource returns 404. Existing tables
 support this API, so no new database migration is needed. Website UI integration
 remains ANY-653 and related product tasks ANY-577/578/580.
+
+## Guest sessions and quotas (ANY-651)
+
+Guest admission is disabled by default (`FITCHECK_GUEST_ENABLED=false`). Enable
+only after migration 0008 and matching API/worker rollout. Obtain the existing
+`GET /v1/auth/csrf` bootstrap, then `POST /v1/guest-sessions` with trusted Origin
+and `X-CSRF-Token`. The response returns guest `csrfToken`, absolute `expiresAt`
+and `demoLimit`; the opaque cookie is Secure/HttpOnly/SameSite=Lax in production.
+Reusing a live cookie preserves its expiry and credits. Issuance permits 3/IP/hour
+and 10/IP/day; deleting cookies does not clear those rate attempts.
+
+`POST /v1/analysis-jobs` selects the identity explicitly with body `mode`.
+Guest bodies include `profile`, `vacancy`, `locale`; accounts use the existing
+`profileRevision`. Extractions, skill suggestions, quota, job polling and analysis
+detail accept `?mode=guest|account`. Without a selector, an account cookie takes
+precedence. An invalid selected cookie fails; there is no fallback. Bearer access
+is rejected. Mutations need the selected session's CSRF and trusted Origin.
+History, feedback, application status and reanalysis remain verified account-only.
+
+`GET /v1/quota` reports analysis `remaining`/`resetsAt`, `mode`, guest `expiresAt`,
+`registrationRequired`, active-job counts, and per-operation
+`limit`/`remaining`/`reserved`/`consumed`. Guest limits per absolute 24-hour session
+are 1 successful analysis, 5 suggestions and 10 extractions, with 1 active job.
+Verified accounts get 20 analyses (including reanalysis), 50 suggestions and
+100 extractions per UTC day, with 2 active jobs. A job reserves credit atomically;
+success consumes it and terminal failure releases it once. Lease retries and
+same-key replay use the original reservation. Extraction reserves a 120-second
+lease around network work; late success cannot consume an expired lease.
+Guest jobs allow 5/guest/minute and 30/IP/15 minutes; extraction allows
+10/guest/minute and 60/IP/15 minutes. Failed operations still count rate attempts.
+
+Technical limits are separate from successful-operation credits. Every physical
+provider send, including audit and retries across worker leases, reserves durable
+call/token/USD exposure before sending. Defaults: analysis 8 calls, 40,000 total
+tokens, $0.02/job; suggestions 4 calls, 10,000 tokens, $0.005/job; guest lifetime
+$0.05, account UTC-day $0.50, deployment UTC-day $10. Values are configurable in
+`backend/.env.example`. New jobs freeze their job limits; existing v1 jobs retain
+compatibility and snapshot safe defaults on their first call without retroactive
+product charges. UTF-8 byte/framing bounds and worst supported cache-write input
+pricing deliberately over-reserve. Confirmed supported usage releases proven
+excess; missing usage, cancellation, crash and unknown pricing retain exposure.
+Known usage accounting remains independent of this conservative ceiling.
+`quota_exceeded` and `budget_exceeded` use safe 429 admission envelopes; a running
+job reports a typed terminal error. No provider details or SQL enter that envelope.
+
+`POST /v1/guest-claims` requires a verified account, active guest cookie, trusted
+Origin, account `X-CSRF-Token`, guest `X-Guest-CSRF-Token`, and `Idempotency-Key`.
+Send no body or `{}`. It atomically transfers terminal results/jobs and copies
+the latest guest profile only if the account has no profile. Existing account
+profile/preferences/draft and immutable result snapshots remain unchanged.
+Same account/key/guest replays the stored `{claimedCount, profileImported}`;
+a changed guest for the same key, already claimed guest, active job/extraction,
+or conflicting job idempotency key returns 409 with no partial transfer.
+After claim, guest access is available only for receipt replay until expiry.
+Claim never grants account credits or transfers guest spending windows. Account
+deletion removes personal links while retaining anonymous deployment exposure.
+
+See [the rollout record](../docs/deployments/2026-10-17-any-651-guest-quotas.md).
+Website integration remains ANY-579/ANY-653.
