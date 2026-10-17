@@ -22,7 +22,7 @@ class DTO(BaseModel):
         for name, field in type(self).model_fields.items():
             # A missing non-nullable field has a sentinel default of None. Explicitly
             # nullable resource fields must retain their null (clear/no next cursor).
-            if field.default is None and NoneType not in get_args(field.annotation):
+            if field.default is None and field.annotation is not NoneType and NoneType not in get_args(field.annotation):
                 key = (field.serialization_alias or field.alias or name) if info.by_alias is not False else name
                 if result.get(key) is None:
                     result.pop(key, None)

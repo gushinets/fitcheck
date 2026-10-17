@@ -95,11 +95,14 @@ class AnalysisSnapshot(DTO):
     policy_version: text(120) = Field(json_schema_extra={"readOnly": True})
 
 
+from .imports import LegacyAnalysisSnapshot, LocalImportRequest
+
+
 class AnalysisResource(DTO):
     analysis_id: Identifier
     created_at: datetime
     analysis: FitAnalysis
-    snapshot: AnalysisSnapshot
+    snapshot: AnalysisSnapshot | LegacyAnalysisSnapshot
     feedback: FeedbackUpdate | None = None
     application_status: ApplicationStatus = "not_applied"
     current_profile_revision: Revision | None = None
@@ -228,10 +231,7 @@ class LegacyHistoryEntry(DTO):
     feedback: LegacyFeedback = None
 
 
-class LegacyImportRequest(DTO):
-    version: Literal[1]
-    profile: LegacyProfile = None
-    history: Annotated[list[LegacyHistoryEntry], Field(max_length=1000)]
+LegacyImportRequest = LocalImportRequest
 
 
 class EmptyRequest(DTO):

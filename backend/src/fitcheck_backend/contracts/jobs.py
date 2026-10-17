@@ -67,6 +67,9 @@ class JobState(RootModel[AnalysisStates | SuggestionStates]):
     pass
 
 
+from .imports import ImportReport
+
+
 class ImportReference(DTO):
     import_id: Identifier
 
@@ -77,16 +80,19 @@ class ImportQueued(ImportReference):
 
 class ImportRunning(ImportReference):
     status: Literal["running"]
+    progress: ImportReport
 
 
 class ImportSucceeded(ImportReference):
     status: Literal["succeeded"]
     imported_count: Annotated[int, Field(strict=True, ge=0)]
+    report: ImportReport
 
 
 class ImportFailed(ImportReference):
     status: Literal["failed"]
     error: ErrorBody
+    progress: ImportReport
 
 
 class ImportState(RootModel[Annotated[ImportQueued | ImportRunning | ImportSucceeded | ImportFailed, Field(discriminator="status")]]):

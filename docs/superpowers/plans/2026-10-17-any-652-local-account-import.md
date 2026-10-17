@@ -49,7 +49,7 @@
 - [ ] Run a clean baseline using task-owned PostgreSQL project `fitcheck-any652`; port55464 is available after ANY-651 cleanup, but verify before starting it. Never reset a shared DB.
 - [ ] Reuse the locked root backend virtualenv if available, explicitly setting worktree source/PYTHONPATH and disabling dotenv/provider credentials in test subprocesses. Create a test wrapper specific to ANY-652 rather than editing the prior task's wrapper.
 
-### Task1: Versioned import and truthful legacy history contracts
+### Task 1: Versioned import and truthful legacy history contracts
 
 **Files:** Create `backend/src/fitcheck_backend/contracts/imports.py`, `backend/tests/imports/test_contracts.py`; modify `contracts/resources.py`, `contracts/jobs.py`, `storage/payloads.py`, `storage/history_repository.py`, `history/service.py`; test `backend/tests/test_openapi.py`, `backend/tests/integration/test_history_http.py`.
 
@@ -61,7 +61,7 @@
 - [ ] Implement DTOs, normalized canonical row representation and codec/history changes. Keep result validation strict and evidence provenance explicit. Profile legacy normalization uses existing defaults; exclude deprecated monthly income.
 - [ ] Run contract/history tests and commit `feat: define local import and legacy snapshot contracts`.
 
-### Task2: Complete selected-user export from IndexedDB
+### Task 2: Complete selected-user export from IndexedDB
 
 **Files:** Create `lib/web/local-export.ts`, `lib/web/local-export.test.ts`; modify `lib/web/repository.ts`, `lib/web/memory-repository.ts`, `lib/web/types.ts`; extend `lib/web/repository.test.ts`.
 
@@ -73,7 +73,7 @@
 - [ ] Implement one readonly transaction over active session, user/profile/preferences/history; read all owner-index rows without HISTORY_LIMIT. Build fields with allowlists and preserve per-row validation failures for the server report. Batched export repeats optional profile/preferences and source identity; refuses an indivisible oversized row without truncation.
 - [ ] Run client repository/export tests and `pnpm typecheck`; commit `feat: export selected local account data safely`.
 
-### Task3: Durable import receipts and atomic publication
+### Task 3: Durable import receipts and atomic publication
 
 **Files:** Create `backend/src/fitcheck_backend/storage/imports.py`, `storage/import_repository.py`, `backend/migrations/versions/0009_local_account_import.py`, `backend/tests/integration/test_import_repository.py`; modify `storage/work.py`, `storage/models.py`, migration tests.
 
@@ -86,7 +86,7 @@
 - [ ] Implement additive migration, owner-scoped progress/item models and receipt changes. Unique item index `(job_id, item_index)` makes outcomes replayable. Owner/job foreign keys cascade on erasure. Counters derive from durable outcomes to prevent double counting. ImportEntry deletion follows history deletion.
 - [ ] Run repository/migration/schema checks; commit `feat: persist resumable local import outcomes`.
 
-### Task4: Verified account admission and import status API
+### Task 4: Verified account admission and import status API
 
 **Files:** Create `backend/src/fitcheck_backend/imports/__init__.py`, `imports/admission.py`, `imports/status.py`, `api/imports.py`, `backend/tests/integration/test_import_http.py`; modify `api/app.py`, `api/runtime.py`, `api/middleware.py`, `contracts/operations.py`.
 
@@ -98,7 +98,7 @@
 - [ ] Implement owner→user→job lock order and existing active-session validation. Hash canonical bounded input including source identity. Use sync routes/dependencies for database I/O; fail closed on storage errors. Status includes typed item outcomes/counters and separate profile/preferences results, scoped to owner.
 - [ ] Run HTTP and existing auth/job tests; commit `feat: admit and report authenticated import jobs`.
 
-### Task5: Worker execution, recovery and lease fencing
+### Task 5: Worker execution, recovery and lease fencing
 
 **Files:** Create `backend/src/fitcheck_backend/imports/execution.py`, `backend/tests/integration/test_import_execution.py`; modify `worker/runtime.py`, `worker/runner.py`, `storage/job_queue.py`, `storage/job_publication.py`; extend `backend/tests/worker/test_runner.py`, `backend/tests/integration/test_worker_recovery.py`.
 
@@ -110,7 +110,7 @@
 - [ ] Implement per-item fenced transactions, durable metadata outcomes and bounded report construction. Reuse queue max_attempts2 and heartbeat/recovery; do not route import failures through LLM logic. Stop promptly after lease loss; cancellation may leave an in-flight transaction only if it still owns a valid fence.
 - [ ] Run worker/recovery/quota tests with imports and native/guest jobs together; commit `feat: execute and recover local imports without duplication`.
 
-### Task6: Contracts, integration proof and operational handoff
+### Task 6: Contracts, integration proof and operational handoff
 
 **Files:** Modify `contracts/fitcheck.openapi.json`, `lib/backend/generated/schema.ts`, `backend/tests/test_openapi.py`, integration history/recalculation tests, `README.md`; create `docs/deployments/2026-10-17-any-652-local-import.md`.
 

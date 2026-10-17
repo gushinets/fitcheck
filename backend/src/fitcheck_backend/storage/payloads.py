@@ -4,6 +4,7 @@ import json
 
 from fitcheck_backend.contracts.domain import FreelancerProfile, Vacancy, FitAnalysis
 from fitcheck_backend.contracts.resources import AnalysisSnapshot, LegacyProfile
+from fitcheck_backend.contracts.imports import LegacyAnalysisSnapshot
 
 CURRENT_SCHEMA_VERSION = "fitcheck.analysis.v1"
 
@@ -33,6 +34,8 @@ def encode_snapshot(value: AnalysisSnapshot) -> dict:
 
 
 def decode_snapshot(value: dict) -> AnalysisSnapshot:
+    if value.get("schemaVersion") == "fitcheck.legacy-analysis.v1":
+        return LegacyAnalysisSnapshot.model_validate(value)
     if value.get("schemaVersion") != CURRENT_SCHEMA_VERSION:
         raise UnsupportedSnapshotVersion("Unsupported analysis snapshot schema version")
     return AnalysisSnapshot.model_validate(value)
