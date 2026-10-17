@@ -79,3 +79,49 @@ verification completion to satisfy the whole-branch review ordering (cost: ledge
 completion is not deployment evidence); classify repeated batch reads as Important
 and omit only the import fence's input column (cost: imports rely on the frozen
 lease rather than reloading immutable input).
+
+## Completed dev rollout
+
+Code commit `636503cc1cdd83b611614c90f40bc174e059e4bb` was fast-forward integrated
+into dev and pushed. [CI39065599184](https://github.com/NikitaPotapovIt/fitcheck/actions/runs/39065599184)
+passed both jobs. The merged local full backend suite passed818 tests,1 paid
+canary skipped; one Pydantic alias warning occurred in the existing concurrent
+profile-update test. No test failed. The final Docker images were rebuilt and
+smoked again: API image523a9fb26726, worker8688e8cf7490, healthchecks passed,
+schema0009 matched and provider-call count stayed zero.
+
+All three Dokploy autodeploy switches were disabled before push. API was stopped
+through its normal application control to pause all admission, rather than edit
+shared environment text. Old worker7334f10635be confirmed schema0008 and zero
+active jobs. The exact runner was first tested on disposable0008, then applied
+under the existing migration advisory lock. Migration payload SHA-256:
+`9a071b623485c09cc11298a098ff0e8032bb20f3f37e7f415bf4a40e6c38212d`.
+The runner repeated upgrade as a no-op and confirmed unchanged existing counts:
+owners3, users/jobs/analyses/provider_calls/import_entries0. No live records were
+deleted, reset or downgraded.
+
+Worker application `uGz_HiVcXoTo1Rid214vn` deployed636503c in24 seconds; runtime
+container `335f53eef676` passed schema check and heartbeat. API application
+`4Dfp-p3ua4kBSxLZ_mczn` deployed the same commit in27 seconds; runtime container
+`8d8e6e005c5a` confirmed jobs=true, guest=true, schema0009 and zero provider calls.
+Both match all151 packaged Python source files (excluding migrations), canonical
+digest `4224ba053d61fb128d4b04a7c238a4eed5be0d0c443edca773a3e623220f9055`.
+
+Inside the live API container, the previously tested rollback smoke imported1
+record and skipped1 replay. The enclosing database transaction was rolled back;
+an independent connection confirmed that the synthetic owner was absent and all
+prior row counts were unchanged. This is a live repository/DB check; the complete
+HTTP login/import/polling/worker flow was tested on disposable Docker services.
+External HTTPS certificate-verified checks returned readiness200/database_ready
+and401 for unauthenticated import POST/GET. No paid provider request was sent.
+
+Operational ruling: stop/redeploy API instead of changing the jobs flag in the
+environment editor; the same admission pause is achieved without touching secret
+configuration. Cost: a short maintenance interval returns502 until the new API is
+ready. No `.env`, shared certificate or other user's data was changed.
+
+The website image needs no deployment for these exported library/backend
+boundaries; its migration UI remains ANY-653. All three autodeploy switches are
+restored after the final documentation push. This manual rollout does not repair
+the separate webhook TLS-chain problem. Task-owned disposable local containers
+and volumes were removed after verification.
