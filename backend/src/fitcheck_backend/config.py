@@ -1,3 +1,6 @@
+from decimal import Decimal
+from pydantic import BeforeValidator
+from typing import Annotated
 from typing import Literal
 from urllib.parse import urlsplit
 import ipaddress
@@ -5,6 +8,12 @@ import re
 from pydantic import Field, SecretStr, field_validator, model_validator
 from email_validator import validate_email, EmailNotValidError
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def not_bool(value):
+    if isinstance(value, bool):
+        raise ValueError('Boolean is not a numeric limit')
+    return value
 
 
 class Settings(BaseSettings):
@@ -29,6 +38,28 @@ class Settings(BaseSettings):
     metrics_ingest_key: SecretStr | None = None
     metrics_campaign_codes: list[str] = Field(default_factory=list)
     jobs_enabled: bool = False
+    guest_enabled: bool = False
+    guest_ttl_seconds: Annotated[int, BeforeValidator(not_bool)] = Field(default=86400, ge=1, le=604800)
+    guest_demo_limit: Annotated[int, BeforeValidator(not_bool)] = Field(default=1, ge=1, le=10000000)
+    guest_suggestions_limit: Annotated[int, BeforeValidator(not_bool)] = Field(default=5, ge=1, le=10000000)
+    guest_extraction_limit: Annotated[int, BeforeValidator(not_bool)] = Field(default=10, ge=1, le=10000000)
+    guest_max_active_jobs: Annotated[int, BeforeValidator(not_bool)] = Field(default=1, ge=1, le=10000000)
+    account_analysis_daily_limit: Annotated[int, BeforeValidator(not_bool)] = Field(default=20, ge=1, le=10000000)
+    account_suggestions_daily_limit: Annotated[int, BeforeValidator(not_bool)] = Field(default=50, ge=1, le=10000000)
+    account_extraction_daily_limit: Annotated[int, BeforeValidator(not_bool)] = Field(default=100, ge=1, le=10000000)
+    account_max_active_jobs: Annotated[int, BeforeValidator(not_bool)] = Field(default=2, ge=1, le=10000000)
+    guest_create_hourly_limit: Annotated[int, BeforeValidator(not_bool)] = Field(default=3, ge=1, le=10000000)
+    guest_create_daily_limit: Annotated[int, BeforeValidator(not_bool)] = Field(default=10, ge=1, le=10000000)
+    budget_analysis_calls: Annotated[int, BeforeValidator(not_bool)] = Field(default=8, ge=1, le=10000000)
+    budget_suggestions_calls: Annotated[int, BeforeValidator(not_bool)] = Field(default=4, ge=1, le=10000000)
+    budget_analysis_tokens: Annotated[int, BeforeValidator(not_bool)] = Field(default=40000, ge=1, le=10000000)
+    budget_suggestions_tokens: Annotated[int, BeforeValidator(not_bool)] = Field(default=10000, ge=1, le=10000000)
+    budget_analysis_usd: Annotated[Decimal, BeforeValidator(not_bool)] = Field(default=Decimal("0.02"), gt=0, le=1000000, allow_inf_nan=False, decimal_places=12)
+    budget_suggestions_usd: Annotated[Decimal, BeforeValidator(not_bool)] = Field(default=Decimal("0.005"), gt=0, le=1000000, allow_inf_nan=False, decimal_places=12)
+    budget_guest_usd: Annotated[Decimal, BeforeValidator(not_bool)] = Field(default=Decimal("0.05"), gt=0, le=1000000, allow_inf_nan=False, decimal_places=12)
+    budget_account_daily_usd: Annotated[Decimal, BeforeValidator(not_bool)] = Field(default=Decimal("0.50"), gt=0, le=1000000, allow_inf_nan=False, decimal_places=12)
+    budget_deployment_daily_usd: Annotated[Decimal, BeforeValidator(not_bool)] = Field(default=Decimal("10.00"), gt=0, le=1000000, allow_inf_nan=False, decimal_places=12)
+
     auth_secret: SecretStr | None = None
     auth_web_base_url: str | None = None
     trusted_proxy_ips: list[str] = Field(default_factory=list)

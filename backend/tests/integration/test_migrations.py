@@ -24,7 +24,7 @@ def test_bootstrap_reupgrade_and_drift(engine, storage_factory):
     check_schema(settings())
     with engine.connect() as conn:
         assert conn.scalar(text("SELECT count(*) FROM analyses")) == 1
-        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0007"
+        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0008"
         assert conn.scalar(text("SELECT count(*) FROM pg_trigger WHERE tgname LIKE 'fitcheck_immutable_%' AND NOT tgisinternal")) == 4
 
 

@@ -948,6 +948,11 @@
             "minimum": 0,
             "title": "Claimedcount",
             "type": "integer"
+          },
+          "profileImported": {
+            "default": false,
+            "title": "Profileimported",
+            "type": "boolean"
           }
         },
         "required": [
@@ -964,6 +969,11 @@
             "minLength": 1,
             "title": "Csrftoken",
             "type": "string"
+          },
+          "demoLimit": {
+            "default": 1,
+            "title": "Demolimit",
+            "type": "integer"
           },
           "expiresAt": {
             "format": "date-time",
@@ -1868,6 +1878,39 @@
         "title": "MetricEvent",
         "type": "object"
       },
+      "OperationQuota": {
+        "additionalProperties": false,
+        "properties": {
+          "consumed": {
+            "minimum": 0,
+            "title": "Consumed",
+            "type": "integer"
+          },
+          "limit": {
+            "minimum": 0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "remaining": {
+            "minimum": 0,
+            "title": "Remaining",
+            "type": "integer"
+          },
+          "reserved": {
+            "minimum": 0,
+            "title": "Reserved",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "limit",
+          "remaining",
+          "reserved",
+          "consumed"
+        ],
+        "title": "OperationQuota",
+        "type": "object"
+      },
       "PageProperties": {
         "additionalProperties": false,
         "properties": {
@@ -2039,6 +2082,59 @@
       "QuotaResource": {
         "additionalProperties": false,
         "properties": {
+          "activeJobs": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Activejobs",
+            "type": "integer"
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expiresat"
+          },
+          "maxActiveJobs": {
+            "default": 2,
+            "minimum": 0,
+            "title": "Maxactivejobs",
+            "type": "integer"
+          },
+          "mode": {
+            "default": "account",
+            "enum": [
+              "account",
+              "guest"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "operations": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/OperationQuota"
+            },
+            "propertyNames": {
+              "enum": [
+                "analysis",
+                "suggestions",
+                "extraction"
+              ]
+            },
+            "title": "Operations",
+            "type": "object"
+          },
+          "registrationRequired": {
+            "default": false,
+            "title": "Registrationrequired",
+            "type": "boolean"
+          },
           "remaining": {
             "minimum": 0,
             "title": "Remaining",

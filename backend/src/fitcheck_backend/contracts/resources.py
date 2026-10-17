@@ -203,18 +203,8 @@ class CsrfResource(DTO):
     csrf_token: text(1024)
 
 
-class GuestSession(DTO):
-    csrf_token: text(1024)
-    expires_at: datetime
-
-
-class QuotaResource(DTO):
-    remaining: Annotated[int, Field(strict=True, ge=0)]
-    resets_at: datetime | None
-
-
-class GuestClaimResult(DTO):
-    claimed_count: Annotated[int, Field(strict=True, ge=0)]
+from .guests import GuestSession, GuestClaimResult
+from .quotas import QuotaResource
 
 
 class LegacyProfile(FreelancerProfile):

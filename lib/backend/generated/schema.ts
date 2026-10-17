@@ -920,11 +920,21 @@ export interface components {
         GuestClaimResult: {
             /** Claimedcount */
             claimedCount: number;
+            /**
+             * Profileimported
+             * @default false
+             */
+            profileImported: boolean;
         };
         /** GuestSession */
         GuestSession: {
             /** Csrftoken */
             csrfToken: string;
+            /**
+             * Demolimit
+             * @default 1
+             */
+            demoLimit: number;
             /**
              * Expiresat
              * Format: date-time
@@ -1242,6 +1252,17 @@ export interface components {
              */
             subjectKind: "visitor" | "account" | "anonymous";
         };
+        /** OperationQuota */
+        OperationQuota: {
+            /** Consumed */
+            consumed: number;
+            /** Limit */
+            limit: number;
+            /** Remaining */
+            remaining: number;
+            /** Reserved */
+            reserved: number;
+        };
         /** PageProperties */
         PageProperties: {
             /**
@@ -1299,6 +1320,36 @@ export interface components {
         };
         /** QuotaResource */
         QuotaResource: {
+            /**
+             * Activejobs
+             * @default 0
+             */
+            activeJobs: number;
+            /**
+             * Expiresat
+             * @default null
+             */
+            expiresAt: string | null;
+            /**
+             * Maxactivejobs
+             * @default 2
+             */
+            maxActiveJobs: number;
+            /**
+             * Mode
+             * @default account
+             * @enum {string}
+             */
+            mode: "account" | "guest";
+            /** Operations */
+            operations?: {
+                [key: string]: components["schemas"]["OperationQuota"];
+            };
+            /**
+             * Registrationrequired
+             * @default false
+             */
+            registrationRequired: boolean;
             /** Remaining */
             remaining: number;
             /** Resetsat */

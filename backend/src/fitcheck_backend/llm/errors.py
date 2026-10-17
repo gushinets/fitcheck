@@ -1,6 +1,6 @@
 from typing import Literal
 
-ErrorCode = Literal['timeout', 'rate_limit', 'invalid_output', 'upstream', 'service_unavailable']
+ErrorCode = Literal['timeout', 'rate_limit', 'invalid_output', 'upstream', 'service_unavailable','budget_exceeded']
 
 
 class LlmError(Exception):
@@ -8,7 +8,7 @@ class LlmError(Exception):
         self.code = code
         super().__init__({'timeout':'Model request timed out.', 'rate_limit':'Model rate limit reached.',
             'invalid_output':'Model output failed validation.', 'upstream':'Model request failed.',
-            'service_unavailable':'Model service unavailable.'}[code])
+            'service_unavailable':'Model service unavailable.','budget_exceeded':'Model budget exceeded.'}[code])
 
 
 class ProviderFailure(LlmError):

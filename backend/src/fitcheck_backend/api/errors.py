@@ -7,6 +7,7 @@ from fitcheck_backend.auth.errors import AuthError
 from fitcheck_backend.profiles.errors import ProfileError
 from fitcheck_backend.extraction.errors import ExtractionError
 from fitcheck_backend.jobs.errors import JobError
+from fitcheck_backend.quotas.errors import QuotaError
 from fitcheck_backend.metrics.errors import MetricsError
 
 
@@ -47,6 +48,11 @@ def install_error_handlers(app: FastAPI) -> None:
         status = {'invalid_request':400, 'conflict':409, 'rate_limited':429}.get(exc.code,503)
         headers = {'Retry-After':str(exc.retry_after)} if exc.retry_after is not None else None
         return error_response(status, exc.code, exc.code.replace('_',' ').capitalize(), request.state.request_id, headers=headers)
+
+    @app.exception_handler(QuotaError)
+    async def quota_error(request: Request, exc: QuotaError):
+        return error_response(429,exc.code,exc.code.replace('_',' ').capitalize(),request.state.request_id,
+            headers={'Retry-After':str(exc.retry_after)} if exc.retry_after else None)
 
     @app.exception_handler(JobError)
     async def job_error(request: Request, exc: JobError):
