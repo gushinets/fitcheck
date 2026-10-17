@@ -54,7 +54,7 @@ def test_security_idempotency_and_pagination():
     assert profile['security'] == [{'webSession': []}]
     assert profile['x-fitcheck-cookie-mutation'] == {'originRequired': True, 'csrfHeader': 'X-CSRF-Token'}
     extraction = document['paths']['/v1/extractions']['post']
-    assert extraction['security'] == [{'webSession': []}]
+    assert extraction['security'] == [{'webSession': []}, {'guestSession': []}]
     assert extraction['x-fitcheck-cookie-mutation'] == profile['x-fitcheck-cookie-mutation']
     claim = document['paths']['/v1/guest-claims']['post']
     assert claim['security'] == [{'webSession': [], 'guestSession': []}]

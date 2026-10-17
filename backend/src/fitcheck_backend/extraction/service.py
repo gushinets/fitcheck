@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from uuid import uuid4
 
 from pydantic import ValidationError
@@ -11,13 +12,21 @@ from .network import fetch_public_page
 
 
 class ExtractionService:
-    def __init__(self, limiter, *, fetch_page=fetch_public_page):
+    def __init__(self, limiter, *, fetch_page=fetch_public_page,quotas=None):
+        self.quotas = quotas
         self.limiter = limiter
         self.fetch_page = fetch_page
 
     def extract(self, principal, request: ExtractionRequest, client_ip: str) -> ExtractionResponse:
-        require_verified(principal)
-        self.limiter.enforce('extraction', {'user': str(principal.user_id), 'ip': client_ip})
+        if getattr(principal,'mode',None)=='guest':
+            self.limiter.enforce('guest_extraction',{'guest':str(principal.owner_id),'ip':client_ip},rules=[('guest',10,60),('ip',60,900)])
+        else:
+            if not hasattr(principal,'mode'):require_verified(principal)
+            self.limiter.enforce('extraction', {'user': str(principal.user_id), 'ip': client_ip})
+        with self.quotas.extraction(principal) if self.quotas is not None else nullcontext():
+            return self._extract(request)
+
+    def _extract(self,request):
         value = request.root
         if value.type == 'url':
             page = self.fetch_page(value.url)

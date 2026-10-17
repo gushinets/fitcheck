@@ -554,6 +554,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get Quota */
         get: operations["getQuota"];
         put?: never;
         post?: never;
@@ -4377,7 +4378,9 @@ export interface operations {
     };
     extractVacancy: {
         parameters: {
-            query?: never;
+            query?: {
+                mode?: ("account" | "guest") | null;
+            };
             header: {
                 Origin: string;
                 "X-CSRF-Token": string;
@@ -6480,14 +6483,16 @@ export interface operations {
     };
     getQuota: {
         parameters: {
-            query?: never;
+            query?: {
+                mode?: ("account" | "guest") | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Planned success response; route is not implemented */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;

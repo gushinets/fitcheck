@@ -29,20 +29,20 @@ class AuthRateLimiter:
 
     def enforce(self, action: str, subjects: dict[str, str], *, rules=None) -> None:
         now = self.clock()
-        rules = []
+        buckets = []
         for subject, limit, seconds in (rules if rules is not None else POLICIES[action]):
             if not subjects.get(subject):
                 raise AuthError('forbidden')
             scope = action + ':' + subject
             window = datetime.fromtimestamp(int(now.timestamp()) // seconds * seconds, timezone.utc)
-            rules.append((scope, self.crypto.subject_digest(scope, subjects[subject]), window, window + timedelta(seconds=seconds), limit))
+            buckets.append((scope, self.crypto.subject_digest(scope, subjects[subject]), window, window + timedelta(seconds=seconds), limit))
         retry = 0
         try:
             with self.engine.begin() as c:
                 expired = select(AuthRateBucket.scope, AuthRateBucket.subject_digest, AuthRateBucket.window_start).where(
                     AuthRateBucket.expires_at <= now).order_by(AuthRateBucket.expires_at).limit(100).with_for_update(skip_locked=True)
                 c.execute(delete(AuthRateBucket).where(tuple_(AuthRateBucket.scope, AuthRateBucket.subject_digest, AuthRateBucket.window_start).in_(expired)))
-                for scope, digest, window, expiry, limit in sorted(rules):
+                for scope, digest, window, expiry, limit in sorted(buckets):
                     statement = insert(AuthRateBucket).values(scope=scope, subject_digest=digest, window_start=window, expires_at=expiry, attempts=1)
                     statement = statement.on_conflict_do_update(index_elements=['scope', 'subject_digest', 'window_start'],
                         set_={'attempts': AuthRateBucket.attempts + 1}).returning(AuthRateBucket.attempts)

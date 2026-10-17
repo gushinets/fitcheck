@@ -48,8 +48,8 @@ class GuestSessions:
         now=self.clock();expiry=now+timedelta(seconds=self.policy.guest_ttl_seconds)
         try:
             with job_transaction(self.engine) as s:
-                owner=Owner(kind='guest');s.add(owner);s.flush()
-                s.add(Guest(owner_id=owner.id,expires_at=expiry))
+                owner=Owner(kind='guest',created_at=now);s.add(owner);s.flush()
+                s.add(Guest(owner_id=owner.id,expires_at=expiry,created_at=now))
                 row=GuestSessionRow(owner_id=owner.id,token_digest=self.crypto.digest(token),expires_at=expiry)
                 s.add(row);s.flush()
                 return IssuedGuestSession(token,self.csrf(token),AccessIdentity('guest',owner.id,row.id,expiry))

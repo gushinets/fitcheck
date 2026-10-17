@@ -17,6 +17,7 @@ from ..extraction.service import ExtractionService
 from ..jobs.admission import JobAdmission
 from ..jobs.status import JobStatusReader
 from ..quotas.policy import QuotaPolicy
+from ..quotas.service import QuotaService
 from ..guests.sessions import GuestSessions
 from ..history.service import HistoryService
 
@@ -37,9 +38,10 @@ class AuthRuntime:
         self.email = EmailAuthService(self.engine, self.crypto, passwords, self.limiter, self.mailer, clock, metrics_environment=metrics_environment)
         self.deletion = AccountDeletionService(self.engine, passwords, self.limiter, clock, metrics_environment=metrics_environment)
         self.profiles = ProfileService(self.engine, clock, metrics_environment=metrics_environment)
-        self.extraction = ExtractionService(self.limiter)
-        self.jobs = JobAdmission(self.engine,self.limiter,model=settings.open_ai_model,metrics_environment=metrics_environment)
         self.quota_policy = QuotaPolicy.from_settings(settings)
+        self.quotas = QuotaService(self.engine,self.quota_policy,clock)
+        self.extraction = ExtractionService(self.limiter,quotas=self.quotas)
+        self.jobs = JobAdmission(self.engine,self.limiter,model=settings.open_ai_model,metrics_environment=metrics_environment)
         self.guests = GuestSessions(self.engine,self.crypto,self.quota_policy,clock,self.limiter)
         self.job_status = JobStatusReader(self.engine,clock=clock)
         self.history = HistoryService(self.engine, clock, bytes.fromhex(settings.auth_secret.get_secret_value()))

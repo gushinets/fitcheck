@@ -84,3 +84,13 @@ def test_revoked_claimed_sessions_and_account_only_routes(profile_http):
     c.cookies.delete('__Host-fitcheck_session')
     assert c.get('/v1/history').status_code==401
     assert c.put('/v1/analyses/'+str(uuid4())+'/feedback',json={'correctedScore':10},headers=h).status_code==401
+
+
+def test_guest_creation_rate_limit_cannot_be_reset_with_cookie_deletion(profile_http):
+    a,c,r,_,_=profile_http
+    for _ in range(3):
+        c.cookies.delete('__Host-fitcheck_guest');guest(c)
+    c.cookies.delete('__Host-fitcheck_guest')
+    bootstrap=c.get('/v1/auth/csrf',headers={'Origin':WEB}).json()['csrfToken']
+    response=c.post('/v1/guest-sessions',json={},headers={'Origin':WEB,'X-CSRF-Token':bootstrap})
+    assert response.status_code==429 and int(response.headers['retry-after'])>0

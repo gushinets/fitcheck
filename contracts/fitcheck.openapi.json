@@ -6495,6 +6495,26 @@
         "operationId": "extractVacancy",
         "parameters": [
           {
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "account",
+                    "guest"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mode"
+            }
+          },
+          {
             "in": "header",
             "name": "Origin",
             "required": true,
@@ -6656,6 +6676,9 @@
         "security": [
           {
             "webSession": []
+          },
+          {
+            "guestSession": []
           }
         ],
         "summary": "Extract Vacancy",
@@ -9141,7 +9164,28 @@
     "/v1/quota": {
       "get": {
         "operationId": "getQuota",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "account",
+                    "guest"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mode"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -9151,7 +9195,7 @@
                 }
               }
             },
-            "description": "Planned success response; route is not implemented"
+            "description": "Successful Response"
           },
           "400": {
             "content": {
@@ -9282,7 +9326,8 @@
             "guestSession": []
           }
         ],
-        "x-fitcheck-implementation": "planned",
+        "summary": "Get Quota",
+        "x-fitcheck-implementation": "implemented",
         "x-fitcheck-owner-task": "ANY-651"
       }
     },
