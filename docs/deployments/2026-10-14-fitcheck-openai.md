@@ -22,8 +22,9 @@ is deferred. Operational logs remain enabled while provider SDK logs are isolate
 [Runtime CI](https://github.com/NikitaPotapovIt/fitcheck/actions/runs/39039672986)
 passed both verify and backend jobs at the exact runtime SHA. All three Dokploy
 autodeploy switches were verified OFF before the provider push and remained OFF
-through the controlled rollout. Final restoration is recorded below after the
-deployment evidence is pushed.
+through the controlled rollout. Deployment evidence was pushed as `3e844ca`;
+only afterward, the website, API and worker switches were each restored OFF → ON
+and verified in the UI on 2026-10-17. All three intended final states are ON.
 
 | Local validation | Result |
 | --- | --- |
@@ -210,10 +211,12 @@ model, live response compatibility, grounding quality and billing remain
 unverified by startup/mock checks. All four opt-in paid tests remained skipped.
 A live canary requires separate approval of a concrete spending cap.
 
-External HTTPS readiness also returned status ok with database ready. Deployment
-evidence is ready to push; restoration of the three intended autodeploy ON states
-follows that push and will be recorded separately. No completed restoration is
-claimed by this checkpoint.
+External HTTPS readiness returned status ok with database ready. The clean-image
+website gate, real non-paid visit, migration, matching fleet and configuration
+gates are complete. Evidence was pushed as `3e844ca`, then all three autodeploy
+switches were restored and verified ON. This final documentation update changes
+no runtime source; subsequent automatic builds use the same reviewed code and
+cleaned server configuration.
 
 ## Official sources checked during implementation
 

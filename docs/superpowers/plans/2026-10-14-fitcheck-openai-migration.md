@@ -84,7 +84,7 @@ isolated from product outputs. Deployment documents verify all three services.
 - [x] Prepare concrete secret configuration, then transfer supplied local OpenAI key to the existing website and worker using supported secret storage. Respect any Computer Use action-time grant requirement and ask only at this ready-to-apply step. Do not regenerate the supplied credential or show its value. Deploy API's new registry with admission still off, then worker; verify matching model, schema and health without paid generation. Re-enable admission after worker compatibility is confirmed, then deploy website.
 - [x] Verify external readiness, anonymous jobs rejection, server model/env booleans and telemetry/report provider attribution using mock/disposable test evidence. If live compatibility canary is needed, ask for a defined cap before calling OpenAI; record skipped/live status accurately. Remove obsolete active DeepSeek key variables only after successful OpenAI startup/config verification; preserve historical costs.
 - [x] Enforce post-0007 recovery restriction: keep admission off and retain/start the reviewed current 0007-compatible runtime to repair forward. Old exact-head-0006 backend images fail readiness/startup schema gates and cannot be restored directly. A provider rollback requires a separately reviewed 0007-compatible artifact with intended registry/transport and validated frozen-job compatibility; none is prepared here. Drain incompatible jobs with their matching worker/key first. Preserve 0007 and all rows/envelopes/costs; never bypass schema gates, downgrade/reset, delete or rewrite jobs. Recovery is less immediate and admission may remain unavailable during repair.
-- [ ] Save deployment/CI/migration/model-health evidence and limitations, commit/push clean tracked work, preserve .env.local outside Git and collect all execution rulings/deferred review findings. Only then return to the next backlog task.
+- [x] Save deployment/CI/migration/model-health evidence and limitations, commit/push clean tracked work, preserve .env.local outside Git and collect all execution rulings/deferred review findings. Only then return to the next backlog task.
 
 ## Plan self-review
 
@@ -97,3 +97,14 @@ without replacing existing events. The registry's exact model parameter is
 consistent in both admission and worker. No ANY-653 product migration is hidden
 in this plan. The user-supplied secret is never staged and the default model is
 the explicitly selected Luna.
+
+## Completion evidence — 2026-10-17
+
+All four tasks completed. Reviewed runtime `d30b19b` passed exact-SHA CI and
+matched development rollout, additive live migration 0006→0007 and source/health
+checks. Supplied server key saved only to website/worker with user approval;
+all three consumers use `gpt-6-luna`. Admission enabled, metrics preserved,
+obsolete DeepSeek active variables removed, all three autodeploy switches
+restored ON after evidence push `3e844ca`. Full results, both execution rulings,
+review resolution, pricing limits and no-paid-canary coverage are in
+[the deployment record](../../deployments/2026-10-14-fitcheck-openai.md).
