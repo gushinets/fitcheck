@@ -1,9 +1,10 @@
-# ANY-651 local validation and rollout
+# ANY-651 validation and completed dev rollout
 
 Implementation branch: `feat/any-651-guest-quotas`, isolated worktree
 `.worktrees/any-651`, base `4fa589327d0e123beecde03e23e3c4aa4f3e610b`.
-This record describes local validation. No push, shared dev deployment, production
-migration or admission toggle has been performed. Website UI remains ANY-579/653.
+The initial sections preserve the local validation checkpoint. The completed dev
+rollout section below supersedes the earlier pending statements. Production
+rollout and website UI remain outside this task (ANY-579/653).
 
 ## Local evidence
 
@@ -95,3 +96,50 @@ Both healthchecks passed again; schema drift, actual HTTP bootstrap/quota and
 account isolation passed, with zero provider-call rows in the smoke database.
 The disposable task-owned containers were stopped after validation. Linear stays
 in review until the branch is integrated; shared dev deployment is still pending.
+
+
+## Completed dev rollout — 2026-10-17
+
+- Integrated and pushed code commit `1bd9197437a23730adf20744a5096df8761ce540`
+  to `dev`. [CI39061690429](https://github.com/NikitaPotapovIt/fitcheck/actions/runs/39061690429)
+  passed both backend and website verification jobs. The full local suite after
+  integration passed797 backend tests with1 paid canary skipped. The last CSRF
+  review minor is fixed; both malformed-header regressions were RED→GREEN.
+- Verified all three Dokploy autodeploy switches OFF before pushing. Paused API
+  admission by changing only `FITCHECK_JOBS_ENABLED` tofalse and adding
+  `FITCHECK_GUEST_ENABLED=true`; all other environment values were compared and
+  preserved. Reloaded the old API and verified jobs=false, schema0007 and an
+  empty queue in runtime container `3a6e55f5a420`.
+- Used the existing migration connection/advisory-lock runner with a temporary
+  copy of packaged migrations and the exact hash-checked0008 file
+  (`a7779f74309c2360a8d3d0eab4cb1e9bbf63946f5f98d91a8a6590dce5fc7a52`).
+  The identical runner first passed0007→0008 and a repeated no-op on a separate
+  disposable local DB. Live migration visibly reported0007→0008 and unchanged
+  owner/job/analysis/provider-call row counts (allzero before migration).
+- Manually deployed API application `4Dfp-p3ua4kBSxLZ_mczn` and worker application
+  `uGz_HiVcXoTo1Rid214vn` from the reviewed dev code. Worker deployment reported
+  Done for commit1bd9197 in22 seconds. Worker container `7334f10635be` passed
+  migration drift check and heartbeat validation, with zero provider-call rows.
+- Both runtimes were checked against the143 Python source files of code1bd9197:
+  canonical aggregate SHA-256
+  `add087a01c52e3865e692bacc980eccdd3936039f16942fccf9e051ef3ccc26f`.
+- Actual external HTTPS verification passed with certificate verification enabled:
+  readiness200, guest bootstrap201, cookie reuse preserving expiry, quota1 demo,
+  explicit account isolation401, forged guest cookie401, foreign job404, missing
+  and malformed CSRF403, and one successful synchronous text extraction. The
+  extraction consumed one extraction credit; analysis demo remained1. No LLM
+  operation or paid canary was requested. The synthetic guest has no personal
+  data and expires normally; scheduled retention remains a separate operation.
+- Restored API admission after schema/worker/HTTP checks: final API container
+  `4288661a560a` uses jobs=true and guest=true, demo limit1 and TTL86400 seconds.
+  Runtime verification caught a missing line boundary around the jobs flag in
+  the environment editor; repaired that boundary, compared all remaining values,
+  saved and redeployed. The final deployment completed in3 seconds and passed
+  the same source digest and schema checks, with zero provider-call rows.
+  No user environment files or shared
+  certificate files were modified. The existing website runtime requires no UI
+  changes for this backend-only task; its UI integration remains ANY-579/653.
+
+Autodeploy toggles are restored after the final documentation push. This rollout
+used manual deployment and does not claim that the earlier GitHub webhook TLS
+chain issue was repaired. No certificate verification was disabled.
