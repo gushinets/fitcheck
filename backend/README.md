@@ -166,6 +166,12 @@ Optional paid canary, from `backend/`, requires a concrete approved spend cap, a
 `FITCHECK_RUN_LLM_CANARY=1 uv run --locked pytest tests/analysis/test_live_canary.py -q`.
 It uses only anonymized fixtures and in-process metrics; PostgreSQL accounting is
 tested separately on disposable PG. Without opt-in/key it is reported as skipped.
+For real API admission → WorkerRuntime → persisted results and physical-attempt
+accounting, supply `FITCHECK_TEST_DATABASE_URL` for disposable PostgreSQL and run:
+`FITCHECK_RUN_LLM_CANARY=1 uv run --locked pytest tests/integration/test_live_llm_jobs.py -m integration -q`.
+This paid canary uses anonymized fixtures and the supplied `OPEN_AI_KEY`; default
+job exposure limits are $0.02 for analysis and $0.005 for suggestions. It checks
+both successful results and equality of HTTP sends and durable ledger rows.
 Library behavior references: [PydanticAI output](https://pydantic.dev/docs/ai/core-concepts/output/),
 [LiteLLM SDK](https://docs.litellm.ai/docs/python_sdk).
 
@@ -285,6 +291,9 @@ docker compose -f compose.worker.yaml up -d --build
 ```
 
 Container deployments use `backend/Dockerfile.worker` with context `backend/`.
+The local CLI handles Ctrl+C with graceful shutdown on Windows as well as POSIX.
+When the event loop cannot register signals, it uses Python signal handlers to
+schedule the same drain; prior handlers are restored when the worker exits.
 Worker starts only with a provider key and matching schema; no public worker HTTP
 port is needed. It processes one job at a time; multiple processes may scale the
 same queue. Defaults: poll 1s, lease 150s, heartbeat 20s, drain 130s. Environment

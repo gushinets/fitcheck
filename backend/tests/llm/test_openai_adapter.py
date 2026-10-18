@@ -45,6 +45,10 @@ def test_adapter_outbound_exact_host_path_reasoning_none_and_max_completion_toke
         assert body['reasoning_effort'] == 'none'
         assert body['max_completion_tokens'] == cap
         assert body['response_format'] == {'type': 'json_object'}
+        # Validate the serialized request from the installed LiteLLM/OpenAI SDKs:
+        # unknown kwargs otherwise become provider body fields (e.g. no_log).
+        assert set(body) == {'model', 'messages', 'reasoning_effort',
+            'max_completion_tokens', 'response_format', 'service_tier'}
         assert not {'temperature', 'thinking', 'max_tokens'} & body.keys()
         return response()
     async def run():

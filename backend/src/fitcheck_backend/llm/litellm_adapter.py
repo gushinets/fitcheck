@@ -129,7 +129,9 @@ class LiteLlmAdapter:
                 max_completion_tokens=max_tokens, response_format={'type':'json_object'},service_tier='default',
                 num_retries=0, max_retries=0,
                 timeout=timeout, client=self._sdk, drop_params=False, caching=False,
-                mock_response=None, no_log=True)
+                # LiteLLM consumes the hyphenated control option. `no_log`
+                # is treated as an extra provider parameter and sent to OpenAI.
+                mock_response=None, **{'no-log': True})
             content = response.choices[0].message.content or ''
             usage, model, tier = self._usage_basis.get() or (ProviderUsage(), None, None)
             estimate = estimate_openai_cost(usage, model=model, rate_version=RATE_VERSION,
