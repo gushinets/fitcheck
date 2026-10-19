@@ -300,6 +300,8 @@ same queue. Defaults: poll 1s, lease 150s, heartbeat 20s, drain 130s. Environmen
 variables `FITCHECK_WORKER_POLL_INTERVAL`, `LEASE_SECONDS`, `HEARTBEAT_SECONDS`
 and `DRAIN_SECONDS` use that common prefix. Set container stop grace to 140s.
 `python -m fitcheck_backend.worker.health` checks a fresh live-process marker.
+Health probes open the Windows marker with read/write/delete sharing, so a
+concurrent probe does not block atomic heartbeat replacement or shutdown cleanup.
 On Windows it inspects a process handle with a nonblocking Win32 wait, without
 calling `os.kill` or sending console signals. Windows CI runs the original health
 tests and CLI shutdown tests on Python 3.12 and 3.14.
