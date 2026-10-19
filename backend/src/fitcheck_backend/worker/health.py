@@ -192,7 +192,7 @@ class WorkerHealth:
             if self._foreign_marker():
                 logger.warning('Worker health path belongs to another live worker')
                 return False
-            temporary = self.path.with_suffix('.tmp')
+            temporary = self.path.with_name(self.path.name + '.tmp')
             temporary.write_text(json.dumps(dict(pid=os.getpid(),at=self.clock(),bootId=self.boot_id,maxAge=self.max_age)),encoding='utf-8')
             temporary.replace(self.path)
             return True
@@ -203,7 +203,7 @@ class WorkerHealth:
             if self._foreign_marker():
                 return False
             self.path.unlink(missing_ok=True)
-            self.path.with_suffix('.tmp').unlink(missing_ok=True)
+            self.path.with_name(self.path.name + '.tmp').unlink(missing_ok=True)
             return True
         return self._change(remove)
 

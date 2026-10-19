@@ -186,7 +186,7 @@ print(count, flush=True)
         stop.touch()
         output, _ = child.communicate(timeout=10)
         assert child.returncode == 0 and int(output.strip()) > 0
-        assert not path.with_suffix('.tmp').exists()
+        assert not path.with_name(path.name + '.tmp').exists()
     finally:
         stop.touch()
         if child.poll() is None:
@@ -223,7 +223,7 @@ with _open_marker(sys.argv[1]) as stream:
             assert child.returncode == 17
             assert healthy(path, now=200) is (operation == 'mark')
             marker.clear()
-            assert not path.exists() and not path.with_suffix('.tmp').exists()
+            assert not path.exists() and not path.with_name(path.name + '.tmp').exists()
         finally:
             if child.poll() is None:
                 child.kill()
@@ -267,7 +267,7 @@ def test_windows_sharing_errors_are_bounded_and_recoverable(monkeypatch, tmp_pat
     # A later pass recovers, including deletion of any unpublished temp file.
     assert marker.mark() and json.loads(path.read_text())['at'] == 200.0
     assert marker.clear()
-    assert not path.exists() and not path.with_suffix('.tmp').exists()
+    assert not path.exists() and not path.with_name(path.name + '.tmp').exists()
 
 
 @pytest.mark.parametrize('platform,winerror', [('win32', 87), ('darwin', 32)])
@@ -380,3 +380,31 @@ with _open_marker(sys.argv[1]):
             child.kill()
             child.communicate(timeout=10)
         marker.close()
+
+
+def test_distinct_health_suffixes_do_not_share_temporary_files(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from pathlib import Path
+    from threading import Barrier
+    from fitcheck_backend.worker.health import WorkerHealth, healthy
+    first = WorkerHealth(tmp_path / 'worker.one')
+    second = WorkerHealth(tmp_path / 'worker.two')
+    rendezvous = Barrier(2)
+    original = Path.replace
+    def replace(source, target):
+        rendezvous.wait(timeout=5)
+        return original(source, target)
+    first.claim()
+    second.claim()
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(Path, 'replace', replace)
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results = list(pool.map(lambda value: value.mark(), [first, second]))
+        assert results == [True, True]
+        for marker in (first, second):
+            assert healthy(marker.path)
+            assert json.loads(marker.path.read_text())['bootId'] == marker.boot_id
+    finally:
+        first.close()
+        second.close()
