@@ -299,8 +299,11 @@ port is needed. It processes one job at a time; multiple processes may scale the
 same queue. Defaults: poll 1s, lease 150s, heartbeat 20s, drain 130s. Environment
 variables `FITCHECK_WORKER_POLL_INTERVAL`, `LEASE_SECONDS`, `HEARTBEAT_SECONDS`
 and `DRAIN_SECONDS` use that common prefix. Set container stop grace to 140s.
-`python -m fitcheck_backend.worker.health` checks a fresh live-process marker;
-busy jobs refresh it after successful database heartbeat. DB operations have
+`python -m fitcheck_backend.worker.health` checks a fresh live-process marker.
+On Windows it inspects a process handle with a nonblocking Win32 wait, without
+calling `os.kill` or sending console signals. Windows CI runs the original health
+tests and CLI shutdown tests on Python 3.12 and 3.14.
+Busy jobs refresh it after successful database heartbeat. DB operations have
 5s statement/connection/pool timeouts; queue/publication locks have 3s timeout.
 
 Claim uses PostgreSQL SKIP LOCKED. Each execution has a unique lease token;

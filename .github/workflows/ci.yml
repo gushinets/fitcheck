@@ -8,6 +8,34 @@ permissions:
   contents: read
 
 jobs:
+  worker-windows:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.14"]
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.7"
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install backend dependencies
+        run: uv sync --locked
+
+      - name: Check native Windows health and graceful shutdown
+        run: uv run pytest tests/worker/test_health.py tests/worker/test_cli.py -q
+
   backend:
     runs-on: ubuntu-latest
     timeout-minutes: 15
