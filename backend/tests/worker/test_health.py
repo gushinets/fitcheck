@@ -97,69 +97,64 @@ def test_windows_health_rejects_pid_overflow_before_opening_process(monkeypatch,
     assert not health.healthy(path, now=100)
 
 
-def test_probe_open_handle_does_not_block_replace_or_shutdown_cleanup(tmp_path):
-    from fitcheck_backend.worker.health import WorkerHealth
+@pytest.mark.parametrize('operation', ['mark', 'clear'])
+def test_probe_reader_serializes_replace_and_shutdown_cleanup(tmp_path, operation):
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError
+    from fitcheck_backend.worker.health import WorkerHealth, healthy
     path = tmp_path / 'health.json'
     marker = WorkerHealth(path)
     marker.mark()
-    # Hold the actual probe reader open in another process, deterministically
-    # overlapping every replace and unlink. Ordinary open fails on Windows.
-    script = '''
+    script = """
 import sys
 from fitcheck_backend.worker.health import _open_marker
 with _open_marker(sys.argv[1]) as stream:
     print('ready', flush=True)
     sys.stdin.readline()
     assert stream.read()
-'''
+"""
     child = subprocess.Popen([sys.executable, '-c', script, str(path)],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    pool = ThreadPoolExecutor(max_workers=1)
     try:
         assert child.stdout.readline().strip() == 'ready'
-        for _ in range(100):
-            marker.mark()
-        marker.clear()
-        assert not path.exists()
+        write = pool.submit(getattr(marker, operation))
+        if sys.platform == 'win32':
+            # The writer must wait for the real probe's open handle to close.
+            with pytest.raises(TimeoutError):
+                write.result(timeout=0.05)
         child.communicate(input='done\n', timeout=10)
         assert child.returncode == 0
+        write.result(timeout=10)
+        assert healthy(path) is (operation == 'mark')
+        marker.clear()
+        assert not path.exists()
     finally:
         if child.poll() is None:
             child.kill()
             child.communicate(timeout=10)
+        pool.shutdown(wait=True)
 
 
-@pytest.mark.parametrize('conversion_fails', [False, True])
-def test_windows_marker_reader_shares_delete_access_and_releases_handle(monkeypatch, tmp_path, conversion_fails):
+@pytest.mark.parametrize('wait_result', [0, 0x80, 0x102])
+def test_windows_marker_mutex_releases_handles_and_bounds_wait(monkeypatch, tmp_path, wait_result):
     import ctypes
     from fitcheck_backend.worker import health
-    path = tmp_path / 'health.json'
-    path.write_text('{"pid":123}', encoding='utf-8')
     handle = 2**40
-    kernel = SimpleNamespace(CreateFileW=Mock(return_value=handle), CloseHandle=Mock())
+    kernel = SimpleNamespace(CreateMutexW=Mock(return_value=handle),
+        WaitForSingleObject=Mock(return_value=wait_result), ReleaseMutex=Mock(), CloseHandle=Mock())
     monkeypatch.setattr(ctypes, 'WinDLL', Mock(return_value=kernel), raising=False)
-    def convert(actual, flags):
-        assert actual == handle
-        if conversion_fails:
-            raise OSError('fd conversion failed')
-        return os.open(path, os.O_RDONLY)
-    crt = SimpleNamespace(open_osfhandle=Mock(side_effect=convert))
-    monkeypatch.setitem(sys.modules, 'msvcrt', crt)
-    monkeypatch.setattr(os, 'O_BINARY', 0, raising=False)
     monkeypatch.setattr(health, 'sys', SimpleNamespace(platform='win32'))
-    if conversion_fails:
-        with pytest.raises(OSError, match='fd conversion failed'):
-            with health._open_marker(path):
-                pytest.fail('Invalid handle must not yield a stream')
-        kernel.CloseHandle.assert_called_once_with(handle)
+    def operation():
+        with health._marker_lock(tmp_path / 'health.json'):
+            raise ValueError('body failed')
+    if wait_result == 0x102:
+        with pytest.raises(TimeoutError): operation()
+        kernel.ReleaseMutex.assert_not_called()
     else:
-        with health._open_marker(path) as stream:
-            fd = stream.fileno()
-            assert json.load(stream) == {'pid': 123}
-        with pytest.raises(OSError):
-            os.fstat(fd)
-        kernel.CloseHandle.assert_not_called()  # Ownership moved to the CRT fd.
-    kernel.CreateFileW.assert_called_once_with(str(path.absolute()), 0x80000000, 0x7,
-        None, 3, 0x80, None)
+        with pytest.raises(ValueError, match='body failed'): operation()
+        kernel.ReleaseMutex.assert_called_once_with(handle)
+    kernel.WaitForSingleObject.assert_called_once_with(handle, 5000)
+    kernel.CloseHandle.assert_called_once_with(handle)
 
 
 def test_concurrent_health_probes_and_writer_do_not_crash(tmp_path):

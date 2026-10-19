@@ -1,4 +1,5 @@
 import json
+import hashlib
 import math
 import os
 import sys
@@ -42,42 +43,52 @@ def _process_alive(pid):
 
 
 @contextmanager
-def _open_marker(path):
+def _marker_lock(path):
     if sys.platform != 'win32':
-        with Path(path).open(encoding='utf-8') as stream:
-            yield stream
+        yield
         return
 
     import ctypes
-    import msvcrt
     from ctypes import wintypes
 
     kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
-    kernel32.CreateFileW.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD,
-        wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE)
-    kernel32.CreateFileW.restype = wintypes.HANDLE
+    kernel32.CreateMutexW.argtypes = (wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR)
+    kernel32.CreateMutexW.restype = wintypes.HANDLE
+    kernel32.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+    kernel32.WaitForSingleObject.restype = wintypes.DWORD
+    kernel32.ReleaseMutex.argtypes = (wintypes.HANDLE,)
+    kernel32.ReleaseMutex.restype = wintypes.BOOL
     kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
     kernel32.CloseHandle.restype = wintypes.BOOL
-    # GENERIC_READ, FILE_SHARE_READ | WRITE | DELETE, OPEN_EXISTING.
-    # Python's ordinary open does not share delete access on Windows. A probe
-    # must allow the writer's atomic replace and shutdown unlink while reading.
-    handle = kernel32.CreateFileW(str(Path(path).absolute()), 0x80000000, 0x7,
-        None, 3, 0x80, None)
-    if handle == wintypes.HANDLE(-1).value:
+    # Serialize the entire file-handle lifetime, not just JSON parsing. Windows
+    # can retain a replaced file's name until its last reader closes, even with
+    # FILE_SHARE_DELETE. A named kernel mutex coordinates separate CLI processes
+    # without leaving a lock file and is released if an owner process crashes.
+    key = hashlib.sha256(os.path.normcase(os.path.abspath(path)).encode('utf-8')).hexdigest()
+    handle = kernel32.CreateMutexW(None, False, 'Local\\FitCheckHealth-' + key)
+    if not handle:
         raise ctypes.WinError(ctypes.get_last_error())
+    acquired = False
     try:
-        fd = msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)
-    except BaseException:
+        result = kernel32.WaitForSingleObject(handle, 5000)
+        # WAIT_OBJECT_0 or WAIT_ABANDONED: both grant ownership.
+        if result not in (0, 0x80):
+            if result == 0x102:
+                raise TimeoutError('Health marker lock timed out')
+            raise ctypes.WinError(ctypes.get_last_error())
+        acquired = True
+        yield
+    finally:
+        if acquired:
+            kernel32.ReleaseMutex(handle)
         kernel32.CloseHandle(handle)
-        raise
-    # The CRT fd owns the handle after open_osfhandle succeeds.
-    try:
-        stream = os.fdopen(fd, encoding='utf-8')
-    except BaseException:
-        os.close(fd)
-        raise
-    with stream:
-        yield stream
+
+
+@contextmanager
+def _open_marker(path):
+    with _marker_lock(path):
+        with Path(path).open(encoding='utf-8') as stream:
+            yield stream
 
 
 class WorkerHealth:
@@ -86,12 +97,14 @@ class WorkerHealth:
         self.boot_id = str(uuid4())
 
     def mark(self):
-        temporary = self.path.with_suffix('.tmp')
-        temporary.write_text(json.dumps(dict(pid=os.getpid(),at=self.clock(),bootId=self.boot_id,maxAge=self.max_age)),encoding='utf-8')
-        temporary.replace(self.path)
+        with _marker_lock(self.path):
+            temporary = self.path.with_suffix('.tmp')
+            temporary.write_text(json.dumps(dict(pid=os.getpid(),at=self.clock(),bootId=self.boot_id,maxAge=self.max_age)),encoding='utf-8')
+            temporary.replace(self.path)
 
     def clear(self):
-        self.path.unlink(missing_ok=True)
+        with _marker_lock(self.path):
+            self.path.unlink(missing_ok=True)
 
 
 def healthy(path,*,now=None):
