@@ -49,8 +49,9 @@ def main():
                 text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
             if okay and result.returncode:
                 # Never echo interpolated config, secret-bearing arguments or DB errors.
+                output = result.stdout[-8000:] + '\n' + result.stderr[-12000:]
                 raise RuntimeError('Compose command failed: ' + ' '.join(args[:3]) + '\n' +
-                    result.stderr.replace(password,'[redacted]').replace(token,'[redacted]')[-12000:])
+                    output.replace(password,'[redacted]').replace(token,'[redacted]'))
             return result
         def sql(value):
             return run('exec','-T','postgres','psql','-U','fitcheck','-d','fitcheck',
