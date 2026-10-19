@@ -15,6 +15,7 @@ const en = {
   email: "Email",
   password: "Password",
   passwordReset: "Forgot your password?",
+  tryDemo: "Try without an account",
   localAccountNotice:
     "Your profile and history sync securely between devices. New passwords need at least 15 characters.",
   duplicateEmail: "An account with this email already exists",
@@ -168,6 +169,7 @@ const ru: Record<keyof typeof en, string> = {
   email: "Email",
   password: "Пароль",
   passwordReset: "Забыли пароль?",
+  tryDemo: "Попробовать без регистрации",
   localAccountNotice:
     "Профиль и история синхронизируются между устройствами. Новый пароль — не менее 15 символов.",
   duplicateEmail: "Аккаунт с таким email уже существует",

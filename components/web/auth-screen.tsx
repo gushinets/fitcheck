@@ -16,6 +16,8 @@ export function AuthScreen({
   onCreate,
   onSignIn,
   serverAccount = false,
+  onDemo,
+  onRetry,
 }: {
   copy: WebMessages
   error: string | null
@@ -23,6 +25,8 @@ export function AuthScreen({
   onCreate: (input: { name: string; email: string; password: string }) => void
   onSignIn: (input: { email: string; password: string }) => void
   serverAccount?: boolean
+  onDemo?: () => void
+  onRetry?: () => void
 }) {
   const [mode, setMode] = useState<AuthMode>("create")
   const [name, setName] = useState("")
@@ -52,7 +56,7 @@ export function AuthScreen({
         </p>
       </section>
 
-      <section className="flex items-center justify-center px-4 py-10 sm:px-8">
+      <section className="flex items-center justify-center px-4 pb-8 pt-24 sm:px-8 lg:py-12">
         <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-xl shadow-black/5 sm:p-8">
           <div className="mb-7 lg:hidden">
             <div className="text-xl font-bold text-primary">{copy.productName}</div>
@@ -95,12 +99,13 @@ export function AuthScreen({
               <Label htmlFor="auth-password">{copy.password}</Label>
               <Input id="auth-password" type="password" autoComplete={mode === "create" ? "new-password" : "current-password"} minLength={serverAccount && mode === "create" ? 15 : serverAccount ? 1 : 8} maxLength={serverAccount ? 128 : 200} required value={password} onChange={(event) => setPassword(event.target.value)} />
             </div>
-            {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
+            {error ? <div role="alert" className="space-y-3 text-sm text-danger"><p>{error}</p>{onRetry ? <Button type="button" variant="outline" onClick={onRetry}>{copy.retry}</Button> : null}</div> : null}
             <Button type="submit" disabled={busy} className="h-11 w-full font-semibold">
               {mode === "create" ? copy.createAccount : copy.signIn}
             </Button>
           </form>
           {serverAccount ? <a className="mt-4 block text-sm text-primary underline" href="/auth/password-reset">{copy.passwordReset}</a> : null}
+          {onDemo ? <div className="mt-6 border-t border-border pt-5"><Button type="button" variant="outline" className="h-11 w-full" disabled={busy} onClick={onDemo}>{copy.tryDemo}</Button></div> : null}
           <div className="mt-5 flex gap-3 rounded-xl bg-secondary p-3 text-xs leading-5 text-muted-foreground">
             <LockKeyhole className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             <p>{copy.localAccountNotice}</p>

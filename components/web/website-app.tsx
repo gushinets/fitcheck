@@ -435,9 +435,7 @@ export function WebsiteApp({
     return (
       <div className="relative">
         <div className="absolute right-4 top-4 z-10"><LanguageSwitch locale={locale} label={copy.language} onChange={changeLocale} /></div>
-        {globalError ? <div role="alert" className="p-4">{globalError}<Button onClick={() => guarded(refresh)}>{copy.retry}</Button></div> : null}
-        {server ? <div className="px-6 pt-16"><Button onClick={() => setDemo(true)}>{locale === "ru" ? "Попробовать без регистрации" : "Try without an account"}</Button></div> : null}
-        <AuthScreen copy={copy} error={authError} busy={busy} onCreate={createAccount} onSignIn={signIn} serverAccount={Boolean(server)} />
+        <AuthScreen copy={copy} error={authError ?? globalError} busy={busy} onCreate={createAccount} onSignIn={signIn} serverAccount={Boolean(server)} onDemo={server ? () => setDemo(true) : undefined} onRetry={globalError ? () => guarded(refresh) : undefined} />
       </div>
     )
   }
