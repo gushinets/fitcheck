@@ -14,6 +14,7 @@ export function draftToJob(draft: VacancyDraft): Job {
     title: draft.title,
     description: draft.description,
     skills: [...draft.skills],
+    ...Object.fromEntries(["proposalCount", "averageBid", "averageBidCurrency", "provenance", "experienceLevel", "postedAgo", "clientRating", "clientSpend"].filter(key => draft[key as keyof VacancyDraft] !== undefined).map(key => [key, draft[key as keyof VacancyDraft]])),
     ...(draft.budgetCurrency ? { budgetCurrency: draft.budgetCurrency } : {}),
     ...(draft.hourlyRateMin === undefined
       ? {}

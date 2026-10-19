@@ -45,7 +45,7 @@ export class WebApiError extends Error {
 export interface WebsiteApi {
   extractVacancy(url: string): Promise<VacancyDraft>
   analyzeVacancy(request: AnalysisRequest): Promise<FitAnalysis>
-  analyzeVacancyWithContext?(request: AnalysisRequest): Promise<{ analysis: FitAnalysis; operationId?: string }>
+  analyzeVacancyWithContext?(request: AnalysisRequest): Promise<{ analysis: FitAnalysis; operationId?: string; entry?: import("./types").WebHistoryEntry }>
   suggestSkills(request: SkillSuggestionRequest): Promise<string[]>
 }
 

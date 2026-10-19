@@ -70,6 +70,10 @@ export const jobSchema = z.object({
   postedAgo: trimmedString(100).optional(),
   clientRating: z.number().min(0).max(5).optional(),
   clientSpend: z.number().min(0).max(10_000_000_000).optional(),
+  proposalCount: z.number().int().min(0).max(10_000_000).nullable().optional(),
+  averageBid: moneySchema.nullable().optional(),
+  averageBidCurrency: currencySchema.nullable().optional(),
+  provenance: z.record(z.string(), z.enum(["json_ld", "html", "text"])).optional(),
 })
 
 export const calibrationEntrySchema = z.object({

@@ -15,12 +15,14 @@ export function AuthScreen({
   busy,
   onCreate,
   onSignIn,
+  serverAccount = false,
 }: {
   copy: WebMessages
   error: string | null
   busy: boolean
   onCreate: (input: { name: string; email: string; password: string }) => void
   onSignIn: (input: { email: string; password: string }) => void
+  serverAccount?: boolean
 }) {
   const [mode, setMode] = useState<AuthMode>("create")
   const [name, setName] = useState("")
@@ -29,7 +31,7 @@ export function AuthScreen({
 
   function submit(event: React.FormEvent) {
     event.preventDefault()
-    if (mode === "create") onCreate({ name, email, password })
+    if (mode === "create") onCreate({ name: serverAccount ? email.split("@")[0] : name, email, password })
     else onSignIn({ email, password })
   }
 
@@ -79,7 +81,7 @@ export function AuthScreen({
             {mode === "create" ? copy.createAccountTitle : copy.signInTitle}
           </h2>
           <form onSubmit={submit} className="mt-6 space-y-4">
-            {mode === "create" ? (
+            {mode === "create" && !serverAccount ? (
               <div className="space-y-1.5">
                 <Label htmlFor="auth-name">{copy.name}</Label>
                 <Input id="auth-name" required value={name} onChange={(event) => setName(event.target.value)} />
@@ -91,13 +93,14 @@ export function AuthScreen({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="auth-password">{copy.password}</Label>
-              <Input id="auth-password" type="password" minLength={8} required value={password} onChange={(event) => setPassword(event.target.value)} />
+              <Input id="auth-password" type="password" autoComplete={mode === "create" ? "new-password" : "current-password"} minLength={serverAccount && mode === "create" ? 15 : serverAccount ? 1 : 8} maxLength={serverAccount ? 128 : 200} required value={password} onChange={(event) => setPassword(event.target.value)} />
             </div>
             {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
             <Button type="submit" disabled={busy} className="h-11 w-full font-semibold">
               {mode === "create" ? copy.createAccount : copy.signIn}
             </Button>
           </form>
+          {serverAccount ? <a className="mt-4 block text-sm text-primary underline" href="/auth/password-reset">{copy.passwordReset}</a> : null}
           <div className="mt-5 flex gap-3 rounded-xl bg-secondary p-3 text-xs leading-5 text-muted-foreground">
             <LockKeyhole className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             <p>{copy.localAccountNotice}</p>

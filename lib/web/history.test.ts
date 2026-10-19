@@ -24,7 +24,7 @@ describe("website history", () => {
     profile.skills.push("Redis")
     job.title = "Changed title"
 
-    expect(entry.profile.skills).not.toContain("Redis")
+    expect(entry.profile!.skills).not.toContain("Redis")
     expect(entry.job.title).toBe("Senior Python Backend Developer")
     expect(entry.createdAt).toBe("2026-08-25T12:00:00.000Z")
   })

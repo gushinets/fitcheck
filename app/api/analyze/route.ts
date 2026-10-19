@@ -1,37 +1,5 @@
-import { isSupportedOpenAIModel } from "@/lib/openai/client"
-import { after } from "next/server"
-import { beginWebsiteOperation } from "@/lib/metrics/operations"
-import { createOpenAITransport } from "@/lib/analysis/openai"
-import { corsHeaders, createAnalyzeHandler, json } from "./handler"
-
-function allowedOrigins() {
-  return (process.env.ALLOWED_ORIGINS ?? "http://localhost:3000")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean)
+// Retired: all product requests must use authenticated backend admission.
+export function POST() {
+  return Response.json({ error: "endpoint_retired" }, { status: 410, headers: { "Cache-Control": "no-store" } })
 }
-
-export async function POST(request: Request) {
-  const apiKey = process.env.OPEN_AI_KEY
-  if (!apiKey || !isSupportedOpenAIModel(process.env.OPEN_AI_MODEL)) return json({ error: "server_not_configured" }, 503)
-  const operation = beginWebsiteOperation(request, "analysis", after)
-  const handler = createAnalyzeHandler({
-    allowedOrigins: allowedOrigins(),
-    transport: createOpenAITransport({
-      apiKey,
-      model: process.env.OPEN_AI_MODEL,
-      operation: operation?.context,
-      attemptSink: operation?.sink,
-    }),
-  })
-  const response = await handler(request)
-  return operation?.complete(response) ?? response
-}
-
-export async function OPTIONS(request: Request) {
-  const origin = request.headers.get("origin") ?? ""
-  if (!allowedOrigins().includes(origin)) {
-    return json({ error: "origin_not_allowed" }, 403)
-  }
-  return new Response(null, { status: 204, headers: corsHeaders(origin) })
-}
+export const OPTIONS = POST

@@ -12,6 +12,8 @@
 
 # Test and TypeScript output
 /coverage/
+/playwright-report/
+/test-results/
 *.tsbuildinfo
 next-env.d.ts
 

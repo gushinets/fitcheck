@@ -28,7 +28,7 @@ export function AnalysisResult({
   const [note, setNote] = useState(entry.feedback?.note ?? "")
   const analysis = entry.analysis
   const isGo = analysis.status === "GO"
-  const rateComparison = compareHourlyRate(entry.profile, entry.job)
+  const rateComparison = entry.profile ? compareHourlyRate(entry.profile, entry.job) : null
   const currencyNotice = rateComparison === "conversion_required" ? copy.rateConversionRequired
     : rateComparison === "unknown_currency" ? copy.rateCurrencyUnknown
       : (entry.job.fixedBudget !== undefined || entry.job.fixedBudgetMax !== undefined) && rateComparison === "no_hourly_budget" ? copy.noHourlyBudget : null
@@ -53,7 +53,7 @@ export function AnalysisResult({
           <div className="rounded-3xl border border-border bg-card p-6 shadow-sm sm:p-8">
             <p className="text-sm font-medium text-muted-foreground">{entry.job.title}</p>
             <dl className="mt-3 space-y-1 text-sm text-muted-foreground">
-              <div className="flex flex-wrap gap-x-2"><dt>{copy.preferredRate}:</dt><dd>{formatMoney(entry.profile.preferredRate, entry.profile.rateCurrency, copy.currencyUnspecified)}{copy.perHour}</dd></div>
+              {entry.profile ? <div className="flex flex-wrap gap-x-2"><dt>{copy.preferredRate}:</dt><dd>{formatMoney(entry.profile.preferredRate, entry.profile.rateCurrency, copy.currencyUnspecified)}{copy.perHour}</dd></div> : null}
               {entry.job.hourlyRateMin !== undefined || entry.job.hourlyRateMax !== undefined ? <div className="flex flex-wrap gap-x-2"><dt>{copy.rate}:</dt><dd>{formatMoney(formatRateRange(entry.job.hourlyRateMin, entry.job.hourlyRateMax), entry.job.budgetCurrency, copy.currencyUnspecified)}{copy.perHour}</dd></div> : null}
               {entry.job.fixedBudget !== undefined || entry.job.fixedBudgetMax !== undefined ? <div className="flex flex-wrap gap-x-2"><dt>{copy.fixedBudget}:</dt><dd>{formatMoney(entry.job.fixedBudgetMax === undefined ? entry.job.fixedBudget! : formatRateRange(entry.job.fixedBudget, entry.job.fixedBudgetMax), entry.job.budgetCurrency, copy.currencyUnspecified)}</dd></div> : null}
             </dl>

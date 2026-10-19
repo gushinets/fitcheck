@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { currencySchema } from "@/lib/currency"
+import { jobSchema } from "@/lib/analysis/schema"
 
 const trimmedString = (max: number) => z.string().trim().min(1).max(max)
 const optionalMoney = z.number().min(0).max(100_000_000).optional()
@@ -12,6 +13,14 @@ const httpUrl = z
   }, "Only HTTP and HTTPS URLs are supported")
 
 const vacancyFields = {
+  proposalCount: jobSchema.shape.proposalCount,
+  averageBid: jobSchema.shape.averageBid,
+  averageBidCurrency: jobSchema.shape.averageBidCurrency,
+  provenance: jobSchema.shape.provenance,
+  experienceLevel: jobSchema.shape.experienceLevel,
+  postedAgo: jobSchema.shape.postedAgo,
+  clientRating: jobSchema.shape.clientRating,
+  clientSpend: jobSchema.shape.clientSpend,
   id: trimmedString(200),
   rawSource: z.string().max(50_000).optional(),
   title: trimmedString(300),

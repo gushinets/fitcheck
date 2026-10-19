@@ -17,6 +17,7 @@ export interface LocalUser {
   email: string
   name: string
   createdAt: string
+  emailVerified?: boolean
 }
 
 export interface StoredLocalUser extends LocalUser {
@@ -35,7 +36,7 @@ export interface UserPreferences {
 
 export type VacancySourceMode = "url" | "text"
 
-export interface VacancyDraft {
+export interface VacancyDraft extends Pick<Job, "proposalCount" | "averageBid" | "averageBidCurrency" | "provenance" | "experienceLevel" | "postedAgo" | "clientRating" | "clientSpend"> {
   id: string
   sourceMode: VacancySourceMode
   sourceUrl?: string
@@ -52,10 +53,12 @@ export interface VacancyDraft {
 }
 
 export interface WebHistoryEntry {
+  profileRevision?: string | null
+  applicationStatus?: "not_applied" | "applied" | "replied" | "interview" | "rejected" | "hired"
   providerOperationId?: string
   id: string
   userId: string
-  profile: FreelancerProfile
+  profile: FreelancerProfile | null
   job: Job
   analysis: FitAnalysis
   feedback?: AnalysisFeedback
@@ -68,6 +71,7 @@ export interface WebsiteSnapshot {
   preferences: UserPreferences | null
   draft: VacancyDraft | null
   history: WebHistoryEntry[]
+  historyCursor?: string | null
 }
 
 export interface WebsiteRepository {
@@ -90,5 +94,5 @@ export interface WebsiteRepository {
     feedback: AnalysisFeedback,
   ): Promise<void>
   clearHistory(userId: string): Promise<void>
-  deleteUser(userId: string): Promise<void>
+  deleteUser(userId: string, password?: string): Promise<void>
 }

@@ -7,6 +7,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { WebMessages } from "@/lib/i18n/web-messages"
 import { WebApiError } from "@/lib/web/api"
+import { BackendApiError, BackendTransportError } from "@/lib/backend/client"
+import { WebsiteServerError } from "@/lib/web/server"
+import { serverErrorMessage } from "@/lib/web/server-errors"
 import { vacancyDraftSchema } from "@/lib/web/schemas"
 import { extractDescriptionFields } from "@/lib/extraction/fields"
 import type { VacancyDraft, VacancySourceMode } from "@/lib/web/types"
@@ -112,6 +115,7 @@ export function VacancySource({
 }
 
 function apiErrorMessage(error: unknown, copy: WebMessages) {
+  if (error instanceof BackendApiError || error instanceof BackendTransportError || error instanceof WebsiteServerError) return serverErrorMessage(error, copy.language === "Язык" ? "ru" : "en")
   if (!(error instanceof WebApiError)) return copy.fetchFailed
   const messages: Partial<Record<WebApiError["code"], string>> = {
     invalid_request: copy.invalidRequest,

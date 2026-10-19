@@ -24,7 +24,7 @@ describe("FitCheck website authentication", () => {
     render(<WebsiteApp repository={repository} api={api} />)
 
     expect(
-      await screen.findByText(/account stays in this browser/i),
+      await screen.findByText(/profile and history sync/i),
     ).toBeVisible()
     await user.type(screen.getByLabelText("Name"), "Nikita")
     await user.type(screen.getByLabelText("Email"), "me@example.com")
@@ -95,13 +95,13 @@ describe("FitCheck website authentication", () => {
     render(<WebsiteApp repository={repository} api={api} />)
 
     await user.click((await screen.findAllByRole("button", { name: "Profile" }))[0])
-    await user.click(screen.getByRole("button", { name: "Delete local account" }))
+    await user.click(screen.getByRole("button", { name: "Delete account" }))
 
     expect(confirm).toHaveBeenCalledWith(
-      "Delete this local account, profile, drafts, and history from this browser?",
+      "Delete your account, profile, drafts, and history from the server?",
     )
     expect(
-      await screen.findByRole("heading", { name: "Create your local account" }),
+      await screen.findByRole("heading", { name: "Create your account" }),
     ).toBeVisible()
     expect((await repository.loadSnapshot()).user).toBeNull()
   })

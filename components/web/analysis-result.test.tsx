@@ -30,7 +30,7 @@ describe("AnalysisResult", () => {
   })
   it("shows stored currencies and a conversion notice in the Russian report", () => {
     render(<AnalysisResult entry={{ ...entry,
-      profile: { ...entry.profile, preferredRate: 25, rateCurrency: "USD" },
+      profile: { ...entry.profile!, preferredRate: 25, rateCurrency: "USD" },
       job: { ...entry.job, hourlyRateMin: 25, hourlyRateMax: 50, budgetCurrency: "EUR" },
     }} copy={webMessages.ru} onBack={vi.fn()} onAnalyzeAnother={vi.fn()} onSaveFeedback={vi.fn()} />)
     expect(screen.getByText("25 USD/час")).toBeVisible()

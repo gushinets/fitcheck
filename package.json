@@ -5,12 +5,13 @@
   "packageManager": "pnpm@10.17.1",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "build:web": "next build",
+    "build": "next build --webpack",
+    "build:web": "next build --webpack",
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "backend:types": "node scripts/generate-backend-types.mjs",
     "backend:types:check": "node scripts/generate-backend-types.mjs --check"
@@ -32,6 +33,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "^16.3.2",

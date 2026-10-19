@@ -8,7 +8,11 @@ import { getWebMessages } from "@/lib/i18n/web-messages"
 import type { SkillSuggestionRequest } from "@/lib/skill-suggestions/schema"
 import type { WebsiteApi } from "@/lib/web/api"
 import { websiteApi } from "@/lib/web/api"
-import { createWebsiteRepository, LocalAuthError } from "@/lib/web/repository"
+import { LocalAuthError } from "@/lib/web/repository"
+import { createServerWebsite, type ServerWebsite } from "@/lib/web/server"
+import { serverErrorMessage } from "@/lib/web/server-errors"
+import { VerifyAccount, ServerAccountTools } from "./server-account"
+import { DemoAnalysis } from "./demo-analysis"
 import type { WebsiteRepository, WebsiteSnapshot } from "@/lib/web/types"
 import type { VacancyDraft, WebHistoryEntry } from "@/lib/web/types"
 import { createAnalysisRequest, createHistoryEntry } from "@/lib/web/history"
@@ -45,12 +49,14 @@ function initialLocale(): Locale {
 
 export function WebsiteApp({
   repository,
-  api = websiteApi,
+  api: suppliedApi,
+  server: suppliedServer,
   metricsEnabled = false,
   knownCampaignCodes = noCampaignCodes,
 }: {
   repository?: WebsiteRepository
   api?: WebsiteApi
+  server?: ServerWebsite
   metricsEnabled?: boolean
   knownCampaignCodes?: string[]
 }) {
@@ -76,9 +82,9 @@ export function WebsiteApp({
       client.dispose()
     }
   }, [metricsEnabled])
-  const [store] = useState<WebsiteRepository>(() =>
-    repository ?? createWebsiteRepository(),
-  )
+  const [server] = useState(() => suppliedServer ?? (repository ? null : createServerWebsite()))
+  const api = suppliedApi ?? server?.api ?? websiteApi
+  const [store] = useState<WebsiteRepository>(() => repository ?? server!.repository)
   const [locale, setLocale] = useState<Locale>("en")
   const [snapshot, setSnapshot] = useState<WebsiteSnapshot>(emptySnapshot)
   const [initialized, setInitialized] = useState(false)
@@ -89,6 +95,9 @@ export function WebsiteApp({
   const [draft, setDraft] = useState<VacancyDraft | null>(null)
   const [activeEntry, setActiveEntry] = useState<WebHistoryEntry | null>(null)
   const [analysisError, setAnalysisError] = useState<string | null>(null)
+  const [globalError, setGlobalError] = useState<string | null>(null)
+  const [demo, setDemo] = useState(false)
+  const [historyFilter, setHistoryFilter] = useState("")
   const copy = getWebMessages(locale)
 
   useEffect(() => {
@@ -106,6 +115,7 @@ export function WebsiteApp({
         observe("page_viewed", { locale: loadedLocale, campaign })
         if (!loaded.profile) setView("profile")
       })
+      .catch(error => active && setGlobalError(serverErrorMessage(error, initialLocale())))
       .finally(() => active && setInitialized(true))
     return () => {
       active = false
@@ -117,7 +127,41 @@ export function WebsiteApp({
   }, [locale])
 
   async function refresh() {
-    setSnapshot(await store.loadSnapshot())
+    const loaded = await store.loadSnapshot()
+    if (snapshot.user && loaded.user?.id !== snapshot.user.id) {
+      observationGeneration.current++
+      resumed.current = false
+      setActiveEntry(null); setAnalysisStep("source"); setView(loaded.profile ? "analyze" : "profile")
+    }
+    setSnapshot(loaded)
+    setDraft(loaded.draft)
+    if (loaded.preferences) setLocale(loaded.preferences.locale)
+  }
+
+  const resumed = useRef(false)
+  useEffect(() => {
+    if (!server || !snapshot.user?.emailVerified || resumed.current || !server.hasPendingAnalysis()) return
+    resumed.current = true
+    let active = true
+    setAnalysisStep("analyzing")
+    void server.resumeAnalysis().then(result => {
+      if (!active || !result) return
+      setActiveEntry(result.entry); setAnalysisStep("result"); setView("analyze")
+      void refresh().catch(error => setGlobalError(serverErrorMessage(error, locale)))
+    }).catch(error => { if (active) { setGlobalError(serverErrorMessage(error, locale)); setAnalysisStep("source") } })
+    return () => { active = false }
+  }, [server, snapshot.user?.id, snapshot.user?.emailVerified]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function guarded(action: () => Promise<void>) {
+    setGlobalError(null)
+    try { await action() } catch (error) { setGlobalError(serverErrorMessage(error, locale)) }
+  }
+
+  async function signOut() {
+    await store.signOut()
+    observationGeneration.current++
+    resumed.current = false
+    setSnapshot(emptySnapshot); setDraft(null); setActiveEntry(null); setAnalysisStep("source"); setView("analyze")
   }
 
   async function createAccount(input: {
@@ -130,8 +174,8 @@ export function WebsiteApp({
     setAuthError(null)
     try {
       const user = await store.createUser(input)
-      observe("local_registration_completed", { locale }, undefined, generation)
-      await store.saveLocale(user.id, locale)
+      if (!server) observe("local_registration_completed", { locale }, undefined, generation)
+      if (!server) await store.saveLocale(user.id, locale)
       await refresh()
       setView("profile")
     } catch (error) {
@@ -147,7 +191,7 @@ export function WebsiteApp({
     setAuthError(null)
     try {
       await store.authenticate(input.email, input.password)
-      observe("local_login_completed", { locale }, undefined, generation)
+      if (!server) observe("local_login_completed", { locale }, undefined, generation)
       await refresh()
     } catch (error) {
       setAuthError(authErrorMessage(error))
@@ -157,6 +201,7 @@ export function WebsiteApp({
   }
 
   function authErrorMessage(error: unknown) {
+    if (server) return serverErrorMessage(error, locale)
     if (!(error instanceof LocalAuthError)) return copy.authError
     return {
       duplicate_email: copy.duplicateEmail,
@@ -168,7 +213,7 @@ export function WebsiteApp({
   async function changeLocale(nextLocale: Locale) {
     setLocale(nextLocale)
     window.localStorage.setItem("fitcheck.locale", nextLocale)
-    if (snapshot.user) {
+    if (snapshot.user && (!server || snapshot.user.emailVerified)) {
       await store.saveLocale(snapshot.user.id, nextLocale)
       await refresh()
     }
@@ -212,7 +257,7 @@ export function WebsiteApp({
         ? await api.analyzeVacancyWithContext(request)
         : { analysis: await api.analyzeVacancy(request) }
       if (generation !== observationGeneration.current) return
-      const entry = createHistoryEntry({ userId: snapshot.user.id, profile: snapshot.profile, job: request.job, analysis: result.analysis, providerOperationId: result.operationId })
+      const entry = ("entry" in result ? result.entry : undefined) ?? createHistoryEntry({ userId: snapshot.user.id, profile: snapshot.profile, job: request.job, analysis: result.analysis, providerOperationId: result.operationId })
       await store.addHistory(entry)
       if (generation !== observationGeneration.current) return
       setSnapshot((current) => ({ ...current, history: [entry, ...current.history].slice(0, 50) }))
@@ -232,6 +277,7 @@ export function WebsiteApp({
   }
 
   function analysisErrorMessage(error: unknown) {
+    if (server) return serverErrorMessage(error, locale)
     if (!(error instanceof WebApiError)) return copy.analysisFailed
     switch (error.code) {
       case "server_not_configured": return copy.serverNotConfigured
@@ -247,6 +293,7 @@ export function WebsiteApp({
   }
 
   function skillSuggestionErrorMessage(error: unknown) {
+    if (server) return serverErrorMessage(error, locale)
     if (!(error instanceof WebApiError)) return copy.skillSuggestionsFailed
     switch (error.code) {
       case "suggestions_rate_limit": return copy.suggestionsRateLimit
@@ -296,6 +343,7 @@ export function WebsiteApp({
 
   function openHistory(entry: WebHistoryEntry) {
     const restoredDraft: VacancyDraft = {
+      ...entry.job,
       id: entry.job.id,
       sourceMode: entry.job.url ? "url" : "text",
       ...(entry.job.url ? { sourceUrl: entry.job.url } : {}),
@@ -334,8 +382,10 @@ export function WebsiteApp({
 
   async function deleteAccount() {
     if (!snapshot.user || !window.confirm(copy.deleteAccountConfirmation)) return
-    await store.deleteUser(snapshot.user.id)
-    observe("local_account_deleted", {})
+    const password = server ? window.prompt(copy.password) : undefined
+    if (password === null) return
+    await store.deleteUser(snapshot.user.id, password)
+    if (!server) observe("local_account_deleted", {})
     observationGeneration.current++
     viewedResults.current.clear()
     // The bridge rotates the cookie even when journal deletion delivery fails.
@@ -356,21 +406,24 @@ export function WebsiteApp({
 
   function content() {
     if (view === "profile") {
-      return <div className="space-y-6"><ProfileEditor profile={snapshot.profile} locale={locale} copy={copy} onSave={saveProfile} onSuggestSkills={suggestProfileSkills} onSkillsAccepted={(count) => observe("skills_accepted", { locale, count })} /><section className="mx-auto max-w-3xl rounded-3xl border border-danger/20 bg-card p-6 sm:p-8"><h2 className="text-lg font-semibold">{copy.localDataTitle}</h2><p className="mt-2 text-sm text-muted-foreground">{copy.localDataDescription}</p><p className="mt-3 text-sm font-medium">{snapshot.user?.email}</p><Button type="button" variant="destructive" className="mt-5" onClick={deleteAccount}>{copy.deleteAccount}</Button></section></div>
+      return <div className="space-y-6"><ProfileEditor key={JSON.stringify(snapshot.profile)} profile={snapshot.profile} locale={locale} copy={copy} onSave={value => guarded(() => saveProfile(value))} onSuggestSkills={suggestProfileSkills} onSkillsAccepted={(count) => observe("skills_accepted", { locale, count })} />{server ? <ServerAccountTools server={server} locale={locale} refresh={refresh} /> : null}<section className="mx-auto max-w-3xl rounded-3xl border border-danger/20 bg-card p-6 sm:p-8"><h2 className="text-lg font-semibold">{copy.localDataTitle}</h2><p className="mt-2 text-sm text-muted-foreground">{copy.localDataDescription}</p><p className="mt-3 text-sm font-medium">{snapshot.user?.email}</p><Button type="button" variant="destructive" className="mt-5" onClick={() => guarded(deleteAccount)}>{copy.deleteAccount}</Button></section></div>
     }
     if (view === "history") {
-      return <HistoryView entries={snapshot.history} locale={locale} copy={copy} onOpen={openHistory} onClear={clearHistory} />
+      return <HistoryView entries={snapshot.history} locale={locale} copy={copy} onOpen={openHistory} onClear={() => guarded(clearHistory)}
+        onFilter={server ? status => guarded(async () => { const page = await server.loadHistory(null, status); setHistoryFilter(status); setSnapshot(current => ({ ...current, ...page })) }) : undefined}
+        onMore={server && snapshot.historyCursor ? () => guarded(async () => { const page = await server.loadHistory(snapshot.historyCursor, historyFilter); setSnapshot(current => ({ ...current, historyCursor: page.historyCursor, history: [...current.history, ...page.history] })) }) : undefined}
+        onStatus={server ? (entry, status) => guarded(async () => { await server.setApplicationStatus(entry.id, status); const page = await server.loadHistory(null, historyFilter); setSnapshot(current => ({ ...current, ...page })) }) : undefined} />
     }
     if (analysisStep === "review" && draft) {
-      return <div className="space-y-4">{analysisError ? <div role="alert" className="mx-auto max-w-4xl rounded-xl bg-danger-muted p-4 text-sm text-danger">{analysisError}</div> : null}<VacancyReview draft={draft} copy={copy} onBack={backToSource} onAnalyze={startAnalysis} /></div>
+      return <div className="space-y-4">{analysisError ? <div role="alert" className="mx-auto max-w-4xl rounded-xl bg-danger-muted p-4 text-sm text-danger">{analysisError}</div> : null}<VacancyReview draft={draft} copy={copy} onBack={value => guarded(() => backToSource(value))} onAnalyze={value => guarded(() => startAnalysis(value))} /></div>
     }
     if (analysisStep === "analyzing") {
       return <section className="grid min-h-96 place-items-center rounded-3xl border border-border bg-card"><p role="status" className="text-lg font-medium text-primary">{copy.analyzingVacancy}</p></section>
     }
     if (analysisStep === "result" && activeEntry) {
-      return <AnalysisResult entry={activeEntry} copy={copy} onBack={() => setAnalysisStep("source")} onAnalyzeAnother={analyzeAnother} onSaveFeedback={saveFeedback} />
+      return <div className="space-y-4">{server ? <Button onClick={() => guarded(async () => { setAnalysisStep("analyzing"); try { const result = await server.reanalyze(activeEntry.id); setActiveEntry(result.entry); await refresh() } finally { setAnalysisStep("result") } })}>{locale === "ru" ? "Пересчитать по текущему профилю" : "Reanalyze with current profile"}</Button> : null}<AnalysisResult key={activeEntry.id} entry={activeEntry} copy={copy} onBack={() => setAnalysisStep("source")} onAnalyzeAnother={() => guarded(analyzeAnother)} onSaveFeedback={value => guarded(() => saveFeedback(value))} /></div>
     }
-    return <VacancySource copy={copy} initialDraft={draft} onInputStarted={(inputMode) => observe("vacancy_input_started", { locale, inputMode })} onLoadUrl={(url) => { observe("extraction_requested", { locale, inputMode: "url" }); return api.extractVacancy(url) }} onReview={reviewDraft} />
+    return <VacancySource copy={copy} initialDraft={draft} onInputStarted={(inputMode) => observe("vacancy_input_started", { locale, inputMode })} onLoadUrl={(url) => { observe("extraction_requested", { locale, inputMode: "url" }); return api.extractVacancy(url) }} onReview={value => guarded(() => reviewDraft(value))} />
   }
 
   if (!initialized) {
@@ -378,16 +431,22 @@ export function WebsiteApp({
   }
 
   if (!snapshot.user) {
+    if (server && demo) return <DemoAnalysis server={server} locale={locale} onAccount={() => { setDemo(false) }} />
     return (
       <div className="relative">
         <div className="absolute right-4 top-4 z-10"><LanguageSwitch locale={locale} label={copy.language} onChange={changeLocale} /></div>
-        <AuthScreen copy={copy} error={authError} busy={busy} onCreate={createAccount} onSignIn={signIn} />
+        {globalError ? <div role="alert" className="p-4">{globalError}<Button onClick={() => guarded(refresh)}>{copy.retry}</Button></div> : null}
+        {server ? <div className="px-6 pt-16"><Button onClick={() => setDemo(true)}>{locale === "ru" ? "Попробовать без регистрации" : "Try without an account"}</Button></div> : null}
+        <AuthScreen copy={copy} error={authError} busy={busy} onCreate={createAccount} onSignIn={signIn} serverAccount={Boolean(server)} />
       </div>
     )
   }
 
+  if (server && !snapshot.user.emailVerified) return <VerifyAccount server={server} email={snapshot.user.email} locale={locale} onVerified={async () => { await store.saveLocale(snapshot.user!.id, locale); await refresh() }} onSignOut={signOut} />
+
   return (
-    <AppShell user={snapshot.user} locale={locale} copy={copy} activeView={view} onNavigate={navigate} onLocaleChange={changeLocale} onSignOut={async () => { await store.signOut(); setSnapshot(emptySnapshot); setView("analyze") }}>
+    <AppShell user={snapshot.user} locale={locale} copy={copy} activeView={view} onNavigate={navigate} onLocaleChange={value => guarded(() => changeLocale(value))} onSignOut={() => guarded(signOut)}>
+      {globalError ? <div role="alert" className="mb-4 rounded-xl bg-danger-muted p-4">{globalError}<Button variant="outline" onClick={() => guarded(async () => { await refresh(); if (server?.hasPendingAnalysis()) { const result = await server.resumeAnalysis(); if (result) { setActiveEntry(result.entry); setAnalysisStep("result"); setView("analyze") } } })}>{copy.retry}</Button>{server?.hasPendingAnalysis() ? <Button variant="outline" onClick={() => { server.forgetPendingAnalysis(); setGlobalError(null) }}>{locale === "ru" ? "Начать новый анализ" : "Start a new analysis"}</Button> : null}</div> : null}
       {content()}
     </AppShell>
   )

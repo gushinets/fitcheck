@@ -125,7 +125,7 @@ it('test_local_delete_rotates_visitor_not_backend_identity', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<WebsiteApp repository={repository} api={api} metricsEnabled/>);
     fireEvent.click((await screen.findAllByRole('button', { name: 'Profile' }))[0]);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete local account' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete account' }));
     await screen.findByText('register');
     await waitFor(() => expect(metrics.deleteVisitor).toHaveBeenCalledOnce());
     await waitFor(() => expect(status).toHaveBeenCalledWith('FitCheck metrics: visitor deletion observation was not delivered'));
@@ -159,7 +159,7 @@ it('strict mode disposes each mounted client and deletion cannot recreate after 
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     const view = render(<StrictMode><WebsiteApp repository={repository} api={api} metricsEnabled/></StrictMode>);
     fireEvent.click((await screen.findAllByRole('button', { name: 'Profile' }))[0]);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete local account' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete account' }));
     await waitFor(() => expect(metrics.deleteVisitor).toHaveBeenCalledOnce());
     const count = metrics.clients.length;
     view.unmount();
@@ -203,7 +203,7 @@ it('pending analysis after deletion cannot associate its result with the rotated
     fireEvent.click(await screen.findByText('review'));
     fireEvent.click(await screen.findByText('analyze'));
     fireEvent.click(screen.getAllByRole('button', { name: 'Profile' })[0]);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete local account' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete account' }));
     await screen.findByText('register');
     await act(async () => complete({ analysis: goAnalysis, operationId }));
     expect(names()).not.toContain('analysis_result_viewed');
@@ -238,7 +238,7 @@ it('pending history clearing cannot emit an old mutation for the rotated visitor
   fireEvent.click((await screen.findAllByRole('button', {name:'History'}))[0])
   fireEvent.click(screen.getByRole('button', {name:'Clear history'}))
   fireEvent.click(screen.getAllByRole('button', {name:'Profile'})[0])
-  fireEvent.click(screen.getByRole('button', {name:'Delete local account'}))
+  fireEvent.click(screen.getByRole('button', {name:'Delete account'}))
   await screen.findByText('register')
   await act(async () => complete())
   expect(names()).not.toContain('history_cleared')

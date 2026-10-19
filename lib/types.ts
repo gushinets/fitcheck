@@ -39,6 +39,10 @@ export interface Job {
   postedAgo?: string
   clientRating?: number
   clientSpend?: number
+  proposalCount?: number | null
+  averageBid?: number | null
+  averageBidCurrency?: Currency | null
+  provenance?: Record<string, "json_ld" | "html" | "text">
 }
 
 export interface FitBreakdown {
