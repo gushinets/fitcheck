@@ -305,8 +305,17 @@ named mutex. File handles close before the next operation, preventing replacemen
 and deletion races; waits are bounded and abandoned locks are recoverable.
 After a reader crashes, Windows can release its mutex before closing its file
 handles. Marker replacement/deletion retries sharing errors for at most 255 ms.
-If contention persists, the worker logs a warning and continues; it does not
+If contention or another health I/O error persists, the worker logs a warning and continues; it does not
 refresh the old timestamp, so health expires until a later update succeeds.
+Health I/O runs outside the event loop so a stalled probe cannot block signals
+or database heartbeats. Shutdown closes provider/database resources independently
+of marker cleanup, and prevents late background writes from recreating the marker.
+Each local worker needs a distinct `FITCHECK_WORKER_HEALTH_PATH`. A nonblocking
+OS lock on the adjacent `.owner` file rejects a second worker using the same path.
+The guard file intentionally remains after shutdown; its OS lock is released on
+normal exit or process death. Do not remove it while a worker is running.
+An invalid/unwritable health directory rejects startup; runtime monitoring failures
+degrade health until storage recovers rather than stopping queue processing.
 On Windows it inspects a process handle with a nonblocking Win32 wait, without
 calling `os.kill` or sending console signals. Windows CI runs the original health
 tests and CLI shutdown tests on Python 3.12 and 3.14.

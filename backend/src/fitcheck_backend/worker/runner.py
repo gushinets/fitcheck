@@ -28,10 +28,10 @@ class WorkerRunner:
                 pass
             try:
                 if not await asyncio.to_thread(self.queue.heartbeat,lease):
-                    self.health.clear(); return False
-                self.health.mark()
+                    await asyncio.to_thread(self.health.clear); return False
+                await asyncio.to_thread(self.health.mark)
             except Exception:
-                self.health.clear(); return False
+                await asyncio.to_thread(self.health.clear); return False
 
     async def _drain(self):
         await self.stopping.wait()
@@ -88,16 +88,16 @@ class WorkerRunner:
                 try:
                     await asyncio.to_thread(self.queue.recover_expired)
                     lease = await asyncio.to_thread(self.queue.claim)
-                    self.health.mark()
+                    await asyncio.to_thread(self.health.mark)
                     if lease is not None:
                         await self.process(lease)
                         continue
                 except Exception:
-                    self.health.clear()
+                    await asyncio.to_thread(self.health.clear)
                     logger.warning('worker iteration unavailable')
                 try:
                     await asyncio.wait_for(self.stopping.wait(),timeout=self.settings.poll_interval)
                 except TimeoutError:
                     pass
         finally:
-            self.health.clear()
+            await asyncio.to_thread(self.health.clear)

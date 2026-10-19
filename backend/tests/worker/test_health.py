@@ -271,7 +271,7 @@ def test_windows_sharing_errors_are_bounded_and_recoverable(monkeypatch, tmp_pat
 
 
 @pytest.mark.parametrize('platform,winerror', [('win32', 87), ('darwin', 32)])
-def test_unrelated_health_filesystem_errors_are_not_suppressed(monkeypatch, tmp_path, platform, winerror):
+def test_health_filesystem_failure_is_reported_without_stopping_worker(monkeypatch, tmp_path, caplog, platform, winerror):
     from contextlib import nullcontext
     from pathlib import Path
     from fitcheck_backend.worker import health
@@ -280,5 +280,103 @@ def test_unrelated_health_filesystem_errors_are_not_suppressed(monkeypatch, tmp_
     error = PermissionError('unrelated filesystem failure')
     error.winerror = winerror
     monkeypatch.setattr(Path, 'replace', Mock(side_effect=error))
-    with pytest.raises(PermissionError):
-        health.WorkerHealth(tmp_path / 'health.json').mark()
+    assert health.WorkerHealth(tmp_path / 'health.json').mark() is False
+    assert 'health marker temporarily unavailable' in caplog.text
+
+
+@pytest.mark.parametrize('crash', [False, True])
+def test_health_path_is_exclusive_across_worker_processes(tmp_path, crash):
+    from fitcheck_backend.worker.health import WorkerHealth, healthy
+    path = tmp_path / 'health.json'
+    script = '''
+import os, sys
+from fitcheck_backend.worker.health import WorkerHealth
+health = WorkerHealth(sys.argv[1])
+health.claim()
+health.mark()
+print('ready', flush=True)
+sys.stdin.readline()
+if sys.argv[2] == 'crash': os._exit(17)
+health.close()
+'''
+    child = subprocess.Popen([sys.executable, '-c', script, str(path), 'crash' if crash else 'normal'],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    second = WorkerHealth(path)
+    try:
+        assert child.stdout.readline().strip() == 'ready'
+        with pytest.raises(RuntimeError, match='already in use'):
+            second.claim()
+        assert second.mark() is False and second.clear() is False
+        assert healthy(path)
+        child.communicate(input='stop\n', timeout=10)
+        assert child.returncode == (17 if crash else 0)
+        second.claim()
+        assert second.mark() and healthy(path)
+    finally:
+        if child.poll() is None:
+            child.kill()
+            child.communicate(timeout=10)
+        second.close()
+    assert not path.exists()
+
+
+@pytest.mark.parametrize('error', [PermissionError('read only'), OSError(28, 'disk full'), FileNotFoundError('removed')])
+def test_health_io_failure_does_not_fabricate_freshness_and_can_recover(tmp_path, monkeypatch, error):
+    from pathlib import Path
+    from fitcheck_backend.worker.health import WorkerHealth, healthy
+    path = tmp_path / 'health.json'
+    clock = [100.0]
+    marker = WorkerHealth(path, clock=lambda: clock[0])
+    marker.mark()
+    clock[0] = 200.0
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, 'replace', Mock(side_effect=error))
+        patch.setattr(Path, 'unlink', Mock(side_effect=error))
+        assert marker.mark() is False
+        assert marker.clear() is False
+        assert not healthy(path, now=200)
+    assert marker.mark() and healthy(path, now=200)
+    marker.close()
+    assert not path.exists()
+
+
+@pytest.mark.parametrize('payload', ['null', '{', 'x' * 4097,
+    '{"pid":1,"at":' + '9' * 500 + '}',
+    '{"pid":' + '9' * 500 + ',"at":100}'])
+def test_invalid_marker_always_returns_unhealthy(tmp_path, payload):
+    from fitcheck_backend.worker.health import healthy
+    path = tmp_path / 'health.json'
+    path.write_text(payload)
+    assert not healthy(path, now=100)
+
+
+@pytest.mark.skipif(sys.platform != 'win32', reason='Native Windows mutex wait timeout')
+def test_live_reader_timeout_expires_health_then_recovers(tmp_path):
+    from fitcheck_backend.worker.health import WorkerHealth, healthy
+    path = tmp_path / 'health.json'
+    clock = [100.0]
+    marker = WorkerHealth(path, clock=lambda: clock[0])
+    marker.mark()
+    script = '''
+import sys
+from fitcheck_backend.worker.health import _open_marker
+with _open_marker(sys.argv[1]):
+    print('ready', flush=True)
+    sys.stdin.readline()
+'''
+    child = subprocess.Popen([sys.executable, '-c', script, str(path)],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        assert child.stdout.readline().strip() == 'ready'
+        clock[0] = 200.0
+        assert marker.mark() is False
+        assert child.poll() is None
+        child.communicate(input='release\n', timeout=10)
+        assert child.returncode == 0
+        assert not healthy(path, now=200)
+        assert marker.mark() and healthy(path, now=200)
+    finally:
+        if child.poll() is None:
+            child.kill()
+            child.communicate(timeout=10)
+        marker.close()

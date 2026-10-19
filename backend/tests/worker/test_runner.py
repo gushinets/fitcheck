@@ -206,3 +206,29 @@ def test_deadline_during_ledger_admission_settles_before_job_failure():
         assert [error.code for error in pub.failures] == ['timeout']
         assert adapter.calls == []
     asyncio.run(run())
+
+
+def test_health_io_cannot_block_shutdown_event_loop():
+    entered, released = Event(), Event()
+    async def run():
+        q, pub = Queue(), Publication()
+        class Executor:
+            async def execute(self, lease): return ['React']
+        value = runner(q, Executor(), pub)
+        def mark():
+            entered.set()
+            assert released.wait(2), 'Health I/O blocked the event loop'
+        value.health.mark = mark
+        task = asyncio.create_task(value.run_forever())
+        try:
+            while not entered.is_set(): await asyncio.sleep(0)
+            value.request_shutdown()
+            released.set()
+            await asyncio.wait_for(task, 2)
+        finally:
+            released.set()
+            if not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+        assert q.claims == 1
+    asyncio.run(run())
