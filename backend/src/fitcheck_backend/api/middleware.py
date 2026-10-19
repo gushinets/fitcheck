@@ -1,4 +1,5 @@
 import logging
+import time
 from uuid import uuid4
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.responses import Response
@@ -12,16 +13,18 @@ HEADERS = {"content-type", "authorization", "x-csrf-token", "x-guest-csrf-token"
 
 class RequestBoundaryMiddleware:
     """Bounded JSON requests and exact-origin CORS around the complete HTTP boundary."""
-    def __init__(self, app: ASGIApp, max_body_bytes: int, allowed_origins: list[str]):
+    def __init__(self, app: ASGIApp, max_body_bytes: int, allowed_origins: list[str], counters=None):
         self.app = app
         self.max_body_bytes = max_body_bytes
         self.allowed_origins = frozenset(allowed_origins)
+        self.counters = counters
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
         request_id = str(uuid4())
+        began = time.monotonic()
         scope.setdefault("state", {})["request_id"] = request_id
         headers = Headers(scope=scope)
         origin = headers.get("origin")
@@ -95,5 +98,9 @@ class RequestBoundaryMiddleware:
                 raise
             await fail(500, "internal_error", "Internal server error")
         finally:
-            logger.info("requestId=%s method=%s path=%s status=%s", request_id,
-                        scope["method"], "/internal/metrics" if scope["path"].startswith("/internal/metrics/") else scope["path"], status)
+            elapsed = time.monotonic()-began
+            if self.counters: self.counters.observe(scope['method'],status,elapsed,scope.get('state',{}).get('error_code'))
+            route = getattr(scope.get('route'), 'path', '/unmatched')
+            logger.info('http_request', extra={'event':'http_request','request_id':request_id,
+                'method':scope['method'],'route':route,'status':status,'duration_ms':elapsed*1000,
+                'owner_ref':scope.get('state',{}).get('owner_ref')})

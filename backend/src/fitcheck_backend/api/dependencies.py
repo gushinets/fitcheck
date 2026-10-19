@@ -35,7 +35,9 @@ def account_principal(request: Request):
     if authorizations:
         raise AuthError('forbidden' if cookie is not None else 'unauthenticated')
     if cookie is not None:
-        return runtime.auth.resolve(cookie, 'web')
+        principal = runtime.auth.resolve(cookie, 'web')
+        request.state.owner_ref = runtime.crypto.subject_digest('log-owner', str(principal.owner_id))[:24]
+        return principal
     raise AuthError('unauthenticated')
 
 
@@ -87,7 +89,9 @@ def resolve_identity(request: Request, mode: Literal['account','guest'] | None =
     if request.headers.getlist('authorization'):
         raise AuthError('forbidden' if request.cookies else 'unauthenticated')
     if mode=='guest':
-        return runtime.guests.resolve(request.cookies.get(guest_cookie_name(runtime.settings)))
+        identity = runtime.guests.resolve(request.cookies.get(guest_cookie_name(runtime.settings)))
+        request.state.owner_ref = runtime.crypto.subject_digest('log-owner', str(identity.owner_id))[:24]
+        return identity
     principal=verified_principal(request)
     issued=runtime.auth.session(request.cookies[cookie_name(runtime.settings)])
     return AccessIdentity('account',principal.owner_id,principal.session_id,issued.expires_at,principal.user_id)

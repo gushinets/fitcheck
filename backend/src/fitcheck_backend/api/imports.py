@@ -7,7 +7,7 @@ from ..contracts.openapi import ERRORS
 from ..jobs.errors import JobError
 from .errors import ErrorEnvelope
 from .dependencies import required_runtime,verified_principal,validate_account_mutation
-from .jobs import idempotency
+from .jobs import idempotency,log_admission
 from .history import metadata
 
 router=APIRouter(dependencies=[Depends(required_runtime)],responses={status:{'model':ErrorEnvelope,'description':code} for status,code in ERRORS.items()})
@@ -25,7 +25,9 @@ def mutation(request:Request,principal=Depends(verified_principal)):
 
 @router.post('/v1/import-jobs',status_code=202,response_model=ImportReference,operation_id='startImport',openapi_extra=import_metadata(True))
 def start_import(request:Request,body:LocalImportRequest,principal=Depends(mutation),key=Depends(idempotency)):
-    return required_runtime(request).imports.start(principal,body,key)
+    value = required_runtime(request).imports.start(principal,body,key)
+    log_admission(request,value.import_id)
+    return value
 
 
 @router.get('/v1/import-jobs/{importId}',response_model=ImportState,operation_id='getImport',openapi_extra=import_metadata())

@@ -20,6 +20,7 @@ class WorkerRuntime:
         self.health = WorkerHealth(self.worker_settings.health_path,
             max_age=self.worker_settings.heartbeat_seconds*2+5)
         self.engine = self.llm = self.runner = None
+        self.metrics_server = None
 
     async def start(self):
         if self.settings.open_ai_key is None or not self.settings.open_ai_key.get_secret_value().strip():
@@ -35,10 +36,16 @@ class WorkerRuntime:
         self.runner = WorkerRunner(JobQueue(self.engine,lease_seconds=self.worker_settings.lease_seconds,metrics_environment=metrics_environment),
             FrozenJobExecutor(self.llm,model=self.settings.open_ai_model),JobPublication(self.engine,metrics_environment=metrics_environment),self.worker_settings,self.health,import_executor=ImportExecutor(self.engine))
         await asyncio.to_thread(self.health.mark)
+        if self.worker_settings.metrics_port:
+            from ..operations.worker_metrics import start_worker_metrics
+            self.metrics_server = start_worker_metrics(self.worker_settings.metrics_host,self.worker_settings.metrics_port,self.worker_settings.health_path)
         return self.runner
 
     async def aclose(self):
         try:
+            if getattr(self,'metrics_server',None) is not None:
+                await asyncio.to_thread(self.metrics_server.shutdown)
+                self.metrics_server.server_close()
             await asyncio.to_thread(self.health.close)
         finally:
             try:

@@ -1,0 +1,16 @@
+.git
+.codex
+.agents
+.aws
+.vscode
+.next
+node_modules
+.env*
+backend
+test-results
+playwright-report
+ops/env/*.env
+ops/secrets
+ops/backup/pg_service.conf
+*.log
+*.tsbuildinfo

@@ -9,6 +9,10 @@
 # Local environment and secrets
 .env*
 !.env.example
+!.env.compose.example
+/ops/env/*.env
+/ops/secrets/
+/ops/backup/pg_service.conf
 
 # Test and TypeScript output
 /coverage/

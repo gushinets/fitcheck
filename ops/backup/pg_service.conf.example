@@ -1,0 +1,14 @@
+[fitcheck]
+host=postgres
+port=5432
+user=fitcheck
+dbname=fitcheck
+# Fill locally; keep actual file outside Git. Alternatively use a PGPASSFILE.
+password=replace-with-database-password
+
+[fitcheck_restore]
+host=postgres
+port=5432
+user=fitcheck
+dbname=postgres
+password=replace-with-database-password

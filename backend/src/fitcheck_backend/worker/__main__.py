@@ -41,7 +41,8 @@ async def main():
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
+    from ..api.logging import configure_logging
+    configure_logging(Settings().log_level)
     try: asyncio.run(main())
     except Exception:
         logging.getLogger('fitcheck.worker').error('Worker startup/runtime unavailable')

@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     log_level: Literal["debug", "info", "warning", "error", "critical"] = "info"
     api_body_max_bytes: int = Field(default=1_048_576, ge=1, le=16_777_216)
     auth_enabled: bool = False
+    ops_token: SecretStr | None = Field(default=None, min_length=32, max_length=256)
+    ops_state_dir: str = '/var/lib/fitcheck-ops'
     metrics_enabled: bool = False
     metrics_environment: Literal["development", "production", "test"] | None = None
     metrics_database_environment: Literal["development", "production", "test"] | None = None

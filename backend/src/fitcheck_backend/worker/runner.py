@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import hashlib
+import time
 from ..api.errors import ErrorBody
 from ..jobs.errors import JobError
 from ..llm.errors import LlmError
@@ -38,6 +40,10 @@ class WorkerRunner:
         await asyncio.sleep(self.settings.drain_seconds)
 
     async def process(self,lease):
+        began = time.monotonic()
+        fields = {'job_id':str(lease.job_id),'owner_ref':hashlib.sha256(lease.owner_id.bytes).hexdigest()[:24]}
+        logger.info('job_started',extra={'event':'job_started',**fields})
+        outcome = 'interrupted'
         executor=self.import_executor if lease.type=="import" else self.executor
         execution = asyncio.create_task(executor.execute(lease))
         stop_heartbeat = asyncio.Event()
@@ -46,6 +52,7 @@ class WorkerRunner:
         try:
             done,_ = await asyncio.wait([execution,heartbeat,drain],return_when=asyncio.FIRST_COMPLETED)
             if heartbeat in done or drain in done:
+                outcome = 'lease_lost' if heartbeat in done else 'interrupted'
                 execution.cancel()
                 return
             # Resolve any DB heartbeat already in flight, then stop scheduling
@@ -56,11 +63,14 @@ class WorkerRunner:
             try:
                 result = execution.result()
             except (JobError,LlmError) as exc:
+                outcome = 'failed'
                 error = ErrorBody(code=exc.code,message=exc.code.replace('_',' ').capitalize(),requestId=str(lease.job_id))
                 await asyncio.to_thread(self.publication.fail,lease,error)
             except ImportLeaseLost:
+                outcome = 'lease_lost'
                 return
             except SQLAlchemyError:
+                outcome = 'failed'
                 if lease.type=='import':
                     # Leave the lease for normal bounded queue recovery; committed
                     # item outcomes survive a transient DB failure.
@@ -68,16 +78,19 @@ class WorkerRunner:
                 error = ErrorBody(code='service_unavailable',message='Service unavailable',requestId=str(lease.job_id))
                 await asyncio.to_thread(self.publication.fail,lease,error)
             except Exception:
+                outcome = 'failed'
                 error = ErrorBody(code='service_unavailable',message='Service unavailable',requestId=str(lease.job_id))
                 await asyncio.to_thread(self.publication.fail,lease,error)
             else:
                 if lease.type == 'analysis':
-                    await asyncio.to_thread(self.publication.succeed_analysis,lease,result)
+                    published = await asyncio.to_thread(self.publication.succeed_analysis,lease,result)
                 elif lease.type=='import':
-                    await asyncio.to_thread(self.publication.succeed_import,lease,result)
+                    published = await asyncio.to_thread(self.publication.succeed_import,lease,result)
                 else:
-                    await asyncio.to_thread(self.publication.succeed_suggestions,lease,result)
+                    published = await asyncio.to_thread(self.publication.succeed_suggestions,lease,result)
+                outcome = 'succeeded' if published else 'lease_lost'
         finally:
+            logger.info('job_finished',extra={'event':'job_finished',**fields,'outcome':outcome,'duration_ms':(time.monotonic()-began)*1000})
             for task in (execution,heartbeat,drain):
                 if not task.done(): task.cancel()
             await asyncio.gather(execution,heartbeat,drain,return_exceptions=True)

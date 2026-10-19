@@ -9,6 +9,8 @@ class WorkerSettings(BaseSettings):
     heartbeat_seconds: float = Field(default=20,gt=0,allow_inf_nan=False)
     drain_seconds: float = Field(default=130,gt=0,le=130,allow_inf_nan=False)
     health_path: str = '/tmp/fitcheck-worker-health.json'
+    metrics_host: str = '127.0.0.1'
+    metrics_port: int = Field(default=0,ge=0,le=65535)
 
     @model_validator(mode='after')
     def valid_timing(self):
