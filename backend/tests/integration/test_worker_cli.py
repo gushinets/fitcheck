@@ -13,7 +13,8 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.mark.parametrize('sig', [signal.SIGINT, signal.SIGTERM])
-def test_worker_module_starts_and_exits_cleanly(engine, tmp_path, sig):
+@pytest.mark.parametrize('crash_reader', [False, True])
+def test_worker_module_starts_and_exits_cleanly(engine, tmp_path, sig, crash_reader):
     backend = Path(__file__).resolve().parents[2]
     health = tmp_path / 'worker-health.json'
     env = {k: v for k, v in os.environ.items()
@@ -48,6 +49,31 @@ runpy.run_module('fitcheck_backend.worker', run_name='__main__')
                 cwd=backend, env=env, capture_output=True, timeout=10)
             assert probe.returncode == 0
             assert process.poll() is None, 'Health probes must not stop the worker'
+        if crash_reader:
+            script = '''
+import os, sys, time
+from fitcheck_backend.worker.health import _open_marker
+with _open_marker(sys.argv[1]) as stream:
+    print('ready', flush=True)
+    time.sleep(0.3)
+    os._exit(17)
+'''
+            for _ in range(5):
+                reader = subprocess.Popen([sys.executable, '-c', script, str(health)],
+                    cwd=backend, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                try:
+                    assert reader.stdout.readline().strip() == b'ready'
+                    reader.communicate(timeout=10)
+                    assert reader.returncode == 17
+                finally:
+                    if reader.poll() is None:
+                        reader.kill()
+                        reader.communicate(timeout=10)
+                assert process.poll() is None, 'Crashing health reader must not stop worker'
+            for _ in range(30):
+                probe = subprocess.run([sys.executable, '-m', 'fitcheck_backend.worker.health'],
+                    cwd=backend, env=env, capture_output=True, timeout=10)
+                assert probe.returncode == 0 and process.poll() is None
         if sys.platform == 'win32':
             process.communicate(input=b'stop\n', timeout=10)
         else:

@@ -192,3 +192,93 @@ print(count, flush=True)
         if child.poll() is None:
             child.kill()
             child.communicate(timeout=10)
+
+
+@pytest.mark.parametrize('operation', ['mark', 'clear'])
+def test_health_recovers_after_reader_exits_with_open_handle(tmp_path, operation):
+    from fitcheck_backend.worker.health import WorkerHealth, healthy
+    path = tmp_path / 'health.json'
+    now = [100.0]
+    marker = WorkerHealth(path, clock=lambda: now[0])
+    script = '''
+import os, sys, time
+from fitcheck_backend.worker.health import _open_marker
+with _open_marker(sys.argv[1]) as stream:
+    print('ready', flush=True)
+    time.sleep(0.3)
+    os._exit(17)
+'''
+    for _ in range(10):
+        now[0] = 100.0
+        marker.mark()
+        child = subprocess.Popen([sys.executable, '-c', script, str(path)],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            assert child.stdout.readline().strip() == 'ready'
+            now[0] = 200.0
+            # On Windows this waits for the abandoned mutex, then accesses the
+            # file before wait()/communicate() confirms full process teardown.
+            getattr(marker, operation)()
+            child.communicate(timeout=10)
+            assert child.returncode == 17
+            assert healthy(path, now=200) is (operation == 'mark')
+            marker.clear()
+            assert not path.exists() and not path.with_suffix('.tmp').exists()
+        finally:
+            if child.poll() is None:
+                child.kill()
+                child.communicate(timeout=10)
+
+
+@pytest.mark.parametrize('operation', ['mark', 'clear'])
+@pytest.mark.parametrize('persistent', [False, True])
+def test_windows_sharing_errors_are_bounded_and_recoverable(monkeypatch, tmp_path, caplog, operation, persistent):
+    from contextlib import nullcontext
+    from pathlib import Path
+    from fitcheck_backend.worker import health
+    path = tmp_path / 'health.json'
+    now = [100.0]
+    marker = health.WorkerHealth(path, clock=lambda: now[0])
+    marker.mark()
+    now[0] = 200.0
+    monkeypatch.setattr(health, 'sys', SimpleNamespace(platform='win32'))
+    monkeypatch.setattr(health, '_marker_lock', lambda _: nullcontext())
+    delays = []
+    monkeypatch.setattr(health.time, 'sleep', delays.append)
+    method = 'replace' if operation == 'mark' else 'unlink'
+    original = getattr(Path, method)
+    calls = []
+    error = PermissionError('reader handle is closing')
+    error.winerror = 32
+    def change(*args, **kwargs):
+        calls.append(True)
+        if persistent or len(calls) <= 2:
+            raise error
+        return original(*args, **kwargs)
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, method, change)
+        assert getattr(marker, operation)() is (not persistent)
+    if persistent:
+        assert len(calls) == 7 and sum(delays) < 0.3
+        assert json.loads(path.read_text())['at'] == 100.0
+        assert 'health marker temporarily unavailable' in caplog.text
+    else:
+        assert len(delays) == 2
+    # A later pass recovers, including deletion of any unpublished temp file.
+    assert marker.mark() and json.loads(path.read_text())['at'] == 200.0
+    assert marker.clear()
+    assert not path.exists() and not path.with_suffix('.tmp').exists()
+
+
+@pytest.mark.parametrize('platform,winerror', [('win32', 87), ('darwin', 32)])
+def test_unrelated_health_filesystem_errors_are_not_suppressed(monkeypatch, tmp_path, platform, winerror):
+    from contextlib import nullcontext
+    from pathlib import Path
+    from fitcheck_backend.worker import health
+    monkeypatch.setattr(health, 'sys', SimpleNamespace(platform=platform))
+    monkeypatch.setattr(health, '_marker_lock', lambda _: nullcontext())
+    error = PermissionError('unrelated filesystem failure')
+    error.winerror = winerror
+    monkeypatch.setattr(Path, 'replace', Mock(side_effect=error))
+    with pytest.raises(PermissionError):
+        health.WorkerHealth(tmp_path / 'health.json').mark()

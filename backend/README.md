@@ -303,6 +303,10 @@ and `DRAIN_SECONDS` use that common prefix. Set container stop grace to 140s.
 Windows probes, heartbeat updates and shutdown cleanup share a path-specific
 named mutex. File handles close before the next operation, preventing replacement
 and deletion races; waits are bounded and abandoned locks are recoverable.
+After a reader crashes, Windows can release its mutex before closing its file
+handles. Marker replacement/deletion retries sharing errors for at most 255 ms.
+If contention persists, the worker logs a warning and continues; it does not
+refresh the old timestamp, so health expires until a later update succeeds.
 On Windows it inspects a process handle with a nonblocking Win32 wait, without
 calling `os.kill` or sending console signals. Windows CI runs the original health
 tests and CLI shutdown tests on Python 3.12 and 3.14.

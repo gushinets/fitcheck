@@ -1,5 +1,6 @@
 import json
 import hashlib
+import logging
 import math
 import os
 import sys
@@ -7,6 +8,9 @@ from contextlib import contextmanager
 from pathlib import Path
 import time
 from uuid import uuid4
+
+logger = logging.getLogger('fitcheck.worker')
+_FILE_RETRY_DELAYS = (0.005, 0.01, 0.02, 0.04, 0.08, 0.1)
 
 
 def _windows_process_alive(pid):
@@ -96,15 +100,42 @@ class WorkerHealth:
         self.path,self.clock,self.max_age = Path(path),clock,max_age
         self.boot_id = str(uuid4())
 
+    def _change(self, operation):
+        try:
+            with _marker_lock(self.path):
+                for attempt in range(len(_FILE_RETRY_DELAYS) + 1):
+                    try:
+                        operation()
+                        return True
+                    except PermissionError as exc:
+                        if sys.platform != 'win32' or getattr(exc, 'winerror', None) not in (5, 32, 33):
+                            raise
+                        # An abandoned mutex grants ownership before Windows
+                        # necessarily finishes closing the dead reader's files.
+                        if attempt == len(_FILE_RETRY_DELAYS):
+                            break
+                        time.sleep(_FILE_RETRY_DELAYS[attempt])
+        except TimeoutError:
+            if sys.platform != 'win32':
+                raise
+        # Monitoring contention must not terminate queue processing or final
+        # cleanup. Keep the old timestamp: an unrefreshed marker expires, and a
+        # later iteration can recover. Do not mask unrelated filesystem errors.
+        logger.warning('Worker health marker temporarily unavailable')
+        return False
+
     def mark(self):
-        with _marker_lock(self.path):
+        def publish():
             temporary = self.path.with_suffix('.tmp')
             temporary.write_text(json.dumps(dict(pid=os.getpid(),at=self.clock(),bootId=self.boot_id,maxAge=self.max_age)),encoding='utf-8')
             temporary.replace(self.path)
+        return self._change(publish)
 
     def clear(self):
-        with _marker_lock(self.path):
+        def remove():
             self.path.unlink(missing_ok=True)
+            self.path.with_suffix('.tmp').unlink(missing_ok=True)
+        return self._change(remove)
 
 
 def healthy(path,*,now=None):
