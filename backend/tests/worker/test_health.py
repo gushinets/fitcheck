@@ -186,9 +186,225 @@ print(count, flush=True)
         stop.touch()
         output, _ = child.communicate(timeout=10)
         assert child.returncode == 0 and int(output.strip()) > 0
-        assert not path.with_suffix('.tmp').exists()
+        assert not path.with_name(path.name + '.tmp').exists()
     finally:
         stop.touch()
         if child.poll() is None:
             child.kill()
             child.communicate(timeout=10)
+
+
+@pytest.mark.parametrize('operation', ['mark', 'clear'])
+def test_health_recovers_after_reader_exits_with_open_handle(tmp_path, operation):
+    from fitcheck_backend.worker.health import WorkerHealth, healthy
+    path = tmp_path / 'health.json'
+    now = [100.0]
+    marker = WorkerHealth(path, clock=lambda: now[0])
+    script = '''
+import os, sys, time
+from fitcheck_backend.worker.health import _open_marker
+with _open_marker(sys.argv[1]) as stream:
+    print('ready', flush=True)
+    time.sleep(0.3)
+    os._exit(17)
+'''
+    for _ in range(10):
+        now[0] = 100.0
+        marker.mark()
+        child = subprocess.Popen([sys.executable, '-c', script, str(path)],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            assert child.stdout.readline().strip() == 'ready'
+            now[0] = 200.0
+            # On Windows this waits for the abandoned mutex, then accesses the
+            # file before wait()/communicate() confirms full process teardown.
+            getattr(marker, operation)()
+            child.communicate(timeout=10)
+            assert child.returncode == 17
+            assert healthy(path, now=200) is (operation == 'mark')
+            marker.clear()
+            assert not path.exists() and not path.with_name(path.name + '.tmp').exists()
+        finally:
+            if child.poll() is None:
+                child.kill()
+                child.communicate(timeout=10)
+
+
+@pytest.mark.parametrize('operation', ['mark', 'clear'])
+@pytest.mark.parametrize('persistent', [False, True])
+def test_windows_sharing_errors_are_bounded_and_recoverable(monkeypatch, tmp_path, caplog, operation, persistent):
+    from contextlib import nullcontext
+    from pathlib import Path
+    from fitcheck_backend.worker import health
+    path = tmp_path / 'health.json'
+    now = [100.0]
+    marker = health.WorkerHealth(path, clock=lambda: now[0])
+    marker.mark()
+    now[0] = 200.0
+    monkeypatch.setattr(health, 'sys', SimpleNamespace(platform='win32'))
+    monkeypatch.setattr(health, '_marker_lock', lambda _: nullcontext())
+    delays = []
+    monkeypatch.setattr(health.time, 'sleep', delays.append)
+    method = 'replace' if operation == 'mark' else 'unlink'
+    original = getattr(Path, method)
+    calls = []
+    error = PermissionError('reader handle is closing')
+    error.winerror = 32
+    def change(*args, **kwargs):
+        calls.append(True)
+        if persistent or len(calls) <= 2:
+            raise error
+        return original(*args, **kwargs)
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, method, change)
+        assert getattr(marker, operation)() is (not persistent)
+    if persistent:
+        assert len(calls) == 7 and sum(delays) < 0.3
+        assert json.loads(path.read_text())['at'] == 100.0
+        assert 'health marker temporarily unavailable' in caplog.text
+    else:
+        assert len(delays) == 2
+    # A later pass recovers, including deletion of any unpublished temp file.
+    assert marker.mark() and json.loads(path.read_text())['at'] == 200.0
+    assert marker.clear()
+    assert not path.exists() and not path.with_name(path.name + '.tmp').exists()
+
+
+@pytest.mark.parametrize('platform,winerror', [('win32', 87), ('darwin', 32)])
+def test_health_filesystem_failure_is_reported_without_stopping_worker(monkeypatch, tmp_path, caplog, platform, winerror):
+    from contextlib import nullcontext
+    from pathlib import Path
+    from fitcheck_backend.worker import health
+    monkeypatch.setattr(health, 'sys', SimpleNamespace(platform=platform))
+    monkeypatch.setattr(health, '_marker_lock', lambda _: nullcontext())
+    error = PermissionError('unrelated filesystem failure')
+    error.winerror = winerror
+    monkeypatch.setattr(Path, 'replace', Mock(side_effect=error))
+    assert health.WorkerHealth(tmp_path / 'health.json').mark() is False
+    assert 'health marker temporarily unavailable' in caplog.text
+
+
+@pytest.mark.parametrize('crash', [False, True])
+def test_health_path_is_exclusive_across_worker_processes(tmp_path, crash):
+    from fitcheck_backend.worker.health import WorkerHealth, healthy
+    path = tmp_path / 'health.json'
+    script = '''
+import os, sys
+from fitcheck_backend.worker.health import WorkerHealth
+health = WorkerHealth(sys.argv[1])
+health.claim()
+health.mark()
+print('ready', flush=True)
+sys.stdin.readline()
+if sys.argv[2] == 'crash': os._exit(17)
+health.close()
+'''
+    child = subprocess.Popen([sys.executable, '-c', script, str(path), 'crash' if crash else 'normal'],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    second = WorkerHealth(path)
+    try:
+        assert child.stdout.readline().strip() == 'ready'
+        with pytest.raises(RuntimeError, match='already in use'):
+            second.claim()
+        assert second.mark() is False and second.clear() is False
+        assert healthy(path)
+        child.communicate(input='stop\n', timeout=10)
+        assert child.returncode == (17 if crash else 0)
+        second.claim()
+        assert second.mark() and healthy(path)
+    finally:
+        if child.poll() is None:
+            child.kill()
+            child.communicate(timeout=10)
+        second.close()
+    assert not path.exists()
+
+
+@pytest.mark.parametrize('error', [PermissionError('read only'), OSError(28, 'disk full'), FileNotFoundError('removed')])
+def test_health_io_failure_does_not_fabricate_freshness_and_can_recover(tmp_path, monkeypatch, error):
+    from pathlib import Path
+    from fitcheck_backend.worker.health import WorkerHealth, healthy
+    path = tmp_path / 'health.json'
+    clock = [100.0]
+    marker = WorkerHealth(path, clock=lambda: clock[0])
+    marker.mark()
+    clock[0] = 200.0
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, 'replace', Mock(side_effect=error))
+        patch.setattr(Path, 'unlink', Mock(side_effect=error))
+        assert marker.mark() is False
+        assert marker.clear() is False
+        assert not healthy(path, now=200)
+    assert marker.mark() and healthy(path, now=200)
+    marker.close()
+    assert not path.exists()
+
+
+@pytest.mark.parametrize('payload', ['null', '{', 'x' * 4097,
+    '{"pid":1,"at":' + '9' * 500 + '}',
+    '{"pid":' + '9' * 500 + ',"at":100}'])
+def test_invalid_marker_always_returns_unhealthy(tmp_path, payload):
+    from fitcheck_backend.worker.health import healthy
+    path = tmp_path / 'health.json'
+    path.write_text(payload)
+    assert not healthy(path, now=100)
+
+
+@pytest.mark.skipif(sys.platform != 'win32', reason='Native Windows mutex wait timeout')
+def test_live_reader_timeout_expires_health_then_recovers(tmp_path):
+    from fitcheck_backend.worker.health import WorkerHealth, healthy
+    path = tmp_path / 'health.json'
+    clock = [100.0]
+    marker = WorkerHealth(path, clock=lambda: clock[0])
+    marker.mark()
+    script = '''
+import sys
+from fitcheck_backend.worker.health import _open_marker
+with _open_marker(sys.argv[1]):
+    print('ready', flush=True)
+    sys.stdin.readline()
+'''
+    child = subprocess.Popen([sys.executable, '-c', script, str(path)],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        assert child.stdout.readline().strip() == 'ready'
+        clock[0] = 200.0
+        assert marker.mark() is False
+        assert child.poll() is None
+        child.communicate(input='release\n', timeout=10)
+        assert child.returncode == 0
+        assert not healthy(path, now=200)
+        assert marker.mark() and healthy(path, now=200)
+    finally:
+        if child.poll() is None:
+            child.kill()
+            child.communicate(timeout=10)
+        marker.close()
+
+
+def test_distinct_health_suffixes_do_not_share_temporary_files(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from pathlib import Path
+    from threading import Barrier
+    from fitcheck_backend.worker.health import WorkerHealth, healthy
+    first = WorkerHealth(tmp_path / 'worker.one')
+    second = WorkerHealth(tmp_path / 'worker.two')
+    rendezvous = Barrier(2)
+    original = Path.replace
+    def replace(source, target):
+        rendezvous.wait(timeout=5)
+        return original(source, target)
+    first.claim()
+    second.claim()
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(Path, 'replace', replace)
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results = list(pool.map(lambda value: value.mark(), [first, second]))
+        assert results == [True, True]
+        for marker in (first, second):
+            assert healthy(marker.path)
+            assert json.loads(marker.path.read_text())['bootId'] == marker.boot_id
+    finally:
+        first.close()
+        second.close()
