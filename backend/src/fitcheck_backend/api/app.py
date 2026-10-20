@@ -15,6 +15,7 @@ from fitcheck_backend.api.imports import router as imports_router
 from fitcheck_backend.api.runtime import AuthRuntime, MetricsRuntime
 from fitcheck_backend.api.metrics import router as metrics_router
 from fitcheck_backend.contracts.openapi import security_schemes
+from fitcheck_backend.operations.monitoring import Counters, router as operations_router
 
 
 def create_app(settings: Settings | None = None, *, auth_runtime: AuthRuntime | None = None, metrics_collector=None) -> FastAPI:
@@ -40,8 +41,10 @@ def create_app(settings: Settings | None = None, *, auth_runtime: AuthRuntime | 
     app.state.settings = configuration
     app.state.auth_runtime = auth_runtime
     app.state.metrics_collector = metrics_collector
+    app.state.ops_counters = Counters()
     install_error_handlers(app)
-    app.add_middleware(RequestBoundaryMiddleware, max_body_bytes=app.state.settings.api_body_max_bytes, allowed_origins=app.state.settings.allowed_origins)
+    app.add_middleware(RequestBoundaryMiddleware, max_body_bytes=app.state.settings.api_body_max_bytes, allowed_origins=app.state.settings.allowed_origins, counters=app.state.ops_counters)
+    app.include_router(operations_router)
     app.include_router(router)
     app.include_router(auth_router)
     app.include_router(profiles_router)

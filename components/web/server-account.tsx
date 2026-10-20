@@ -42,18 +42,22 @@ export function ServerAccountTools({ server, locale, refresh }: { server: Server
   const [password, setPassword] = useState("")
   const [status, setStatus] = useState("")
   const [busy, setBusy] = useState(false)
-  async function run(action: () => Promise<void>) {
+  async function run(action: () => Promise<string>) {
     setBusy(true); setStatus("")
-    try { await action(); await refresh() } catch (e) { setStatus(serverErrorMessage(e, locale)) } finally { setBusy(false) }
+    try {
+      const message = await action()
+      await refresh()
+      setStatus(message)
+    } catch (e) { setStatus(serverErrorMessage(e, locale)) } finally { setBusy(false) }
   }
   return <section className="mx-auto grid max-w-3xl gap-4 rounded-3xl border border-border bg-card p-6">
-    {server.hasGuestClaim() ? <Button disabled={busy} onClick={() => run(async () => { await server.claimGuest(); setStatus(ru ? "Демо перенесено в аккаунт." : "Demo saved to your account.") })}>{ru ? "Сохранить демо в аккаунт" : "Save demo to account"}</Button> : null}
+    {server.hasGuestClaim() ? <Button disabled={busy} onClick={() => run(async () => { await server.claimGuest(); return ru ? "Демо перенесено в аккаунт." : "Demo saved to your account." })}>{ru ? "Сохранить демо в аккаунт" : "Save demo to account"}</Button> : null}
     <h2 className="text-lg font-semibold">{ru ? "Перенести данные из этого браузера" : "Import data from this browser"}</h2>
     <p className="text-sm text-muted-foreground">{ru ? "Укажите email и пароль прежнего локального аккаунта. Серверные данные сохранятся; повторный импорт пропускает уже перенесённые записи." : "Enter your previous local account credentials. Existing server data is preserved; retries skip imported records."}</p>
     <form className="grid gap-3" onSubmit={event => { event.preventDefault(); void run(async () => {
       const report = await server.importLocal(email, password)
       setPassword("")
-      setStatus(report ? (ru ? `Перенесено: ${report.importedCount}; пропущено: ${report.skippedCount}; конфликты: ${report.conflictCount}; некорректные: ${report.invalidCount}.` : `Imported: ${report.importedCount}; skipped: ${report.skippedCount}; conflicts: ${report.conflictCount}; invalid: ${report.invalidCount}.`) : "")
+      return report ? (ru ? `Перенесено: ${report.importedCount}; пропущено: ${report.skippedCount}; конфликты: ${report.conflictCount}; некорректные: ${report.invalidCount}.` : `Imported: ${report.importedCount}; skipped: ${report.skippedCount}; conflicts: ${report.conflictCount}; invalid: ${report.invalidCount}.`) : ""
     }) }}>
       <Input type="email" required aria-label={ru ? "Email локального аккаунта" : "Local account email"} placeholder="Email" value={email} onChange={event => setEmail(event.target.value)} />
       <Input type="password" required aria-label={ru ? "Пароль локального аккаунта" : "Local account password"} autoComplete="off" value={password} onChange={event => setPassword(event.target.value)} />

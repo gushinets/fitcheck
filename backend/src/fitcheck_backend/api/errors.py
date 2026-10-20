@@ -51,11 +51,13 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(QuotaError)
     async def quota_error(request: Request, exc: QuotaError):
+        request.state.error_code = exc.code
         return error_response(429,exc.code,exc.code.replace('_',' ').capitalize(),request.state.request_id,
             headers={'Retry-After':str(exc.retry_after)} if exc.retry_after else None)
 
     @app.exception_handler(JobError)
     async def job_error(request: Request, exc: JobError):
+        request.state.error_code = exc.code
         return error_response(exc.status,exc.code,exc.code.replace('_',' ').capitalize(),request.state.request_id)
 
     @app.exception_handler(ExtractionError)
@@ -68,6 +70,7 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(AuthError)
     async def auth_error(request: Request, exc: AuthError):
+        request.state.error_code = exc.code
         headers = {'Retry-After': str(exc.retry_after)} if exc.retry_after is not None else None
         return error_response(exc.status, exc.code, exc.code.replace('_', ' ').capitalize(), request.state.request_id, headers=headers)
 

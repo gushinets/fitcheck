@@ -11,6 +11,9 @@ The website supports English and Russian with a manual RU / EN switch. Accounts,
 - The FitCheck API, PostgreSQL and worker; see [backend setup](backend/README.md)
 - SMTP for account verification; the worker owns provider credentials
 
+Docker Compose, backups, monitoring, retention and release/rollback procedures:
+[operations runbook](ops/RUNBOOK.md). Local checks: [verification record](ops/VERIFICATION.md).
+
 ## Install and configure
 
 ```bash

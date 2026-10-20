@@ -1,4 +1,5 @@
 from uuid import UUID
+import logging
 from typing import Annotated
 from fastapi import APIRouter,Depends,Header,Request,Path
 from ..contracts.jobs import JobAdmissionResource,JobState
@@ -35,6 +36,11 @@ def idempotency(request: Request,
     return values[0]
 
 
+def log_admission(request, job_id):
+    logging.getLogger('fitcheck.jobs').info('job_admitted', extra={'event':'job_admitted',
+        'request_id':request.state.request_id,'job_id':str(job_id),'owner_ref':getattr(request.state,'owner_ref',None)})
+
+
 def admitted(value):
     return JobAdmissionResource(jobId=str(value.job_id),type=value.type,status=value.status)
 
@@ -44,15 +50,19 @@ def admitted(value):
 def start_analysis(request: Request,body: AnalysisStart,key=Depends(idempotency)):
     principal=resolve_identity(request,mode=body.root.mode)
     mutation(request,principal)
-    return admitted(required_runtime(request).jobs.start_analysis(identity=principal,
-        request=body.root,idempotency_key=key,client_ip=client_ip(request)))
+    value = required_runtime(request).jobs.start_analysis(identity=principal,
+        request=body.root,idempotency_key=key,client_ip=client_ip(request))
+    log_admission(request,value.job_id)
+    return admitted(value)
 
 
 @router.post('/v1/skill-suggestion-jobs',status_code=202,response_model=JobAdmissionResource,
     operation_id='startSkillSuggestions',openapi_extra=metadata(True,access='identity'))
 def start_suggestions(request: Request,body: SkillSuggestionStart,principal=Depends(mutation),key=Depends(idempotency)):
-    return admitted(required_runtime(request).jobs.start_suggestions(identity=principal,
-        request=body,idempotency_key=key,client_ip=client_ip(request)))
+    value = required_runtime(request).jobs.start_suggestions(identity=principal,
+        request=body,idempotency_key=key,client_ip=client_ip(request))
+    log_admission(request,value.job_id)
+    return admitted(value)
 
 
 @router.get('/v1/jobs/{jobId}',response_model=JobState,operation_id='getJob',openapi_extra=metadata(access='identity'))
