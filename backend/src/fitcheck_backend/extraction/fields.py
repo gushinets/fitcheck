@@ -15,6 +15,9 @@ UNSUPPORTED_PERIOD = re.compile(
     re.I,
 )
 HOURLY = re.compile(r'\bhourly\b|\brate\b|ставка|per\s+hour|/\s*(?:h\b|hr\b|hour\b|час)|в\s+час', re.I)
+PROPOSAL_LABEL = r'(?:proposals?|bids?|total\s+bids?|number\s+of\s+bids?|отклик(?:и|ов|а)?|предложени(?:е|я|й))'
+BID_LABEL = r'(?:average\s+bid|avg\.?\s+bid|средн(?:ий|яя|ее)\s+(?:бид|ставка|предложение))'
+PROPOSAL_NUMBER = r'\d+(?:[, ]\d{3})*'
 
 
 def currency(value: str | None) -> str | None:
@@ -45,14 +48,44 @@ def unique_skills(values: list[str]) -> list[str]:
     return result[:100]
 
 
+def competition_lines(text: str) -> list[str]:
+    """Join an isolated statistic label with its adjacent value, in either order."""
+    lines = [line for raw in text.splitlines() if (line := re.sub(r'\s+', ' ', raw).strip())]
+    count_label = re.compile(PROPOSAL_LABEL + r'\s*:?$', re.I).fullmatch
+    bid_label = re.compile(BID_LABEL + r'\s*:?$', re.I).fullmatch
+    count = re.compile(r'[+−-]?\d').match
+    result, index = [], 0
+    while index < len(lines):
+        line = lines[index]
+        if index + 1 < len(lines):
+            following = lines[index + 1]
+            reverse_value = (count_label(following) and count(line)) or (bid_label(following) and MONEY.fullmatch(line))
+            if reverse_value and index + 2 < len(lines):
+                after = lines[index + 2]
+                if (count_label(following) and count(after)) or (bid_label(following) and MONEY.fullmatch(after)):
+                    # Both neighbours could belong to this label. Keep both as
+                    # candidates, excluding both from budgets, and detect conflict.
+                    result.extend([following + ' ' + line, following + ' ' + after])
+                    index += 3
+                    continue
+            if ((count_label(line) and count(following)) or
+                    (bid_label(line) and MONEY.fullmatch(following)) or
+                    reverse_value):
+                line += ' ' + following
+                index += 1
+        result.append(line)
+        index += 1
+    return result
+
+
 def extract_description_fields(text: str) -> dict:
     explicit = []
     for match in re.finditer(r'^[ \t]*(?:required\s+skills|skills(?:\s+required)?|навыки|стек|технологии)[ \t]*:[ \t]*(?:\n[ \t]*)?([^\n]+)', text, re.I | re.M):
         explicit.extend(re.split(r'[,;|]', match[1]))
     mentioned = [skill for skill in KNOWN_SKILLS if re.search(r'(?<![^\W_])' + re.escape(skill) + r'(?![^\W_])', text, re.I)]
     candidates = []
-    for line in text.splitlines():
-        if UNSUPPORTED_PERIOD.search(line) or re.search(r'client\s+spend|average\s+bid', line, re.I):
+    for line in competition_lines(text):
+        if UNSUPPORTED_PERIOD.search(line) or re.search(r'client\s+spend|' + BID_LABEL, line, re.I):
             continue
         labelled = LABEL.search(line)
         for match in MONEY.finditer(line):
@@ -92,24 +125,42 @@ def extract_description_fields(text: str) -> dict:
 def extract_competition(text: str) -> dict:
     """Only labelled, unambiguous project statistics are evidence."""
     counts, bids = [], []
-    for line in text.splitlines():
-        match = re.fullmatch(r'\s*(?:proposals?|bids?|total\s+bids?|number\s+of\s+bids?)\s*:?\s*(\d+(?:[, ]\d{3})*)\s*', line, re.I)
+    ambiguous_count = ambiguous_bid = False
+    for line in competition_lines(text):
+        # An isolated label whose value could not be paired is unresolved
+        # evidence, not permission to select a different occurrence of the field.
+        if re.fullmatch(PROPOSAL_LABEL + r'\s*:?', line, re.I):
+            ambiguous_count = True
+        if re.fullmatch(BID_LABEL + r'\s*:?', line, re.I):
+            ambiguous_bid = True
+        count_stat = re.fullmatch(rf'{PROPOSAL_LABEL}\s*:?\s*(.+)', line, re.I)
+        if not count_stat:
+            count_stat = re.fullmatch(rf'(.+?)\s+{PROPOSAL_LABEL}', line, re.I)
+        if re.search(BID_LABEL, line, re.I):
+            count_stat = None  # "Average bid" is not a proposal-count label.
+        match = re.fullmatch(rf'{PROPOSAL_LABEL}\s*:?\s*({PROPOSAL_NUMBER})', line, re.I)
         if not match:
-            match = re.fullmatch(r'\s*(\d+(?:[, ]\d{3})*)\s+(?:proposals?|bids?)\s*', line, re.I)
+            match = re.fullmatch(rf'({PROPOSAL_NUMBER})\s+{PROPOSAL_LABEL}', line, re.I)
         if match:
             digits = re.sub(r'[, ]', '', match[1]).lstrip('0') or '0'
-            if len(digits) <= 8:
-                count = int(digits)
-                if count <= 10_000_000:
-                    counts.append(count)
-        bid_label = re.fullmatch(r'\s*average\s+bid\s*:?\s*(.+?)\s*', line, re.I)
+            if len(digits) <= 8 and int(digits) <= 10_000_000:
+                counts.append(int(digits))
+            else:
+                ambiguous_count = True
+        elif count_stat and re.search(r'\d', count_stat[1]):
+            ambiguous_count = True
+        bid_label = re.fullmatch(rf'{BID_LABEL}\s*:?\s*(.+)', line, re.I)
+        if not bid_label:
+            bid_label = re.fullmatch(rf'(.+?)\s+{BID_LABEL}', line, re.I)
         if bid_label:
             bid = MONEY.fullmatch(bid_label[1])
             if not bid or bid['max']:
+                ambiguous_bid = True
                 continue
             tokens = [bid[key] for key in ('prefix', 'suffix') if bid[key]]
             currencies = [currency(token) for token in tokens]
             if any(value is None or value != currencies[0] for value in currencies):
+                ambiguous_bid = True
                 continue
             number = amount(bid['min'])
             if math.isfinite(number) and 0 <= number <= 100_000_000:
@@ -117,9 +168,11 @@ def extract_competition(text: str) -> dict:
                 if currencies:
                     fields['averageBidCurrency'] = currencies[0]
                 bids.append(fields)
+            else:
+                ambiguous_bid = True
     result = {}
-    if counts and len(set(counts)) == 1:
+    if counts and not ambiguous_count and len(set(counts)) == 1:
         result['proposalCount'] = counts[0]
-    if bids and all(bid == bids[0] for bid in bids):
+    if bids and not ambiguous_bid and all(bid == bids[0] for bid in bids):
         result.update(bids[0])
     return result

@@ -34,4 +34,9 @@ describe("task fields in free text", () => {
   it("reads a skill list on the line after its label", () => {
     expect(extractDescriptionFields("Required skills:\nCold outreach, Sales prospecting\n\nBudget: €250–750").skills).toEqual(["Cold outreach", "Sales prospecting"])
   })
+
+  it.each(["Средняя ставка: 500 EUR", "Average bid\n$500 USD", "$500 USD\nAverage bid", "Average bid\n$300–$500", "$300–$500\nAverage bid"])("keeps competing bids out of the manual task budget: %s", (text) => {
+    expect(extractDescriptionFields(text)).toEqual({ skills: [] })
+    expect(extractDescriptionFields(`Budget: €250–750\n${text}`)).toEqual({ skills: [], fixedBudget: 250, fixedBudgetMax: 750, budgetCurrency: "EUR" })
+  })
 })

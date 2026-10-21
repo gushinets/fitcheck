@@ -45,22 +45,39 @@ def test_execution_uses_admitted_memory_profile_and_versions():
     job = lease()
     result = asyncio.run(FrozenJobExecutor(value).execute(job))
     assert result.snapshot.profile_revision == '1' and result.snapshot.profile.preferred_rate == 50
-    assert result.snapshot.prompt_version == 'fitcheck.analysis.prompt.v1'
+    assert result.snapshot.prompt_version == 'fitcheck.analysis.prompt.v2'
     assert result.analysis.verdict_threshold == 70
     assert 'Small tasks' in json.dumps(adapter.calls[0]['messages'])
     assert all(row['attempt'].execution_token == job.execution_token for row in ledger.rows.values())
     assert len({row['attempt'].operation_id for row in ledger.rows.values()}) == 1
 
 
-@pytest.mark.parametrize('bad', ['version','legacy'])
+@pytest.mark.parametrize('bad', ['version','legacy','old_prompt','old_audit'])
 def test_unsupported_version_spends_zero_calls(bad):
     from fitcheck_backend.jobs.execution import FrozenJobExecutor
     value, _, adapter = runtime([])
     job = lease()
     if bad == 'version': job.input['versions']['policyVersion'] = 'unknown'
-    else: job = replace(job,input=job.input['request'])
+    elif bad == 'legacy': job = replace(job,input=job.input['request'])
+    elif bad == 'old_prompt': job.input['versions']['promptVersion'] = 'fitcheck.analysis.prompt.v1'
+    else: job.input['versions']['auditPromptVersion'] = 'fitcheck.analysis.audit.v1'
     with pytest.raises(JobError): asyncio.run(FrozenJobExecutor(value).execute(job))
     assert adapter.calls == []
+
+
+@pytest.mark.parametrize('manual', [False, True])
+def test_durable_job_keeps_competition_in_report_and_original_snapshot(manual):
+    from fitcheck_backend.jobs.execution import FrozenJobExecutor
+    value, _, _ = runtime(replies())
+    job = lease()
+    vacancy = job.input['request']['vacancy']
+    if manual:
+        vacancy['description'] += '\nProposals: 248\nAverage bid: $500 USD'
+    else:
+        vacancy.update(proposalCount=248, averageBid=500, averageBidCurrency='USD')
+    result = asyncio.run(FrozenJobExecutor(value).execute(job))
+    assert '248' in result.analysis.risks[0] and '500 USD' in result.analysis.summary
+    assert result.snapshot.vacancy.model_dump(mode='json') == vacancy
 
 
 def test_execution_deadline_is_shared_by_generation_and_audit(monkeypatch):

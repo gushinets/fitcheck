@@ -1,6 +1,6 @@
 import pytest
 
-from fitcheck_backend.extraction.fields import extract_description_fields
+from fitcheck_backend.extraction.fields import extract_competition, extract_description_fields
 
 
 @pytest.mark.parametrize(('text', 'expected'), [
@@ -64,3 +64,51 @@ def test_budget_followed_by_three_letter_prose(text, expected):
 ])
 def test_unsupported_periodic_salary_is_not_task_money(text):
     assert extract_description_fields(text) == {'skills': []}
+
+
+@pytest.mark.parametrize('text,expected', [
+    ('Откликов: 248\nСредний бид: 500 EUR', {'proposalCount': 248, 'averageBid': 500, 'averageBidCurrency': 'EUR'}),
+    ('248 откликов\nСредняя ставка: 1 500,50 ₽', {'proposalCount': 248, 'averageBid': 1500.5, 'averageBidCurrency': 'RUB'}),
+    ('Proposals\n248\nAverage bid\n$500 USD', {'proposalCount': 248, 'averageBid': 500, 'averageBidCurrency': 'USD'}),
+    ('248\nbids\n€330\nAverage bid', {'proposalCount': 248, 'averageBid': 330, 'averageBidCurrency': 'EUR'}),
+    ('Proposals: 1\u00a0248', {'proposalCount': 1248}),
+    ('Proposals: 0\nAverage bid: 0', {'proposalCount': 0, 'averageBid': 0}),
+])
+def test_explicit_competition_statistics(text, expected):
+    assert extract_competition(text) == expected
+
+
+@pytest.mark.parametrize('text', [
+    'Proposals: 10 to 15', 'Proposals: 50+', 'Proposals: 1,23',
+    'Откликов: -1', 'Откликов: 1.5', 'Средний бид: -500 EUR',
+    'Average bid: $300 €400', 'Proposals: 10\nProposals: 248',
+    'Average bid: €300\nAverage bid: $500',
+    'Need 248 products and a $500 integration',
+])
+def test_ambiguous_competition_is_not_guessed(text):
+    assert extract_competition(text) == {}
+
+
+@pytest.mark.parametrize('text', ['Средняя ставка: 500 EUR', 'Average bid\n$500 USD', '$500 USD\nAverage bid'])
+def test_average_bid_never_becomes_project_budget(text):
+    assert extract_description_fields(text) == {'skills': []}
+
+
+@pytest.mark.parametrize('text', ['$250\nAverage bid\n$500', '10\nProposals\n248', '$250\nAverage bid\n$500\nAverage bid\n$600'])
+def test_statistic_label_between_conflicting_values_is_ambiguous(text):
+    assert extract_competition(text) == {}
+    assert extract_description_fields(text) == {'skills': []}
+
+
+@pytest.mark.parametrize('text,expected', [
+    ('Proposals: 10\nProposals: 50+', {}),
+    ('Proposals: 10\nProposals\n50+', {}),
+    ('Proposals: 10\n50+ bids', {}),
+    ('Proposals: 10\nProposals\nmore than 50', {}),
+    ('Average bid: €300\nAverage bid: CHF500', {}),
+    ('Average bid: €300\nAverage bid\nCHF500', {}),
+    ('Average bid: €300\nAverage bid: €200–400', {}),
+    ('Proposals: 10\nProposals: 50+\nAverage bid: €300', {'averageBid': 300, 'averageBidCurrency': 'EUR'}),
+])
+def test_non_exact_conflicting_statistics_invalidate_only_the_affected_field(text, expected):
+    assert extract_competition(text) == expected

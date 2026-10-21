@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from ..contracts.domain import FreelancerProfile, Vacancy, Locale
 from ..storage.calibration_repository import CalibrationEntry
+from .competition import Competition
 
 
 @dataclass(frozen=True)
@@ -24,3 +25,4 @@ class AnalysisPrompt:
     instructions: str
     input: str
     strength_facts: list[StrengthFact]
+    competition: Competition

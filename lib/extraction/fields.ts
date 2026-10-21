@@ -12,6 +12,7 @@ export interface DescriptionFields {
 const knownSkills = ["n8n", "Make.com", "Google Sheets", "Shopify", "TypeScript", "JavaScript", "Python", "React", "PostgreSQL", "Docker", "C#", "ESP32", "LoRa", "Rhino", "Grasshopper", "Lead Generation", "LinkedIn", "WhatsApp", "API", "JSON", "Webhooks"]
 const numberPattern = String.raw`\d+(?:[ ,\.\u00a0]\d{3})*(?:[.,]\d{1,2})?`
 const currencyPattern = String.raw`[Uu][Ss][Dd]|[Ee][Uu][Rr]|[Rr][Uu][Bb]|[Рр][Уу][Бб]\.?|₽|€|\$|[A-Z]{3}\b`
+const averageBidPattern = String.raw`(?:average\s+bid|avg\.?\s+bid|средн(?:ий|яя|ее)\s+(?:бид|ставка|предложение))`
 
 function currency(value?: string): Currency | undefined {
   if (!value) return undefined
@@ -31,8 +32,14 @@ function amount(value: string) {
 
 function moneyFields(text: string): Omit<DescriptionFields, "skills"> {
   const candidates: Omit<DescriptionFields, "skills">[] = []
-  for (const line of text.split(/\n/)) {
-    if (/client\s+spend|average\s+bid|per\s+(?:month|year)|\/\s*(?:month|year)|в\s+месяц/i.test(line)) continue
+  const lines = text.split(/\n/).map(line => line.trim()).filter(Boolean)
+  const bidLabel = new RegExp(`^${averageBidPattern}\\s*:?$`, "i")
+  const bidMention = new RegExp(averageBidPattern, "i")
+  const bareMoney = new RegExp(`^(?:${currencyPattern})?\\s*${numberPattern}(?:\\s*[-–—]\\s*(?:${currencyPattern})?\\s*${numberPattern})?\\s*(?:${currencyPattern})?$`, "u")
+  for (const [index, line] of lines.entries()) {
+    // Manual input still previews budget locally; competition itself is resolved by the backend.
+    const adjacentBid = bareMoney.test(line) && [lines[index - 1], lines[index + 1]].some(value => value !== undefined && bidLabel.test(value))
+    if (bidMention.test(line) || adjacentBid || /client\s+spend|per\s+(?:month|year)|\/\s*(?:month|year)|в\s+месяц/i.test(line)) continue
     const labelled = /\bbudget\b|бюджет|\brate\b|\bhourly\b|ставка|оплата/i.test(line)
     const pattern = new RegExp(`(?<prefix>${currencyPattern})?\\s*(?<min>${numberPattern})(?:\\s*[-–—]\\s*(?<second>${currencyPattern})?\\s*(?<max>${numberPattern}))?\\s*(?<suffix>${currencyPattern})?`, "gu")
     for (const match of line.matchAll(pattern)) {

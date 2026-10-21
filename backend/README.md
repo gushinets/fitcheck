@@ -147,8 +147,37 @@ unknown/mismatched currency and minimum-only hourly budget semantics. Fixed budg
 are not compared to hourly rates without effort estimates. Narrative audit checks
 profile/task grounding before success. The server returns `verdictThreshold: 70`
 and computes GO only at score ≥ 70. Legacy results may omit this new field.
-Nullable `fitCondition` is a forward contract for ANY-576 and is not generated here;
-competition evidence is preserved in vacancy snapshots, with scoring deferred to ANY-575.
+Nullable `fitCondition` is a forward contract for ANY-576 and is not generated here.
+
+### Competition evidence (ANY-575)
+
+Analysis uses explicit `proposalCount`, `averageBid` and `averageBidCurrency`, with
+conservative extraction from labelled description statistics for manually pasted
+tasks. Reviewed structured fields take precedence. English/Russian labels and
+adjacent label/value lines are supported; conflicting or ambiguous numbers are
+omitted. Average bids never become task budgets, and a bid's currency is never
+borrowed from the budget or a different quote.
+
+Competition bands are qualitative product heuristics: 0–9 proposals is low,
+10–49 medium, 50+ high. Single-digit, tens and many dozens of competing proposals
+separate small pools from substantial proposal effort; these bands are not
+empirical hiring probabilities. The model considers competition in attractiveness
+and recommendation; there are no fixed numeric score deductions. Unknown counts
+remain unknown, never zero/low, and missing statistics do not lower the score.
+An average bid is context, not proof of an accepted price or a comparable hourly
+rate: payment units are not established by these fields.
+
+The server keeps known statistics in the explanation and reserves the first risk
+for medium/high competition, including when the model omits it or returns three
+other risks. RU/EN reports retain the existing 800-character summary and three
+240-character risk limits. Grounding audit sees the same resolved statistics and
+the final report. Public DTOs and stored snapshot schemas are unchanged.
+
+Analysis generation/audit prompts are now `fitcheck.analysis.prompt.v2` and
+`fitcheck.analysis.audit.v2`. As with other frozen-version changes, drain active
+jobs with the old worker before replacing API/worker together; old prompt-version
+jobs are rejected rather than silently executed with different instructions.
+Historical results remain unchanged; explicit reanalysis uses the new behavior.
 
 Additive migration `0002` extends `provider_calls` with prompt/schema/policy versions,
 semantic/transport indices and latency_ms. Apply it before restarting the upgraded

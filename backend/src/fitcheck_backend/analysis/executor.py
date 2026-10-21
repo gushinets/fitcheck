@@ -18,13 +18,14 @@ class AnalysisExecutor:
         prompt = build_analysis_prompt(value)
         async def validate(raw):
             try:
-                report = normalize_analysis(raw, prompt.strength_facts)
+                report = normalize_analysis(raw, prompt.strength_facts, competition=prompt.competition, locale=value.locale)
             except ValueError:
                 raise ValueError('Use only unique allowed strength IDs; every claim must use supplied evidence.') from None
             audit = await self.structured.run(context=context, schema=GroundingAudit, operation='analysis.audit',
                 instructions=AUDIT_INSTRUCTIONS, input=json.dumps({
                     'profile':value.profile.model_dump(mode='json',by_alias=True),
                     'task':value.vacancy.model_dump(mode='json',by_alias=True),
+                    'competition':prompt.competition.context(),
                     'report':{'label':report.label,'summary':report.summary,'risks':report.risks}},ensure_ascii=False),
                 max_tokens=context.policy.audit_max_tokens)
             if not audit.output.supported or audit.output.unsupported_claims:
@@ -33,4 +34,4 @@ class AnalysisExecutor:
                     json.dumps(audit.output.unsupported_claims,ensure_ascii=False)[:2000])
         result = await self.structured.run(context=context, schema=RawFitAnalysis, operation='analysis.generate',
             instructions=prompt.instructions, input=prompt.input, max_tokens=context.policy.max_tokens, validator=validate)
-        return normalize_analysis(result.output, prompt.strength_facts)
+        return normalize_analysis(result.output, prompt.strength_facts, competition=prompt.competition, locale=value.locale)

@@ -103,7 +103,7 @@ def test_job_get_contains_committed_result(profile_http):
     assert response.status_code == 202
     lease = JobQueue(a.engine).claim()
     snapshot = AnalysisSnapshot(profileRevision='1',profile=DATA['profile'],vacancy=DATA['vacancy'],locale='en',
-        promptVersion='fitcheck.analysis.prompt.v1',schemaVersion='fitcheck.analysis.v1',policyVersion='fitcheck.llm.policy.v2')
+        promptVersion='fitcheck.analysis.prompt.v2',schemaVersion='fitcheck.analysis.v1',policyVersion='fitcheck.llm.policy.v2')
     analysis_id = JobPublication(a.engine).succeed_analysis(lease,AnalysisResult(FitAnalysis.model_validate(DATA['analysis']),snapshot))
     result = c.get('/v1/jobs/'+response.json()['jobId'])
     assert result.status_code == 200 and result.json()['analysisId'] == str(analysis_id)

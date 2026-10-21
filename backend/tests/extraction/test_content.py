@@ -124,3 +124,26 @@ def test_structured_competition_provenance():
 def test_very_long_proposal_number_ignored():
     result = extract_content('Task\nProposals: ' + '9' * 5000, content_type='text/plain')
     assert 'proposalCount' not in result
+
+
+def test_split_freelancer_statistics_keep_project_evidence_and_ignore_bidders():
+    body = ('<h1>Shopify bridge</h1><div class="Project-heading"><h2>$250-750 USD</h2></div>'
+        '<div class="Project-statistics"><span>248</span><span>proposals</span>'
+        '<span>$500 USD</span><span>Average bid</span></div>'
+        '<p class="Project-description">Build a Shopify bridge.</p>'
+        '<div class="User-bid-text">Proposals: 999\nAverage bid: €1000</div>')
+    result = html(body, 'https://www.freelancer.com/projects/shopify/bridge')
+    assert result['proposalCount'] == 248 and result['averageBid'] == 500
+    assert result['averageBidCurrency'] == 'USD' and result['fixedBudget'] == 250
+    assert result['provenance']['proposalCount'] == result['provenance']['averageBid'] == 'html'
+
+
+@pytest.mark.parametrize('statistics', ['Proposals\n10\nProposals\n248', 'Average bid\n$300\nAverage bid\n$500'])
+@pytest.mark.parametrize('content_type', ['text/plain', 'text/html'])
+def test_repeated_split_labels_do_not_hide_conflicting_statistics(statistics, content_type):
+    body = 'Task\nBuild a React dashboard.\n' + statistics
+    if content_type == 'text/html':
+        body = '<h1>Task</h1><article>' + body.replace('\n', '<br>') + '</article>'
+    result = extract_content(body, content_type=content_type)
+    assert 'proposalCount' not in result and 'averageBid' not in result
+    assert 'fixedBudget' not in result

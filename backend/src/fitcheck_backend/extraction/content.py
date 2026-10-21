@@ -10,7 +10,9 @@ from .fields import currency, extract_competition, extract_description_fields, u
 
 
 def normalized_lines(value: str) -> str:
-    return '\n'.join(dict.fromkeys(line for raw in value.splitlines() if (line := re.sub(r'\s+', ' ', raw).strip())))
+    # Repeated labels may belong to different statistics; keep every occurrence
+    # so downstream conflict detection sees all supplied evidence.
+    return '\n'.join(line for raw in value.splitlines() if (line := re.sub(r'\s+', ' ', raw).strip()))
 
 
 def fragment_text(value: str) -> str:

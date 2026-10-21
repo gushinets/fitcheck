@@ -25,7 +25,7 @@ def prepared(engine, auth_components):
         request=request(),idempotency_key='one',client_ip='127.0.0.1')
     lease = JobQueue(engine).claim()
     snapshot = AnalysisSnapshot(profileRevision='1',profile=DATA['profile'],vacancy=DATA['vacancy'],locale='en',
-        promptVersion='fitcheck.analysis.prompt.v1',schemaVersion='fitcheck.analysis.v1',policyVersion='fitcheck.llm.policy.v2')
+        promptVersion='fitcheck.analysis.prompt.v2',schemaVersion='fitcheck.analysis.v1',policyVersion='fitcheck.llm.policy.v2')
     return lease, AnalysisResult(FitAnalysis.model_validate(DATA['analysis']),snapshot)
 
 
