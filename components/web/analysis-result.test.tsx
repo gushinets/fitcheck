@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { defaultProfile, detectedJob, goAnalysis } from "@/lib/mock-data"
 import { webMessages } from "@/lib/i18n/web-messages"
@@ -16,6 +16,35 @@ const entry: WebHistoryEntry = {
 }
 
 describe("AnalysisResult", () => {
+  it.each([
+    ["en", 69, "NO_GO", "Score is below the threshold."],
+    ["en", 70, "GO", "Score meets the threshold."],
+    ["en", 71, "GO", "Score meets the threshold."],
+    ["ru", 69, "NO_GO", "Оценка ниже порога."],
+    ["ru", 70, "GO", "Оценка достигла порога."],
+    ["ru", 71, "GO", "Оценка достигла порога."],
+  ] as const)("explains the %s score %s against the saved verdict threshold", (locale, score, status, explanation) => {
+    const analysis = { ...entry.analysis, score, status, verdictThreshold: 70 }
+    render(<AnalysisResult entry={{ ...entry, analysis }} copy={webMessages[locale]} onBack={vi.fn()} onAnalyzeAnother={vi.fn()} onSaveFeedback={vi.fn()} />)
+    const scoreGroup = within(screen.getByRole("group", { name: webMessages[locale].fitScore }))
+    expect(scoreGroup.getByText(locale === "ru" ? "Порог «ПОДХОДИТ»: 70 / 100" : "GO threshold: 70 / 100")).toBeVisible()
+    expect(scoreGroup.getByText(explanation)).toBeVisible()
+    expect(screen.getByText(status === "GO" ? webMessages[locale].go : webMessages[locale].noGo)).toBeVisible()
+  })
+
+  it.each([[79, 80, "NO_GO"], [0, 0, "GO"], [99, 100, "NO_GO"]] as const)("uses the supplied threshold %s / %s without a hardcoded default", (score, threshold, status) => {
+    const analysis = { ...entry.analysis, score, status, verdictThreshold: threshold }
+    render(<AnalysisResult entry={{ ...entry, analysis }} copy={webMessages.en} onBack={vi.fn()} onAnalyzeAnother={vi.fn()} onSaveFeedback={vi.fn()} />)
+    expect(screen.getByText(`GO threshold: ${threshold} / 100`)).toBeVisible()
+    expect(screen.getByText(score >= threshold ? "Score meets the threshold." : "Score is below the threshold.")).toBeVisible()
+  })
+
+  it.each(["en", "ru"] as const)("does not invent a threshold for legacy %s results", locale => {
+    render(<AnalysisResult entry={entry} copy={webMessages[locale]} onBack={vi.fn()} onAnalyzeAnother={vi.fn()} onSaveFeedback={vi.fn()} />)
+    expect(screen.getByText(locale === "ru" ? "Порог вердикта не указан." : "Verdict threshold unavailable.")).toBeVisible()
+    expect(screen.queryByText(/70 \/ 100/)).not.toBeInTheDocument()
+  })
+
   it("explains when no confirmed strengths were found", () => {
     render(<AnalysisResult entry={{ ...entry, analysis: { ...entry.analysis, strengths: [] } }} copy={webMessages.ru} onBack={vi.fn()} onAnalyzeAnother={vi.fn()} onSaveFeedback={vi.fn()} />)
     expect(screen.getByText("Подтверждённые сильные стороны не найдены.")).toBeVisible()
@@ -60,7 +89,7 @@ describe("AnalysisResult", () => {
     const onSaveFeedback = vi.fn()
     render(
       <AnalysisResult
-        entry={entry}
+        entry={{ ...entry, analysis: { ...entry.analysis, verdictThreshold: 80 } }}
         copy={webMessages.en}
         onBack={vi.fn()}
         onAnalyzeAnother={vi.fn()}
@@ -79,5 +108,7 @@ describe("AnalysisResult", () => {
       note: "Timezone overlap matters",
     })
     expect(screen.getByLabelText("Fit score 82 out of 100")).toBeVisible()
+    expect(screen.getByText("GO threshold: 80 / 100")).toBeVisible()
+    expect(screen.getByText("Score meets the threshold.")).toBeVisible()
   })
 })

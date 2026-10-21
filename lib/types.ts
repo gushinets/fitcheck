@@ -55,6 +55,8 @@ export interface FitBreakdown {
 
 export interface FitAnalysis {
   score: number
+  /** Decision threshold saved with the result; absent in legacy analyses. */
+  verdictThreshold?: number
   status: FitStatus
   label: string
   summary: string

@@ -76,6 +76,16 @@ describe("server website", () => {
     expect(h.calls).toHaveLength(count)
   })
 
+  it("retains the saved backend threshold for both history and completed jobs", async () => {
+    const h = harness(); const server = h.server()
+    const saved = { ...resource, analysis: { ...goAnalysis, status: "NO_GO", verdictThreshold: 90 } }
+    h.overrides.set("v1/history?limit=100", () => Response.json({ items: [saved], hasMore: false, nextCursor: null }))
+    h.overrides.set("v1/jobs/job-1", () => Response.json({ jobId: "job-1", type: "analysis", status: "succeeded", analysisId: saved.analysisId, result: saved }))
+    expect((await server.repository.loadSnapshot()).history[0].analysis).toMatchObject({ score: 82, status: "NO_GO", verdictThreshold: 90 })
+    const result = await server.api.analyzeVacancyWithContext!(input)
+    expect(result.entry?.analysis).toMatchObject({ score: 82, status: "NO_GO", verdictThreshold: 90 })
+  })
+
   it("resumes an admitted job after reload without sending a second admission", async () => {
     const h = harness(); const first = h.server(); await first.repository.loadSnapshot()
     h.overrides.set("v1/jobs/job-1", () => Response.json({ jobId: "job-1", type: "analysis", status: "running" }))
