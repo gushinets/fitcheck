@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from "vitest"
+import { useState } from "react"
 import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { defaultProfile, detectedJob, goAnalysis } from "@/lib/mock-data"
 import { webMessages } from "@/lib/i18n/web-messages"
-import type { WebHistoryEntry } from "@/lib/web/types"
+import type { HistoryFilters, WebHistoryEntry } from "@/lib/web/types"
 import { HistoryView } from "./history-view"
 
 const entry: WebHistoryEntry = {
@@ -16,6 +17,27 @@ const entry: WebHistoryEntry = {
 }
 
 describe("HistoryView", () => {
+  it.each([
+    { locale: "en" as const, verdict: "Filter by verdict", status: "Filter application status", reset: "Reset filters", empty: "No analyses match these filters." },
+    { locale: "ru" as const, verdict: "Фильтр по вердикту", status: "Фильтр по статусу отклика", reset: "Сбросить фильтры", empty: "Нет анализов с такими фильтрами." },
+  ])("combines controlled filters and resets an empty filtered view in $locale", async copy => {
+    const user = userEvent.setup()
+    const onFilter = vi.fn()
+    function FilteredHistory() {
+      const [filters, setFilters] = useState<HistoryFilters>({ applicationStatus: "", verdict: "" })
+      return <HistoryView entries={[]} locale={copy.locale} copy={webMessages[copy.locale]} onOpen={vi.fn()} onClear={vi.fn()} filters={filters} onFilter={value => { onFilter(value); setFilters(value) }} />
+    }
+    render(<FilteredHistory />)
+    await user.selectOptions(screen.getByRole("combobox", { name: copy.verdict }), "NO_GO")
+    await user.selectOptions(screen.getByRole("combobox", { name: copy.status }), "applied")
+    expect(onFilter).toHaveBeenLastCalledWith({ applicationStatus: "applied", verdict: "NO_GO" })
+    expect(screen.getByText(copy.empty)).toBeVisible()
+    await user.click(screen.getByRole("button", { name: copy.reset }))
+    expect(screen.getByRole("combobox", { name: copy.verdict })).toHaveValue("")
+    expect(screen.getByRole("combobox", { name: copy.status })).toHaveValue("")
+    expect(screen.queryByText(copy.empty)).not.toBeInTheDocument()
+    expect(screen.getByText(webMessages[copy.locale].noHistory)).toBeVisible()
+  })
   it("opens a completed analysis and can request history clearing", async () => {
     const user = userEvent.setup()
     const onOpen = vi.fn()

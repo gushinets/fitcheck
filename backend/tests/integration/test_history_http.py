@@ -77,6 +77,35 @@ def test_keyset_tied_dates_filters_and_missing_annotations(profile_http, sort):
     assert len(c.get('/v1/history', params={'verdict': 'NO_GO'}).json()['items']) == 2
 
 
+def test_combined_filters_status_changes_and_reset_preserve_every_record(profile_http):
+    _, c, _, _, headers = profile_http
+    positive = seed(profile_http, count=3, verdict='GO')
+    negative = seed(profile_http, count=2, verdict='NO_GO')
+    for identifier in [positive[0], negative[0]]:
+        assert c.put('/v1/analyses/' + identifier + '/application-status',
+            json={'applicationStatus': 'applied'}, headers=headers).status_code == 200
+    cursor, found = None, []
+    while True:
+        params = {'limit': 1, 'verdict': 'GO', 'applicationStatus': 'not_applied'}
+        if cursor:
+            params['cursor'] = cursor
+        page = c.get('/v1/history', params=params).json()
+        found.extend(row['analysisId'] for row in page['items'])
+        cursor = page['nextCursor']
+        if cursor is None:
+            break
+    assert set(found) == set(positive[1:])
+    assert c.put('/v1/analyses/' + positive[1] + '/application-status',
+        json={'applicationStatus': 'hired'}, headers=headers).status_code == 200
+    page = c.get('/v1/history', params={'verdict': 'GO', 'applicationStatus': 'not_applied'}).json()
+    assert [row['analysisId'] for row in page['items']] == [positive[2]]
+    page = c.get('/v1/history', params={'verdict': 'NO_GO', 'applicationStatus': 'applied'}).json()
+    assert [row['analysisId'] for row in page['items']] == [negative[0]]
+    all_rows = {row['analysisId']: row for row in c.get('/v1/history').json()['items']}
+    assert set(all_rows) == set(positive + negative)
+    assert all_rows[positive[1]]['applicationStatus'] == 'hired'
+
+
 def test_cursor_tampering_filter_reuse_and_deleted_position(profile_http):
     _, c, _, issued, _ = profile_http
     ids = seed(profile_http, count=3)

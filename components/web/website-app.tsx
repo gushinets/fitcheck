@@ -13,7 +13,7 @@ import { createServerWebsite, type ServerWebsite } from "@/lib/web/server"
 import { serverErrorMessage } from "@/lib/web/server-errors"
 import { VerifyAccount, ServerAccountTools } from "./server-account"
 import { DemoAnalysis } from "./demo-analysis"
-import type { WebsiteRepository, WebsiteSnapshot } from "@/lib/web/types"
+import type { HistoryFilters, WebsiteRepository, WebsiteSnapshot } from "@/lib/web/types"
 import type { VacancyDraft, WebHistoryEntry } from "@/lib/web/types"
 import { createAnalysisRequest, createHistoryEntry } from "@/lib/web/history"
 import { WebApiError } from "@/lib/web/api"
@@ -31,6 +31,7 @@ import { uuidSchema } from "@/lib/metrics/types"
 import type { ClientContext, ClientEventName, ClientProperties } from "@/lib/metrics/types"
 
 const noCampaignCodes: string[] = []
+const emptyHistoryFilters: HistoryFilters = { applicationStatus: "", verdict: "" }
 const emptySnapshot: WebsiteSnapshot = {
   user: null,
   profile: null,
@@ -98,8 +99,18 @@ export function WebsiteApp({
   const [analysisError, setAnalysisError] = useState<string | null>(null)
   const [globalError, setGlobalError] = useState<string | null>(null)
   const [demo, setDemo] = useState(false)
-  const [historyFilter, setHistoryFilter] = useState("")
+  const [historyFilters, setHistoryFilters] = useState<HistoryFilters>(emptyHistoryFilters)
+  const historyFiltersRef = useRef(emptyHistoryFilters)
+  const [historyBusy, setHistoryBusy] = useState(false)
+  const historyRequest = useRef(0)
+  const historyRevision = useRef(0)
+  const historyPending = useRef(false)
   const copy = getWebMessages(locale)
+
+  function commitHistoryFilters(filters: HistoryFilters) {
+    historyFiltersRef.current = filters
+    setHistoryFilters(filters)
+  }
 
   useEffect(() => {
     let active = true
@@ -128,15 +139,41 @@ export function WebsiteApp({
   }, [locale])
 
   async function refresh() {
-    const loaded = await store.loadSnapshot()
+    const sequence = historyRequest.current
+    const revision = historyRevision.current
+    const pending = historyPending.current
+    const loaded = await store.loadSnapshot(historyFiltersRef.current)
     if (snapshot.user && loaded.user?.id !== snapshot.user.id) {
       observationGeneration.current++
       resumed.current = false
       setActiveEntry(null); setAnalysisStep("source"); setView(loaded.profile ? "analyze" : "profile")
+      commitHistoryFilters(emptyHistoryFilters)
+      historyRequest.current++; historyPending.current = false; setHistoryBusy(false)
+      if (server && loaded.user?.emailVerified) Object.assign(loaded, await server.loadHistory())
     }
-    setSnapshot(loaded)
+    // A locale/profile refresh must not replace a newer history page or status update.
+    setSnapshot(current => (!pending && sequence === historyRequest.current && revision === historyRevision.current) || current.user?.id !== loaded.user?.id
+      ? loaded : { ...loaded, history: current.history, historyCursor: current.historyCursor })
     setDraft(loaded.draft)
     if (loaded.preferences) setLocale(loaded.preferences.locale)
+  }
+
+  async function updateHistory(load: () => Promise<Pick<WebsiteSnapshot, "history" | "historyCursor">>, filters: HistoryFilters, append = false) {
+    const sequence = ++historyRequest.current
+    const generation = observationGeneration.current
+    historyPending.current = true
+    setHistoryBusy(true)
+    try {
+      const page = await load()
+      if (sequence !== historyRequest.current || generation !== observationGeneration.current) return
+      historyRevision.current++
+      commitHistoryFilters(filters)
+      setSnapshot(current => ({ ...current, ...page, history: append ? [...current.history, ...page.history] : page.history }))
+    } catch (error) {
+      if (sequence === historyRequest.current && generation === observationGeneration.current) throw error
+    } finally {
+      if (sequence === historyRequest.current) { historyPending.current = false; setHistoryBusy(false) }
+    }
   }
 
   const resumed = useRef(false)
@@ -161,6 +198,7 @@ export function WebsiteApp({
   async function signOut() {
     await store.signOut()
     observationGeneration.current++
+    historyRequest.current++; historyPending.current = false; setHistoryBusy(false); commitHistoryFilters(emptyHistoryFilters)
     resumed.current = false
     setSnapshot(emptySnapshot); setDraft(null); setActiveEntry(null); setAnalysisStep("source"); setView("analyze")
   }
@@ -261,9 +299,10 @@ export function WebsiteApp({
       const entry = ("entry" in result ? result.entry : undefined) ?? createHistoryEntry({ userId: snapshot.user.id, profile: snapshot.profile, job: request.job, analysis: result.analysis, providerOperationId: result.operationId })
       await store.addHistory(entry)
       if (generation !== observationGeneration.current) return
-      setSnapshot((current) => ({ ...current, history: [entry, ...current.history].slice(0, 50) }))
+      if (!server) setSnapshot((current) => ({ ...current, history: [entry, ...current.history].slice(0, 50) }))
       setActiveEntry(entry)
       setAnalysisStep("result")
+      if (server) await guarded(refresh)
     } catch (error) {
       if (generation !== observationGeneration.current) return
       setAnalysisError(analysisErrorMessage(error))
@@ -410,6 +449,7 @@ export function WebsiteApp({
     const password = server ? window.prompt(copy.password) : undefined
     if (password === null) return
     await store.deleteUser(snapshot.user.id, password)
+    historyRequest.current++; historyPending.current = false; setHistoryBusy(false); commitHistoryFilters(emptyHistoryFilters)
     if (!server) observe("local_account_deleted", {})
     observationGeneration.current++
     viewedResults.current.clear()
@@ -434,11 +474,11 @@ export function WebsiteApp({
       return <div className="space-y-6"><ProfileEditor key={JSON.stringify(snapshot.profile)} profile={snapshot.profile} locale={locale} copy={copy} onSave={value => guarded(() => saveProfile(value))} onSuggestSkills={suggestProfileSkills} onSkillsAccepted={(count) => observe("skills_accepted", { locale, count })} />{server ? <ServerAccountTools server={server} locale={locale} refresh={refresh} /> : null}<section className="mx-auto max-w-3xl rounded-3xl border border-danger/20 bg-card p-6 sm:p-8"><h2 className="text-lg font-semibold">{copy.localDataTitle}</h2><p className="mt-2 text-sm text-muted-foreground">{copy.localDataDescription}</p><p className="mt-3 text-sm font-medium">{snapshot.user?.email}</p><Button type="button" variant="destructive" className="mt-5" onClick={() => guarded(deleteAccount)}>{copy.deleteAccount}</Button></section></div>
     }
     if (view === "history") {
-      return <HistoryView entries={snapshot.history} locale={locale} copy={copy} onOpen={openHistory} onClear={() => guarded(clearHistory)}
+      return <HistoryView entries={snapshot.history} locale={locale} copy={copy} filters={historyFilters} busy={historyBusy} onOpen={openHistory} onClear={() => guarded(clearHistory)}
         onReanalyze={server ? entry => guarded(() => reanalyze(entry)) : undefined}
-        onFilter={server ? status => guarded(async () => { const page = await server.loadHistory(null, status); setHistoryFilter(status); setSnapshot(current => ({ ...current, ...page })) }) : undefined}
-        onMore={server && snapshot.historyCursor ? () => guarded(async () => { const page = await server.loadHistory(snapshot.historyCursor, historyFilter); setSnapshot(current => ({ ...current, historyCursor: page.historyCursor, history: [...current.history, ...page.history] })) }) : undefined}
-        onStatus={server ? (entry, status) => guarded(async () => { await server.setApplicationStatus(entry.id, status); const page = await server.loadHistory(null, historyFilter); setSnapshot(current => ({ ...current, ...page })) }) : undefined} />
+        onFilter={server ? filters => guarded(() => updateHistory(() => server.loadHistory(null, filters), filters)) : undefined}
+        onMore={server && snapshot.historyCursor ? () => guarded(() => updateHistory(() => server.loadHistory(snapshot.historyCursor, historyFilters), historyFilters, true)) : undefined}
+        onStatus={server ? (entry, status) => guarded(() => updateHistory(async () => { await server.setApplicationStatus(entry.id, status); return server.loadHistory(null, historyFilters) }, historyFilters)) : undefined} />
     }
     if (analysisStep === "review" && draft) {
       return <div className="space-y-4">{analysisError ? <div role="alert" className="mx-auto max-w-4xl rounded-xl bg-danger-muted p-4 text-sm text-danger">{analysisError}</div> : null}<VacancyReview draft={draft} copy={copy} onBack={value => guarded(() => backToSource(value))} onAnalyze={value => guarded(() => startAnalysis(value))} /></div>

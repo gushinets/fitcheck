@@ -90,7 +90,9 @@ def worker():
             snapshot = AnalysisSnapshot(profileRevision=e.profile_revision, profile=e.profile, vacancy=e.vacancy,
                 locale=e.locale, promptVersion=e.versions.prompt_version, schemaVersion=e.versions.schema_version,
                 policyVersion=e.versions.policy_version)
-            publication.succeed_analysis(lease, AnalysisResult(FitAnalysis.model_validate(domain['analysis']), snapshot))
+            # Captured fixture outcomes exercise both history verdicts without a paid model.
+            analysis = {**domain['analysis'], 'score': 40, 'status': 'NO_GO'} if e.vacancy.title == 'Persisted React task' else domain['analysis']
+            publication.succeed_analysis(lease, AnalysisResult(FitAnalysis.model_validate(analysis), snapshot))
         elif lease.type == 'skill_suggestions':
             publication.succeed_suggestions(lease, ['React', 'TypeScript'])
         else:

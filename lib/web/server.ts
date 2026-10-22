@@ -2,7 +2,7 @@ import { z } from "zod"
 import { BackendApiError, createBackendClient } from "@/lib/backend/client"
 import type { AnalysisRequest, Locale } from "@/lib/types"
 import type { WebsiteApi } from "./api"
-import type { LocalUser, VacancyDraft, WebHistoryEntry, WebsiteRepository, WebsiteSnapshot } from "./types"
+import type { HistoryFilters, LocalUser, VacancyDraft, WebHistoryEntry, WebsiteRepository, WebsiteSnapshot } from "./types"
 import { draftToJob } from "./history"
 import { createWebsiteRepository } from "./repository"
 import { batchLocalExport } from "./local-export"
@@ -115,11 +115,19 @@ export function createServerWebsite(config: { fetch?: typeof fetch; delay?: () =
       throw error
     }
   }
+  async function loadHistory(cursor?: string | null, filters: Partial<HistoryFilters> = {}) {
+    const params = new URLSearchParams({ limit: "100" })
+    if (cursor) params.set("cursor", cursor)
+    if (filters.applicationStatus) params.set("applicationStatus", filters.applicationStatus)
+    if (filters.verdict) params.set("verdict", filters.verdict)
+    const page = await request(`v1/history?${params}`, s.historyPageSchema)
+    return { history: page.items.map(entry), historyCursor: page.nextCursor }
+  }
   const repository: WebsiteRepository = {
     exportLocalData: id => createWebsiteRepository().exportLocalData(id),
     createUser: input => authenticate("v1/auth/register", input.email, input.password),
     authenticate: (email, password) => authenticate("v1/auth/login", email, password),
-    async loadSnapshot() {
+    async loadSnapshot(historyFilters) {
       let started = generation
       let session
       try { session = await request("v1/auth/session", s.sessionSchema) } catch (error) {
@@ -136,12 +144,12 @@ export function createServerWebsite(config: { fetch?: typeof fetch; delay?: () =
           throw error
         }),
         request("v1/preferences", s.preferencesSchema), request("v1/draft", s.draftResourceSchema),
-        request("v1/history?limit=100", s.historyPageSchema),
+        loadHistory(null, historyFilters),
       ])
       if (started !== generation) throw new WebsiteServerError("session_changed")
       revision = profile?.revision ?? null
       locale = preferences.locale
-      return { user, profile: profile?.profile ?? null, preferences: { userId: user!.id, ...preferences }, draft: draft(savedDraft), history: page.items.map(entry), historyCursor: page.nextCursor }
+      return { user, profile: profile?.profile ?? null, preferences: { userId: user!.id, ...preferences }, draft: draft(savedDraft), ...page }
     },
     async signOut() {
       const key = pendingKey()
@@ -190,13 +198,7 @@ export function createServerWebsite(config: { fetch?: typeof fetch; delay?: () =
       return completed(jobId)
     },
     forgetPendingAnalysis() { write(pendingKey(), null) },
-    async loadHistory(cursor?: string | null, applicationStatus?: string) {
-      const params = new URLSearchParams({ limit: "100" })
-      if (cursor) params.set("cursor", cursor)
-      if (applicationStatus) params.set("applicationStatus", applicationStatus)
-      const page = await request(`v1/history?${params}`, s.historyPageSchema)
-      return { history: page.items.map(entry), historyCursor: page.nextCursor }
-    },
+    loadHistory,
     async setApplicationStatus(id: string, applicationStatus: NonNullable<WebHistoryEntry["applicationStatus"]>) {
       await request(`v1/analyses/${encodeURIComponent(id)}/application-status`, z.unknown(), "PUT", { applicationStatus })
     },

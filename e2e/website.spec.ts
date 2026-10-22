@@ -109,7 +109,7 @@ for (const locale of ["en", "ru"] as const) test(`demo → claim recovery → se
   const items = (await result.json()).items
   expect(items).toHaveLength(2)
   const analysisId = items.find((entry: { snapshot: { vacancy: { title: string } } }) => entry.snapshot.vacancy.title === "Persisted React task").analysisId
-  const otherDevice = await browser.newContext()
+  const otherDevice = await browser.newContext({ viewport: { width: 375, height: 900 } })
   const other = await otherDevice.newPage()
   await login(other, email, locale)
   await other.getByRole("button", { name: copy.profile, exact: true }).first().click()
@@ -120,6 +120,18 @@ for (const locale of ["en", "ru"] as const) test(`demo → claim recovery → se
   await expect(other.getByRole("button", { name: /Demo React task/ })).toBeVisible()
   await other.getByLabel(`${ru ? "Статус отклика" : "Application status"}: Persisted React task`).selectOption("applied")
   await expect(other.getByLabel(`${ru ? "Статус отклика" : "Application status"}: Persisted React task`)).toHaveValue("applied")
+  await other.getByRole("combobox", { name: copy.historyVerdictFilter }).selectOption("NO_GO")
+  await expect(other.getByRole("button", { name: /Demo React task/ })).toHaveCount(0)
+  await other.getByRole("combobox", { name: ru ? "Фильтр по статусу отклика" : "Filter application status" }).selectOption("applied")
+  await expect(other.getByRole("button", { name: /Persisted React task/ })).toBeVisible()
+  await other.getByLabel(`${ru ? "Статус отклика" : "Application status"}: Persisted React task`).selectOption("hired")
+  await expect(other.getByText(copy.historyNoMatches)).toBeVisible()
+  await other.getByRole("button", { name: copy.historyResetFilters }).click()
+  await expect(other.getByRole("button", { name: /Demo React task/ })).toBeVisible()
+  await expect(other.getByRole("button", { name: /Persisted React task/ })).toBeVisible()
+  await expect(other.getByLabel(`${ru ? "Статус отклика" : "Application status"}: Persisted React task`)).toHaveValue("hired")
+  expect(await other.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false)
+  await other.screenshot({ path: test.info().outputPath(`history-filters-${locale}.png`), fullPage: true })
   if (!ru) {
   const strangerContext = await browser.newContext()
   const stranger = await strangerContext.newPage()

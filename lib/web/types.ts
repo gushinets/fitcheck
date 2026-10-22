@@ -75,6 +75,11 @@ export interface WebsiteSnapshot {
   historyCursor?: string | null
 }
 
+export interface HistoryFilters {
+  applicationStatus: NonNullable<WebHistoryEntry["applicationStatus"]> | ""
+  verdict: FitAnalysis["status"] | ""
+}
+
 export interface WebsiteRepository {
   exportLocalData(selectedUserId: string): Promise<import("./local-export").LocalImportRequest>
   createUser(input: {
@@ -83,7 +88,7 @@ export interface WebsiteRepository {
     password: string
   }): Promise<LocalUser>
   authenticate(email: string, password: string): Promise<LocalUser>
-  loadSnapshot(): Promise<WebsiteSnapshot>
+  loadSnapshot(historyFilters?: HistoryFilters): Promise<WebsiteSnapshot>
   signOut(): Promise<void>
   saveLocale(userId: string, locale: Locale): Promise<void>
   saveProfile(userId: string, profile: FreelancerProfile): Promise<void>

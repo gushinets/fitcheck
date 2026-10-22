@@ -39,6 +39,20 @@ function harness() {
 beforeEach(() => { localStorage.clear(); sessionStorage.clear() })
 
 describe("server website", () => {
+  it("keeps both history filters during snapshot refresh and pagination, and omits them on reset", async () => {
+    const h = harness(); const server = h.server()
+    const saved = { ...resource, analysisId: "filtered", analysis: { ...goAnalysis, score: 40, status: "NO_GO" }, applicationStatus: "applied" }
+    h.overrides.set("v1/history?limit=100&applicationStatus=applied&verdict=NO_GO", () => Response.json({ items: [saved], hasMore: true, nextCursor: "next+/=" }))
+    const filters = { applicationStatus: "applied" as const, verdict: "NO_GO" as const }
+    const snapshot = await server.repository.loadSnapshot(filters)
+    expect(snapshot.history.map(entry => entry.id)).toEqual(["filtered"])
+    expect(snapshot.historyCursor).toBe("next+/=")
+    await server.loadHistory("next+/=", filters)
+    const query = new URLSearchParams(h.calls.at(-1)!.path.split("?")[1])
+    expect(Object.fromEntries(query)).toEqual({ limit: "100", cursor: "next+/=", applicationStatus: "applied", verdict: "NO_GO" })
+    expect((await server.loadHistory(null, { applicationStatus: "", verdict: "" })).history.map(entry => entry.id)).toEqual(["analysis-1"])
+    expect(h.calls.at(-1)!.path).toBe("v1/history?limit=100")
+  })
   it("authenticates with bootstrap CSRF and submits only credentials, never a client owner", async () => {
     const h = harness(); const server = h.server()
     await server.repository.createUser({ name: "Ignored local display name", email: "a@example.com", password: "long-password-123" })
