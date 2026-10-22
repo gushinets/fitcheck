@@ -42,16 +42,20 @@ export function ServerAccountTools({ server, locale, refresh }: { server: Server
   const [password, setPassword] = useState("")
   const [status, setStatus] = useState("")
   const [busy, setBusy] = useState(false)
+  const [pendingRefresh, setPendingRefresh] = useState<string | null>(null)
   async function run(action: () => Promise<string>) {
     setBusy(true); setStatus("")
     try {
       const message = await action()
+      setPendingRefresh(message)
       await refresh()
+      setPendingRefresh(null)
       setStatus(message)
     } catch (e) { setStatus(serverErrorMessage(e, locale)) } finally { setBusy(false) }
   }
   return <section className="mx-auto grid max-w-3xl gap-4 rounded-3xl border border-border bg-card p-6">
-    {server.hasGuestClaim() ? <Button disabled={busy} onClick={() => run(async () => { await server.claimGuest(); return ru ? "Демо перенесено в аккаунт." : "Demo saved to your account." })}>{ru ? "Сохранить демо в аккаунт" : "Save demo to account"}</Button> : null}
+    {server.hasGuestClaim() ? <Button disabled={busy || pendingRefresh !== null} onClick={() => run(async () => { await server.claimGuest(); return ru ? "Демо перенесено в аккаунт." : "Demo saved to your account." })}>{ru ? "Сохранить демо в аккаунт" : "Save demo to account"}</Button> : null}
+    {pendingRefresh !== null ? <Button disabled={busy} variant="outline" onClick={() => run(async () => pendingRefresh)}>{ru ? "Обновить данные аккаунта" : "Reload account data"}</Button> : null}
     <h2 className="text-lg font-semibold">{ru ? "Перенести данные из этого браузера" : "Import data from this browser"}</h2>
     <p className="text-sm text-muted-foreground">{ru ? "Укажите email и пароль прежнего локального аккаунта. Серверные данные сохранятся; повторный импорт пропускает уже перенесённые записи." : "Enter your previous local account credentials. Existing server data is preserved; retries skip imported records."}</p>
     <form className="grid gap-3" onSubmit={event => { event.preventDefault(); void run(async () => {
@@ -61,7 +65,7 @@ export function ServerAccountTools({ server, locale, refresh }: { server: Server
     }) }}>
       <Input type="email" required aria-label={ru ? "Email локального аккаунта" : "Local account email"} placeholder="Email" value={email} onChange={event => setEmail(event.target.value)} />
       <Input type="password" required aria-label={ru ? "Пароль локального аккаунта" : "Local account password"} autoComplete="off" value={password} onChange={event => setPassword(event.target.value)} />
-      <Button type="submit" disabled={busy}>{busy ? (ru ? "Переносим…" : "Importing…") : (ru ? "Перенести / повторить" : "Import / retry")}</Button>
+      <Button type="submit" disabled={busy || pendingRefresh !== null}>{busy ? (ru ? "Переносим…" : "Importing…") : (ru ? "Перенести / повторить" : "Import / retry")}</Button>
     </form>
     {status ? <p role="status">{status}</p> : null}
   </section>

@@ -1,62 +1,108 @@
 import { expect, test, type Page } from "@playwright/test"
 import { derivePassword } from "../lib/web/password"
 import { defaultProfile, detectedJob, goAnalysis } from "../lib/mock-data"
+import { webMessages } from "../lib/i18n/web-messages"
+import type { Locale } from "../lib/types"
 
 const password = "correct horse battery staple"
-async function register(page: Page, email: string) {
+async function register(page: Page, email: string, locale: Locale = "en") {
+  const copy = webMessages[locale]
   await page.goto("/")
-  await page.getByLabel("Email", { exact: true }).fill(email)
-  await page.getByLabel("Password", { exact: true }).fill(password)
-  await page.getByRole("button", { name: "Create account", exact: true }).click()
-  await expect(page.getByRole("heading", { name: "Verify your email" })).toBeVisible()
+  if (locale === "ru") await page.getByRole("button", { name: "RU", exact: true }).click()
+  await page.getByLabel(copy.email, { exact: true }).fill(email)
+  await page.getByLabel(copy.password, { exact: true }).fill(password)
+  await page.getByRole("button", { name: copy.createAccount, exact: true }).click()
+  await expect(page.getByRole("heading", { name: locale === "ru" ? "Подтвердите email" : "Verify your email" })).toBeVisible()
   const mail = await page.request.get(`http://127.0.0.1:38154/testing/mail?email=${encodeURIComponent(email)}`)
-  await page.getByLabel("Verification code").fill((await mail.json()).token)
-  await page.getByRole("button", { name: "Verify", exact: true }).click()
-  await expect(page.getByRole("heading", { name: "Complete your freelancer profile" })).toBeVisible()
+  await page.getByLabel(locale === "ru" ? "Код подтверждения" : "Verification code").fill((await mail.json()).token)
+  await page.getByRole("button", { name: locale === "ru" ? "Подтвердить" : "Verify", exact: true }).click()
+  await expect(page.getByRole("heading", { name: copy.completeProfileTitle })).toBeVisible()
 }
-async function profile(page: Page) {
-  await page.getByLabel("Specialization", { exact: true }).fill("Frontend Developer")
-  await page.getByPlaceholder("Type a skill and press Enter").fill("React")
-  await page.getByPlaceholder("Type a skill and press Enter").press("Enter")
-  await page.getByRole("checkbox", { name: "Remote", exact: true }).check()
-  await page.getByRole("button", { name: "Save profile", exact: true }).click()
-  await expect(page.getByRole("heading", { name: "Choose how to add a task" })).toBeVisible()
+async function profile(page: Page, locale: Locale = "en") {
+  const copy = webMessages[locale]
+  await page.getByLabel(copy.specialization, { exact: true }).fill("Frontend Developer")
+  await page.getByPlaceholder(copy.skillsPlaceholder).fill("React")
+  await page.getByPlaceholder(copy.skillsPlaceholder).press("Enter")
+  await page.getByLabel(copy.preferredRate, { exact: true }).fill("65")
+  await page.getByRole("checkbox", { name: copy.workRemote, exact: true }).check()
+  await page.getByRole("button", { name: copy.saveProfile, exact: true }).click()
+  await expect(page.getByRole("heading", { name: copy.chooseVacancyTitle })).toBeVisible()
 }
-async function task(page: Page, title: string) {
-  await page.getByRole("button", { name: "Paste text", exact: true }).click()
-  await page.getByLabel("Task title", { exact: true }).fill(title)
-  await page.getByLabel("Task description", { exact: true }).fill("Build a React application with TypeScript and accessible forms for customers.")
-  await page.getByRole("button", { name: "Review task", exact: true }).click()
-  await Promise.all([
+async function task(page: Page, title: string, locale: Locale = "en") {
+  const copy = webMessages[locale]
+  await page.getByRole("button", { name: copy.pasteText, exact: true }).click()
+  await page.getByLabel(copy.vacancyTitle, { exact: true }).fill(title)
+  await page.getByLabel(copy.vacancyDescription, { exact: true }).fill("Build a React application with TypeScript and accessible forms for customers.")
+  await page.getByRole("button", { name: copy.reviewVacancy, exact: true }).click()
+  const [admission] = await Promise.all([
     page.waitForResponse(response => response.url().endsWith("/v1/analysis-jobs") && response.request().method() === "POST"),
-    page.getByRole("button", { name: "Analyze task", exact: true }).click(),
+    page.getByRole("button", { name: copy.analyzeVacancy, exact: true }).click(),
   ])
+  return admission.json() as Promise<{ jobId: string }>
 }
-async function login(page: Page, email: string) {
+async function login(page: Page, email: string, locale: Locale = "en") {
+  const copy = webMessages[locale]
   await page.goto("/")
-  await page.getByRole("button", { name: "Switch to sign in" }).click()
-  await page.getByLabel("Email", { exact: true }).fill(email)
-  await page.getByLabel("Password", { exact: true }).fill(password)
-  await page.getByRole("button", { name: "Sign in", exact: true }).click()
-  await expect(page.getByRole("button", { name: "Sign out", exact: true })).toBeVisible()
+  if (locale === "ru") await page.getByRole("button", { name: "RU", exact: true }).click()
+  await page.getByRole("button", { name: copy.switchToSignIn }).click()
+  await page.getByLabel(copy.email, { exact: true }).fill(email)
+  await page.getByLabel(copy.password, { exact: true }).fill(password)
+  await page.getByRole("button", { name: copy.signIn, exact: true }).click()
+  await expect(page.getByRole("button", { name: copy.signOut, exact: true })).toBeVisible()
 }
 
-test("demo → verified account → claim → analysis survives reload → second browser history → ownership isolation", async ({ page, browser }) => {
+for (const locale of ["en", "ru"] as const) test(`demo → claim recovery → second browser profile/history (${locale})`, async ({ page, browser }) => {
+  const copy = webMessages[locale]
+  const ru = locale === "ru"
   const errors: string[] = []
   page.on("pageerror", error => errors.push(error.message))
   await page.goto("/")
-  await page.getByRole("button", { name: "Try without an account" }).click()
-  await expect(page.getByRole("heading", { name: "Complete your freelancer profile" })).toBeVisible()
-  await profile(page)
-  await task(page, "Demo React task")
+  if (ru) await page.getByRole("button", { name: "RU", exact: true }).click()
+  await page.getByRole("button", { name: copy.tryDemo }).click()
+  await expect(page.getByText(ru ? "Лимит демо — один анализ. После подтверждения email результат можно сохранить в аккаунт." : "The demo allows one analysis. Verify your email to save the result to your account.")).toBeVisible()
+  await expect(page.getByRole("heading", { name: copy.completeProfileTitle })).toBeVisible()
+  await profile(page, locale)
+  const demo = await task(page, "Demo React task", locale)
   await expect(page.getByText("Demo React task", { exact: true })).toBeVisible({ timeout: 15_000 })
-  await page.getByRole("button", { name: "Create account / sign in" }).click()
-  const email = `e2e-${Date.now()}@example.com`
-  await register(page, email)
-  await page.getByRole("button", { name: "Save demo to account" }).click()
-  await expect(page.getByText("Demo saved to your account.")).toBeVisible()
-  await page.getByRole("button", { name: "New analysis", exact: true }).first().click()
-  await task(page, "Persisted React task")
+  const demoResource = (await (await page.request.get(`/api/backend/v1/jobs/${demo.jobId}`)).json()).result
+  const quota = await (await page.request.get("/api/backend/v1/quota?mode=guest")).json()
+  expect(quota).toMatchObject({ remaining: 0, registrationRequired: true, operations: { analysis: { limit: 1, consumed: 1 } } })
+  await page.getByRole("button", { name: ru ? "Создать аккаунт / войти" : "Create account / sign in" }).click()
+  const email = `e2e-${locale}-${Date.now()}@example.com`
+  await register(page, email, locale)
+  const keys: (string | undefined)[] = []
+  let failRefresh = false
+  await page.route("**/api/backend/v1/guest-claims", async route => {
+    keys.push(route.request().headers()["idempotency-key"])
+    const response = await route.fetch()
+    expect(response.status()).toBe(200)
+    if (keys.length === 1) await route.abort("failed") // Receipt persisted, response lost.
+    else { failRefresh = true; await route.fulfill({ response }) }
+  })
+  await page.route("**/api/backend/v1/profile", async route => {
+    if (failRefresh && route.request().method() === "GET") {
+      failRefresh = false
+      await route.fulfill({ status: 503, json: { error: { code: "service_unavailable", message: "Unavailable", details: [] } } })
+    } else await route.continue()
+  })
+  const claim = page.getByRole("button", { name: ru ? "Сохранить демо в аккаунт" : "Save demo to account" })
+  await claim.click()
+  await expect(page.getByRole("status")).toHaveText(ru ? "Не удалось связаться с сервером. Попробуйте снова." : "Could not reach the server. Try again.")
+  await claim.click()
+  const reload = page.getByRole("button", { name: ru ? "Обновить данные аккаунта" : "Reload account data" })
+  await expect(reload).toBeEnabled()
+  await reload.click()
+  await expect(page.getByText(ru ? "Демо перенесено в аккаунт." : "Demo saved to your account.")).toBeVisible()
+  expect(keys).toHaveLength(2)
+  expect(keys[0]).toBeTruthy()
+  expect(keys[1]).toBe(keys[0])
+  const claimed = await (await page.request.get("/api/backend/v1/history?limit=100")).json()
+  expect(claimed.items).toHaveLength(1)
+  expect(claimed.items[0].analysisId).toBe(demoResource.analysisId)
+  expect(claimed.items[0].snapshot).toEqual(demoResource.snapshot)
+  expect((await (await page.request.get("/api/backend/v1/profile")).json()).profile).toEqual(demoResource.snapshot.profile)
+  await page.getByRole("button", { name: copy.newAnalysis, exact: true }).first().click()
+  await task(page, "Persisted React task", locale)
   await page.reload()
   await expect(page.getByText("Persisted React task", { exact: true })).toBeVisible({ timeout: 15_000 })
   const result = await page.request.get("/api/backend/v1/history?limit=100")
@@ -65,19 +111,25 @@ test("demo → verified account → claim → analysis survives reload → secon
   const analysisId = items.find((entry: { snapshot: { vacancy: { title: string } } }) => entry.snapshot.vacancy.title === "Persisted React task").analysisId
   const otherDevice = await browser.newContext()
   const other = await otherDevice.newPage()
-  await login(other, email)
-  await other.getByRole("button", { name: "History", exact: true }).first().click()
+  await login(other, email, locale)
+  await other.getByRole("button", { name: copy.profile, exact: true }).first().click()
+  await expect(other.getByLabel(copy.specialization, { exact: true })).toHaveValue("Frontend Developer")
+  await expect(other.getByLabel(copy.preferredRate, { exact: true })).toHaveValue("65")
+  await other.getByRole("button", { name: copy.history, exact: true }).first().click()
   await expect(other.getByRole("button", { name: /Persisted React task/ })).toBeVisible()
   await expect(other.getByRole("button", { name: /Demo React task/ })).toBeVisible()
-  await other.getByLabel("Application status: Persisted React task").selectOption("applied")
-  await expect(other.getByLabel("Application status: Persisted React task")).toHaveValue("applied")
+  await other.getByLabel(`${ru ? "Статус отклика" : "Application status"}: Persisted React task`).selectOption("applied")
+  await expect(other.getByLabel(`${ru ? "Статус отклика" : "Application status"}: Persisted React task`)).toHaveValue("applied")
+  if (!ru) {
   const strangerContext = await browser.newContext()
   const stranger = await strangerContext.newPage()
   await register(stranger, `stranger-${Date.now()}@example.com`)
   expect((await stranger.request.get(`/api/backend/v1/analyses/${analysisId}`)).status()).toBe(404)
   expect((await stranger.request.get("/api/backend/v1/history")).ok()).toBe(true)
   expect((await (await stranger.request.get("/api/backend/v1/history")).json()).items).toEqual([])
-  await otherDevice.close(); await strangerContext.close()
+  await strangerContext.close()
+  }
+  await otherDevice.close()
   expect(errors).toEqual([])
 })
 
