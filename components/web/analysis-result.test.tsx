@@ -17,6 +17,27 @@ const entry: WebHistoryEntry = {
 
 describe("AnalysisResult", () => {
   it.each([
+    ["en", "Suitable if the client agrees to communicate in English", "Fit condition"],
+    ["ru", "Подходит, если клиент согласится общаться на английском", "Условие соответствия"],
+  ] as const)("shows the saved %s fit condition with the GO verdict", (locale, fitCondition, label) => {
+    const analysis = { ...entry.analysis, fitCondition }
+    render(<AnalysisResult entry={{ ...entry, analysis }} copy={webMessages[locale]} onBack={vi.fn()} onAnalyzeAnother={vi.fn()} onSaveFeedback={vi.fn()} />)
+    expect(screen.getByRole("note", { name: label })).toHaveTextContent(fitCondition)
+    expect(screen.getByRole("note", { name: label })).toBeVisible()
+    expect(screen.getByText(webMessages[locale].go)).toBeVisible()
+  })
+
+  it.each([
+    { fitCondition: undefined }, { fitCondition: null }, { fitCondition: "   " },
+    { fitCondition: "Suitable if scope is confirmed", status: "NO_GO" as const, score: 60 },
+    { fitCondition: "Suitable if scope is confirmed", risks: [] },
+  ])("omits inapplicable conditions for unconditional, legacy or NO-GO results", changes => {
+    const analysis = { ...entry.analysis, ...changes }
+    render(<AnalysisResult entry={{ ...entry, analysis }} copy={webMessages.en} onBack={vi.fn()} onAnalyzeAnother={vi.fn()} onSaveFeedback={vi.fn()} />)
+    expect(screen.queryByRole("note", { name: "Fit condition" })).not.toBeInTheDocument()
+  })
+
+  it.each([
     ["en", 69, "NO_GO", "Score is below the threshold."],
     ["en", 70, "GO", "Score meets the threshold."],
     ["en", 71, "GO", "Score meets the threshold."],
@@ -89,7 +110,7 @@ describe("AnalysisResult", () => {
     const onSaveFeedback = vi.fn()
     render(
       <AnalysisResult
-        entry={{ ...entry, analysis: { ...entry.analysis, verdictThreshold: 80 } }}
+        entry={{ ...entry, analysis: { ...entry.analysis, verdictThreshold: 80, fitCondition: "Suitable if you can cover the client's US working hours" } }}
         copy={webMessages.en}
         onBack={vi.fn()}
         onAnalyzeAnother={vi.fn()}
@@ -110,5 +131,6 @@ describe("AnalysisResult", () => {
     expect(screen.getByLabelText("Fit score 82 out of 100")).toBeVisible()
     expect(screen.getByText("GO threshold: 80 / 100")).toBeVisible()
     expect(screen.getByText("Score meets the threshold.")).toBeVisible()
+    expect(screen.getByRole("note", { name: "Fit condition" })).toHaveTextContent("Suitable if you can cover the client's US working hours")
   })
 })

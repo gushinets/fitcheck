@@ -45,7 +45,7 @@ def test_execution_uses_admitted_memory_profile_and_versions():
     job = lease()
     result = asyncio.run(FrozenJobExecutor(value).execute(job))
     assert result.snapshot.profile_revision == '1' and result.snapshot.profile.preferred_rate == 50
-    assert result.snapshot.prompt_version == 'fitcheck.analysis.prompt.v2'
+    assert result.snapshot.prompt_version == 'fitcheck.analysis.prompt.v3'
     assert result.analysis.verdict_threshold == 70
     assert 'Small tasks' in json.dumps(adapter.calls[0]['messages'])
     assert all(row['attempt'].execution_token == job.execution_token for row in ledger.rows.values())
@@ -59,8 +59,8 @@ def test_unsupported_version_spends_zero_calls(bad):
     job = lease()
     if bad == 'version': job.input['versions']['policyVersion'] = 'unknown'
     elif bad == 'legacy': job = replace(job,input=job.input['request'])
-    elif bad == 'old_prompt': job.input['versions']['promptVersion'] = 'fitcheck.analysis.prompt.v1'
-    else: job.input['versions']['auditPromptVersion'] = 'fitcheck.analysis.audit.v1'
+    elif bad == 'old_prompt': job.input['versions']['promptVersion'] = 'fitcheck.analysis.prompt.v2'
+    else: job.input['versions']['auditPromptVersion'] = 'fitcheck.analysis.audit.v2'
     with pytest.raises(JobError): asyncio.run(FrozenJobExecutor(value).execute(job))
     assert adapter.calls == []
 

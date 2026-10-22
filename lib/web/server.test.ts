@@ -86,6 +86,16 @@ describe("server website", () => {
     expect(result.entry?.analysis).toMatchObject({ score: 82, status: "NO_GO", verdictThreshold: 90 })
   })
 
+  it("preserves the server fit condition through history and completed analysis", async () => {
+    const h = harness(); const server = h.server()
+    const fitCondition = "Suitable if you can cover the client's US working hours"
+    const saved = { ...resource, analysis: { ...goAnalysis, fitCondition } }
+    h.overrides.set("v1/history?limit=100", () => Response.json({ items: [saved], hasMore: false, nextCursor: null }))
+    h.overrides.set("v1/jobs/job-1", () => Response.json({ jobId: "job-1", type: "analysis", status: "succeeded", analysisId: saved.analysisId, result: saved }))
+    expect((await server.repository.loadSnapshot()).history[0].analysis.fitCondition).toBe(fitCondition)
+    expect((await server.api.analyzeVacancyWithContext!(input)).entry?.analysis.fitCondition).toBe(fitCondition)
+  })
+
   it("resumes an admitted job after reload without sending a second admission", async () => {
     const h = harness(); const first = h.server(); await first.repository.loadSnapshot()
     h.overrides.set("v1/jobs/job-1", () => Response.json({ jobId: "job-1", type: "analysis", status: "running" }))

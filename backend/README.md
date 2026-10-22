@@ -147,7 +147,29 @@ unknown/mismatched currency and minimum-only hourly budget semantics. Fixed budg
 are not compared to hourly rates without effort estimates. Narrative audit checks
 profile/task grounding before success. The server returns `verdictThreshold: 70`
 and computes GO only at score ≥ 70. Legacy results may omit this new field.
-Nullable `fitCondition` is a forward contract for ANY-576 and is not generated here.
+
+### Conditional verdict (ANY-576)
+
+For a GO score, the generator may propose a short prerequisite for a significant,
+explicitly grounded and remediable risk. Its internal `{clause, riskIndex}` points
+to an existing risk; invalid references and conditions on NO_GO scores are rejected
+before audit. The linked risk is retained when competition takes a risk slot.
+The server adds `Suitable if …` / `Подходит, если …` in the report locale and keeps
+the existing public `fitCondition` string contract (at most 300 characters).
+
+Grounding audit receives the complete condition, its linked risk, score, verdict,
+profile and task. A condition requires explicit `fitConditionSupported=true` in
+addition to the usual supported-claims verdict; a missing/false confirmation causes
+generation correction, within the existing shared attempt/call budget. The audit
+checks significance, feasible remediation, factual grounding and consistency.
+Unknown credentials, output-content languages, minor caveats and high competition
+alone cannot establish a condition. Prospective client agreement never claims that
+agreement already exists. The condition changes neither score nor verdict.
+
+Unconditional and legacy results omit the field; the website shows a saved condition
+under GO only with a nonempty risk list. New/history/demo reports use the same view.
+No database migration or new environment setting is needed. Historical results remain
+unchanged until explicit reanalysis creates a new report.
 
 ### Competition evidence (ANY-575)
 
@@ -173,8 +195,8 @@ other risks. RU/EN reports retain the existing 800-character summary and three
 240-character risk limits. Grounding audit sees the same resolved statistics and
 the final report. Public DTOs and stored snapshot schemas are unchanged.
 
-Analysis generation/audit prompts are now `fitcheck.analysis.prompt.v2` and
-`fitcheck.analysis.audit.v2`. As with other frozen-version changes, drain active
+Analysis generation/audit prompts are now `fitcheck.analysis.prompt.v3` and
+`fitcheck.analysis.audit.v3`. As with other frozen-version changes, drain active
 jobs with the old worker before replacing API/worker together; old prompt-version
 jobs are rejected rather than silently executed with different instructions.
 Historical results remain unchanged; explicit reanalysis uses the new behavior.

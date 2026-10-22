@@ -5,8 +5,8 @@ from .grounding import build_strength_evidence
 from .currency import compare_hourly_rate
 from .competition import assess_competition
 
-PROMPT_VERSION = 'fitcheck.analysis.prompt.v2'
-AUDIT_PROMPT_VERSION = 'fitcheck.analysis.audit.v2'
+PROMPT_VERSION = 'fitcheck.analysis.prompt.v3'
+AUDIT_PROMPT_VERSION = 'fitcheck.analysis.audit.v3'
 
 ANALYSIS_INSTRUCTIONS = ' '.join([
     'You assess whether a freelance task fits one freelancer profile.',
@@ -32,6 +32,9 @@ ANALYSIS_INSTRUCTIONS = ' '.join([
     "A technology in the task description is a task requirement or client context, never proof of the freelancer's skill. A missing profile skill is unconfirmed, not proof that the freelancer cannot use it.",
     'Distinguish human language proficiency requirements from output-content language. AI-generated or translated EN/CZ product descriptions do not establish a requirement for the freelancer to speak Czech. Apply this distinction to every language.',
     'Return no more than three risks, grounded in actual task requirements and supplied profile data.',
+    'For a GO score (70 or higher), provide fitCondition only when a significant, explicitly grounded risk can be resolved by a concrete feasible prerequisite. Otherwise return null; always return null for a NO_GO score. A condition never changes the score or verdict.',
+    'fitCondition is an object with clause (at most 270 characters) and riskIndex (the zero-based index of its risk in your risks array). Keep that risk in the array. Return only the prerequisite clause in the report language, without a Suitable if / Подходит, если prefix; the server adds that prefix.',
+    'The clause must directly resolve the linked risk and remain prospective, such as the client agreeing to a supported communication language. Never imply that an agreement already exists or that the freelancer has unlisted credentials. Unknown or missing data alone is not a confirmed mismatch or a reason to invent a prerequisite. High competition alone, winning the task, generic diligence and minor caveats do not qualify as a significant remediable risk.',
     'Keep the report concise: label at most 80 characters, summary at most 800 characters (aim for 500), each risk at most 240 characters. Character limits include spaces.',
     'A score of 70 or higher means GO; every lower score means NO_GO.',
     "Use memory only to calibrate this user's preferences; do not treat prior tasks as facts about the current task.",
@@ -45,6 +48,8 @@ AUDIT_INSTRUCTIONS = ' '.join([
     'An average bid has no established payment unit. It is not the task budget or proof of an accepted price; never support a direct comparison to an hourly rate or a currency borrowed from the task budget.',
     'AI-generated or translated product titles (EN/CZ, CZ required) concern output-content language, not a requirement to speak Czech. Do not infer human language proficiency requirements from content-language codes, AI generation or translation requirements. Apply this distinction to all languages.',
     'A warning that an unlisted skill needs verification is supported; asserting experience in that unlisted skill is unsupported. Profile-derived strengths merely listing a skill do not assert independent proficiency.',
+    'Set fitConditionSupported to true only when a supplied fitCondition is justified by a significant, explicitly grounded and realistically remediable fitConditionRisk that remains in report.risks, directly resolves that risk, and is consistent with the GO verdict and the rest of the report. Otherwise set it to false. Review the whole condition, including any implied facts, against the current profile and task; calibration memory is not current-task evidence.',
+    'A prospective request for client agreement is not a claim that agreement already exists, but its need and feasibility must follow from the supplied evidence. Missing skills or unspecified proficiency alone do not prove inability. Do not approve invented human-language requirements derived from output-content language, fabricated credentials, generic diligence, minor caveats or a condition to beat competition. Conditions cannot accompany NO_GO or promise that an irreversible blocker is resolved.',
     "Only reject concrete factual contradictions or invented credentials/requirements. Statements such as 'no evidence in the profile', 'unconfirmed', 'not established' and 'needs verification' correctly describe missing information and must not be rejected merely because the user might possess that skill. Evaluative fit judgments and cautious capability assessments are allowed. Advanced English supporting communication is a reasonable assessment, not an invented credential. A fixed budget cannot be compared to an hourly rate without an effort estimate; explaining that rate fit is unknown or neutral is correct.",
     'Assess factual grounding, not whether you agree with the numeric score or GO verdict. supported can be true only when every factual assertion is supported; otherwise quote each unsupported claim in unsupportedClaims.',
 ])

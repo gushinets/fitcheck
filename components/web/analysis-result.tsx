@@ -29,6 +29,7 @@ export function AnalysisResult({
   const analysis = entry.analysis
   const threshold = analysis.verdictThreshold
   const isGo = analysis.status === "GO"
+  const fitCondition = isGo && analysis.risks.length ? analysis.fitCondition?.trim() : undefined
   const rateComparison = entry.profile ? compareHourlyRate(entry.profile, entry.job) : null
   const currencyNotice = rateComparison === "conversion_required" ? copy.rateConversionRequired
     : rateComparison === "unknown_currency" ? copy.rateCurrencyUnknown
@@ -73,6 +74,7 @@ export function AnalysisResult({
               </div>
               <div>
                 <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${isGo ? "bg-success-muted text-success" : "bg-warning-muted text-warning-foreground"}`}>{isGo ? copy.go : copy.noGo}</span>
+                {fitCondition ? <p role="note" aria-label={copy.fitCondition} className="mt-3 rounded-xl bg-warning-muted p-3 text-sm leading-6 text-warning-foreground">{fitCondition}</p> : null}
                 <h1 className="mt-3 text-3xl font-semibold tracking-tight">{analysis.label}</h1>
                 <p className="mt-3 leading-7 text-muted-foreground">{analysis.summary}</p>
               </div>

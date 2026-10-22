@@ -54,7 +54,7 @@ def test_service_uses_revision_memory_and_corrected_vacancy_without_publishing(p
     result=asyncio.run(run())
     assert result.snapshot.profile.preferred_rate==50 and result.snapshot.profile_revision=='1'
     assert result.snapshot.vacancy==corrected and result.analysis.verdict_threshold==70
-    assert result.snapshot.prompt_version=='fitcheck.analysis.prompt.v2'
+    assert result.snapshot.prompt_version=='fitcheck.analysis.prompt.v3'
     assert result.snapshot.policy_version=='fitcheck.llm.policy.v2'
     request=next(m['content'] for m in adapter.calls[0]['messages'] if m['role']=='user')
     assert 'Prefer small projects' in request and 'corrected_score' in request

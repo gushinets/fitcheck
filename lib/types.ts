@@ -57,6 +57,8 @@ export interface FitAnalysis {
   score: number
   /** Decision threshold saved with the result; absent in legacy analyses. */
   verdictThreshold?: number
+  /** Localized, audited prerequisite; omitted for unconditional/legacy results. */
+  fitCondition?: string | null
   status: FitStatus
   label: string
   summary: string
