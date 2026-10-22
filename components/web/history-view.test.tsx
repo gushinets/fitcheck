@@ -39,6 +39,28 @@ describe("HistoryView", () => {
   })
 
   it.each([
+    { locale: "en" as const, label: "Task URL" },
+    { locale: "ru" as const, label: "Ссылка на задачу" },
+  ])("links to the original task in a separate protected tab in $locale", ({ locale, label }) => {
+    const url = "https://www.freelancer.com/projects/n8n/task?ref=history#details"
+    render(<HistoryView entries={[{ ...entry, job: { ...entry.job, url } }]} locale={locale} copy={webMessages[locale]} onOpen={vi.fn()} onClear={vi.fn()} />)
+    const link = screen.getByRole("link", { name: label })
+    expect(link).toHaveAttribute("href", url)
+    expect(link).toHaveAttribute("target", "_blank")
+    expect(link.getAttribute("rel")?.split(/\s+/)).toEqual(expect.arrayContaining(["noopener", "noreferrer"]))
+  })
+
+  it.each([undefined, "", "javascript:alert(1)", "data:text/html,task", "file:///task", "//example.com/task"])("keeps an entry with URL %s usable without an unsafe or empty link", async url => {
+    const user = userEvent.setup()
+    const onOpen = vi.fn()
+    const saved = { ...entry, job: { ...entry.job, url } }
+    render(<HistoryView entries={[saved]} locale="en" copy={webMessages.en} onOpen={onOpen} onClear={vi.fn()} />)
+    expect(screen.queryByRole("link")).not.toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: /Senior Python Backend Developer/ }))
+    expect(onOpen).toHaveBeenCalledWith(saved)
+  })
+
+  it.each([
     { locale: "en" as const, version: "Profile version: v2", changed: "Profile changed", action: "Reanalyze with current profile" },
     { locale: "ru" as const, version: "Версия профиля: v2", changed: "Профиль изменён", action: "Пересчитать по текущему профилю" },
   ])("marks only outdated analyses and offers a separate reanalysis action in $locale", async ({ locale, version, changed, action }) => {

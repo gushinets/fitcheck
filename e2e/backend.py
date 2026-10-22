@@ -25,6 +25,8 @@ from fitcheck_backend.contracts.resources import AnalysisSnapshot
 from fitcheck_backend.contracts.domain import FitAnalysis
 from fitcheck_backend.analysis.service import AnalysisResult
 from fitcheck_backend.imports.execution import ImportExecutor
+from fitcheck_backend.extraction.network import PublicPageResponse
+from fitcheck_backend.extraction.errors import ExtractionError
 
 url = make_url(os.environ.get('FITCHECK_E2E_DATABASE_URL', 'postgresql+psycopg://fitcheck_test:fitcheck_test@127.0.0.1:55464/fitcheck_e2e_test'))
 if url.database != 'fitcheck_e2e_test' or url.host not in {'127.0.0.1', 'localhost'}:
@@ -53,6 +55,17 @@ with runtime.engine.begin() as connection:
     connection.execute(text('TRUNCATE owners, provider_calls, auth_rate_buckets CASCADE'))
 app = create_app(settings, auth_runtime=runtime)
 domain = json.loads((Path(__file__).parents[1] / 'backend/tests/fixtures/domain.json').read_text(encoding='utf-8'))
+
+
+def captured_task_page(url):
+    if url != 'https://tasks.example.test/projects/n8n/task?ref=history#details':
+        raise ExtractionError('fetch_failed')
+    return PublicPageResponse('https://tasks.example.test/projects/n8n/canonical-task', 'text/plain',
+        'n8n integration task\nBuild reliable n8n automations connecting customer tools and CRM APIs.\nSkills: n8n, TypeScript')
+
+
+# Replace only the external page fetch; extraction/auth/API/storage remain real.
+runtime.extraction.fetch_page = captured_task_page
 
 
 @app.get('/testing/mail')
