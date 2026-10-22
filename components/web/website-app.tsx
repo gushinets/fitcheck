@@ -62,6 +62,7 @@ export function WebsiteApp({
 }) {
   const metrics = useRef<ReturnType<typeof createMetricsClient> | null>(null)
   const observationGeneration = useRef(0)
+  const navigationGeneration = useRef(0)
   const viewedResults = useRef(new Set<string>())
   const campaignCodes = useRef(knownCampaignCodes)
   const observe = useCallback(<N extends ClientEventName,>(name: N, properties: ClientProperties[N], context?: ClientContext, generation = observationGeneration.current) => {
@@ -271,9 +272,10 @@ export function WebsiteApp({
   }
 
   function navigate(nextView: WebView) {
+    navigationGeneration.current++
     if (nextView === "history" && view !== "history") observe("history_viewed", {})
     setView(nextView === "analyze" && !snapshot.profile ? "profile" : nextView)
-    if (nextView === "analyze") setAnalysisStep("source")
+    if (nextView === "analyze" || analysisStep === "analyzing") setAnalysisStep("source")
   }
 
   function analysisErrorMessage(error: unknown) {
@@ -325,6 +327,29 @@ export function WebsiteApp({
     const update = (entry: WebHistoryEntry) => entry.id === activeEntry.id ? { ...entry, feedback: saved } : entry
     setSnapshot((current) => ({ ...current, history: current.history.map(update) }))
     setActiveEntry((current) => current ? update(current) : current)
+  }
+
+  async function reanalyze(entry: WebHistoryEntry) {
+    if (!server) return
+    const generation = observationGeneration.current
+    const navigation = navigationGeneration.current
+    const previousView = view
+    const previousStep = analysisStep
+    let completed = false
+    setView("analyze")
+    setAnalysisStep("analyzing")
+    try {
+      const result = await server.reanalyze(entry.id)
+      if (generation !== observationGeneration.current) return
+      if (navigation === navigationGeneration.current) setActiveEntry(result.entry)
+      completed = true
+      await refresh()
+    } finally {
+      if (generation === observationGeneration.current && navigation === navigationGeneration.current) {
+        setAnalysisStep(completed ? "result" : previousStep)
+        if (!completed) setView(previousView)
+      }
+    }
   }
 
   function resultId(entry: WebHistoryEntry) {
@@ -410,6 +435,7 @@ export function WebsiteApp({
     }
     if (view === "history") {
       return <HistoryView entries={snapshot.history} locale={locale} copy={copy} onOpen={openHistory} onClear={() => guarded(clearHistory)}
+        onReanalyze={server ? entry => guarded(() => reanalyze(entry)) : undefined}
         onFilter={server ? status => guarded(async () => { const page = await server.loadHistory(null, status); setHistoryFilter(status); setSnapshot(current => ({ ...current, ...page })) }) : undefined}
         onMore={server && snapshot.historyCursor ? () => guarded(async () => { const page = await server.loadHistory(snapshot.historyCursor, historyFilter); setSnapshot(current => ({ ...current, historyCursor: page.historyCursor, history: [...current.history, ...page.history] })) }) : undefined}
         onStatus={server ? (entry, status) => guarded(async () => { await server.setApplicationStatus(entry.id, status); const page = await server.loadHistory(null, historyFilter); setSnapshot(current => ({ ...current, ...page })) }) : undefined} />
@@ -421,7 +447,7 @@ export function WebsiteApp({
       return <section className="grid min-h-96 place-items-center rounded-3xl border border-border bg-card"><p role="status" className="text-lg font-medium text-primary">{copy.analyzingVacancy}</p></section>
     }
     if (analysisStep === "result" && activeEntry) {
-      return <div className="space-y-4">{server ? <Button onClick={() => guarded(async () => { setAnalysisStep("analyzing"); try { const result = await server.reanalyze(activeEntry.id); setActiveEntry(result.entry); await refresh() } finally { setAnalysisStep("result") } })}>{locale === "ru" ? "Пересчитать по текущему профилю" : "Reanalyze with current profile"}</Button> : null}<AnalysisResult key={activeEntry.id} entry={activeEntry} copy={copy} onBack={() => setAnalysisStep("source")} onAnalyzeAnother={() => guarded(analyzeAnother)} onSaveFeedback={value => guarded(() => saveFeedback(value))} /></div>
+      return <div className="space-y-4">{server ? <Button onClick={() => guarded(() => reanalyze(activeEntry))}>{copy.reanalyzeCurrentProfile}</Button> : null}<AnalysisResult key={activeEntry.id} entry={activeEntry} copy={copy} onBack={() => setAnalysisStep("source")} onAnalyzeAnother={() => guarded(analyzeAnother)} onSaveFeedback={value => guarded(() => saveFeedback(value))} /></div>
     }
     return <VacancySource copy={copy} initialDraft={draft} onInputStarted={(inputMode) => observe("vacancy_input_started", { locale, inputMode })} onLoadUrl={(url) => { observe("extraction_requested", { locale, inputMode: "url" }); return api.extractVacancy(url) }} onReview={value => guarded(() => reviewDraft(value))} />
   }

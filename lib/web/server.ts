@@ -68,7 +68,7 @@ export function createServerWebsite(config: { fetch?: typeof fetch; delay?: () =
   function entry(resource: s.ServerAnalysisResource): WebHistoryEntry {
     return {
       id: resource.analysisId, userId: user?.id ?? "guest", profile: resource.snapshot.profile ?? null,
-      profileRevision: resource.snapshot.profileRevision, job: resource.snapshot.vacancy,
+      profileRevision: resource.snapshot.profileRevision, profileChanged: resource.profileChanged, job: resource.snapshot.vacancy,
       analysis: resource.analysis, createdAt: resource.createdAt, applicationStatus: resource.applicationStatus,
       ...(resource.feedback ? { feedback: { ...resource.feedback, createdAt: resource.createdAt } } : {}),
     }

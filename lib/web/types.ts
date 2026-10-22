@@ -54,6 +54,7 @@ export interface VacancyDraft extends Pick<Job, "proposalCount" | "averageBid" |
 
 export interface WebHistoryEntry {
   profileRevision?: string | null
+  profileChanged?: boolean | null
   applicationStatus?: "not_applied" | "applied" | "replied" | "interview" | "rejected" | "hired"
   providerOperationId?: string
   id: string

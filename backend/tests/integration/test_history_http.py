@@ -112,12 +112,14 @@ def test_feedback_update_clear_and_independent_application_status(profile_http):
         assert annotation.feedback_created_at is None and annotation.note is None
 
 
-def test_reanalysis_current_profile_frozen_memory_idempotency_and_previous_result(profile_http):
+@pytest.mark.parametrize('advance_profile_after_admission', [False, True])
+def test_reanalysis_current_profile_frozen_memory_idempotency_and_previous_result(profile_http, advance_profile_after_admission):
     a, c, runtime, issued, h = profile_http
     c.app.state.settings.jobs_enabled = True
     identifier = seed(profile_http, url=False)[0]
     base = '/v1/analyses/' + identifier
     assert c.put(base + '/feedback', json={'correctedScore': 40}, headers=h).status_code == 200
+    original = c.get(base).json()
     assert save(c, h, '1', preferredRate=70).status_code == 200
     response = c.post(base + '/reanalyses', headers={**h, 'Idempotency-Key': 'reanalysis-1'})
     assert response.status_code == 202, response.text
@@ -128,7 +130,8 @@ def test_reanalysis_current_profile_frozen_memory_idempotency_and_previous_resul
         assert job.input['profile']['preferredRate'] == 70
         assert 'url' not in job.input['vacancy']
         assert job.input['memory'][0]['correctedScore'] == 40
-    assert save(c, h, '2', preferredRate=80).status_code == 200
+    if advance_profile_after_admission:
+        assert save(c, h, '2', preferredRate=80).status_code == 200
     replay = c.post(base + '/reanalyses', headers={**h, 'Idempotency-Key': 'reanalysis-1'})
     assert replay.json() == response.json()
     assert c.get(base).json()['snapshot']['profileRevision'] == '1'
@@ -144,10 +147,22 @@ def test_reanalysis_current_profile_frozen_memory_idempotency_and_previous_resul
     snapshot = AnalysisSnapshot(profileRevision='2', profile=envelope.profile, vacancy=envelope.request.vacancy,
         locale='en', promptVersion=envelope.versions.prompt_version,
         schemaVersion=envelope.versions.schema_version, policyVersion=envelope.versions.policy_version)
-    new_id = JobPublication(a.engine).succeed_analysis(lease, AnalysisResult(FitAnalysis.model_validate(DATA['analysis']), snapshot))
+    analysis = FitAnalysis.model_validate({**DATA['analysis'], 'score': 62, 'status': 'NO_GO'})
+    new_id = JobPublication(a.engine).succeed_analysis(lease, AnalysisResult(analysis, snapshot))
     assert new_id is not None
-    assert len(c.get('/v1/history').json()['items']) == 2
-    assert c.get('/v1/analyses/' + str(new_id)).json()['snapshot']['profileRevision'] == '2'
+    history = {item['analysisId']: item for item in c.get('/v1/history').json()['items']}
+    assert set(history) == {identifier, str(new_id)}
+    assert history[identifier]['snapshot'] == original['snapshot']
+    assert history[identifier]['analysis'] == original['analysis']
+    assert history[identifier]['feedback'] == original['feedback']
+    assert history[identifier]['profileChanged'] is True
+    updated = c.get('/v1/analyses/' + str(new_id)).json()
+    assert history[str(new_id)] == updated
+    assert updated['snapshot']['profileRevision'] == '2'
+    assert updated['snapshot']['profile']['preferredRate'] == 70
+    assert updated['analysis']['score'] == 62
+    assert updated['currentProfileRevision'] == ('3' if advance_profile_after_admission else '2')
+    assert updated['profileChanged'] is advance_profile_after_admission
     assert c.get('/v1/jobs/' + str(job_id)).status_code == 200
     assert c.delete('/v1/history', headers=h).status_code == 204
     assert c.get('/v1/jobs/' + str(job_id)).status_code == 404

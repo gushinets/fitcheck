@@ -15,6 +15,7 @@ export function HistoryView({
   onMore,
   onStatus,
   onFilter,
+  onReanalyze,
 }: {
   entries: WebHistoryEntry[]
   locale: Locale
@@ -24,6 +25,7 @@ export function HistoryView({
   onMore?: () => void
   onStatus?: (entry: WebHistoryEntry, status: NonNullable<WebHistoryEntry["applicationStatus"]>) => void
   onFilter?: (status: string) => void
+  onReanalyze?: (entry: WebHistoryEntry) => void
 }) {
   return (
     <section>
@@ -39,7 +41,13 @@ export function HistoryView({
           <p className="mt-4 line-clamp-2 text-sm leading-6 text-muted-foreground">{entry.analysis.summary}</p><span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary">{entry.analysis.status === "GO" ? copy.go : copy.noGo}<ArrowRight className="size-4 transition group-hover:translate-x-1" aria-hidden="true" /></span>
         </button>
         {entry.job.url && /^https?:\/\//i.test(entry.job.url) ? <a className="mx-5 block text-sm text-primary underline" href={entry.job.url} target="_blank" rel="noopener noreferrer">{copy.vacancyUrl}</a> : null}
-        {entry.profileRevision ? <p className="mx-5 mt-2 text-sm text-muted-foreground">{copy.profile}: v{entry.profileRevision}</p> : null}
+        <div className="mx-5 my-3 space-y-2">
+          <p className="text-sm text-muted-foreground">{entry.profileRevision ? `${copy.profileVersion}: v${entry.profileRevision}` : copy.profileVersionUnknown}</p>
+          {entry.profileChanged === true ? <>
+            <p className="w-fit rounded-lg bg-warning-muted px-2 py-1 text-sm text-warning-foreground">{copy.profileChanged}</p>
+            {onReanalyze ? <Button type="button" variant="outline" className="h-auto min-h-9 max-w-full whitespace-normal py-2 text-left" onClick={() => onReanalyze(entry)}>{copy.reanalyzeCurrentProfile}</Button> : null}
+          </> : null}
+        </div>
         {onStatus ? <select className="m-5 rounded-lg border p-2" aria-label={`${locale === "ru" ? "Статус отклика" : "Application status"}: ${entry.job.title}`} value={entry.applicationStatus ?? "not_applied"} onChange={event => onStatus(entry, event.target.value as NonNullable<WebHistoryEntry["applicationStatus"]>)}>{applicationStatuses.map(status => <option key={status} value={status}>{statusLabel(status, locale)}</option>)}</select> : null}
         </div>
       ))}</div>}

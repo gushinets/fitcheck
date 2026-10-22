@@ -23,6 +23,7 @@ export const analysisResourceSchema = z.object({
   snapshot: z.object({ profileRevision: z.string().nullable(), profile: freelancerProfileSchema.nullable().optional(), vacancy: serverVacancySchema }),
   feedback: z.object({ correctedScore: z.number().int().min(0).max(100), note: z.string().optional() }).nullable().optional(),
   applicationStatus: z.enum(["not_applied", "applied", "replied", "interview", "rejected", "hired"]),
+  profileChanged: z.boolean().nullable().optional(),
 })
 export type ServerAnalysisResource = z.infer<typeof analysisResourceSchema>
 export const historyPageSchema = z.object({ items: z.array(analysisResourceSchema), hasMore: z.boolean(), nextCursor: z.string().nullable() })

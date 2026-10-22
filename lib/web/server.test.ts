@@ -96,6 +96,16 @@ describe("server website", () => {
     expect((await server.api.analyzeVacancyWithContext!(input)).entry?.analysis.fitCondition).toBe(fitCondition)
   })
 
+  it.each([true, false, null])("preserves the server profile change state %s in history and completed jobs", async profileChanged => {
+    const h = harness(); const server = h.server()
+    const saved = { ...resource, profileChanged, currentProfileRevision: "3" }
+    h.overrides.set("v1/history?limit=100", () => Response.json({ items: [saved], hasMore: false, nextCursor: null }))
+    h.overrides.set("v1/jobs/job-1", () => Response.json({ jobId: "job-1", type: "analysis", status: "succeeded", analysisId: saved.analysisId, result: saved }))
+    expect((await server.repository.loadSnapshot()).history[0]).toMatchObject({ profileRevision: "2", profileChanged })
+    expect((await server.loadHistory()).history[0]).toMatchObject({ profileRevision: "2", profileChanged })
+    expect((await server.api.analyzeVacancyWithContext!(input)).entry).toMatchObject({ profileRevision: "2", profileChanged })
+  })
+
   it("resumes an admitted job after reload without sending a second admission", async () => {
     const h = harness(); const first = h.server(); await first.repository.loadSnapshot()
     h.overrides.set("v1/jobs/job-1", () => Response.json({ jobId: "job-1", type: "analysis", status: "running" }))
