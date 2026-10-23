@@ -5,6 +5,7 @@ from ..contracts.openapi import ERRORS, SECURITY
 from .errors import ErrorEnvelope
 from .dependencies import required_runtime, account_principal, web_principal, client_ip, validate_web_origin, validate_bootstrap, validate_account_mutation
 from ..auth.crypto import cookie_name, cookie_options
+from ..metrics.identity import visitor_context
 
 router = APIRouter(dependencies=[Depends(required_runtime)], responses={status: {'model': ErrorEnvelope, 'description': code} for status, code in ERRORS.items()})
 
@@ -46,7 +47,9 @@ def bootstrap(request: Request):
 def register(body: r.RegistrationCredentials, request: Request):
     validate_bootstrap(request)
     runtime = required_runtime(request)
+    context = visitor_context(request)
     issued = runtime.auth.register(body.email, body.password, client_ip(request), old_session_token=request.cookies.get(cookie_name(runtime.settings)))
+    runtime.identity.auth(context,issued,"registered")
     return web_session_response(request, issued, 201)
 
 
@@ -54,7 +57,9 @@ def register(body: r.RegistrationCredentials, request: Request):
 def login(body: r.LoginCredentials, request: Request):
     validate_bootstrap(request)
     runtime = required_runtime(request)
+    context = visitor_context(request)
     issued = runtime.auth.login(body.email, body.password, client_ip(request), old_session_token=request.cookies.get(cookie_name(runtime.settings)))
+    runtime.identity.auth(context,issued,"login")
     return web_session_response(request, issued, 200)
 
 

@@ -59,4 +59,7 @@ class AuthRepository:
         query = update(AuthSession).where(AuthSession.user_id == user_id, AuthSession.revoked_at.is_(None))
         if session_id is not None:
             query = query.where(AuthSession.id == session_id)
-        self.session.execute(query.values(revoked_at=now))
+        ids=list(self.session.scalars(query.returning(AuthSession.id).values(revoked_at=now)))
+        if ids:
+            from ..metrics.identity import archive_sessions
+            archive_sessions(self.session,ids,now)

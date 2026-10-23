@@ -79,6 +79,11 @@ class MetricsCollector:
                     .on_conflict_do_nothing())
                 deleted = session.execute(delete(MetricJournal).where(MetricJournal.subject_kind=='visitor',
                     MetricJournal.subject_id==visitor_id, MetricJournal.environment==self.settings.metrics_environment)).rowcount
+                from ..storage.metric_identity import MetricIdentityTransition, MetricVisitorBoundary
+                session.execute(delete(MetricIdentityTransition).where(MetricIdentityTransition.visitor_id==visitor_id,
+                    MetricIdentityTransition.environment==self.settings.metrics_environment))
+                session.execute(delete(MetricVisitorBoundary).where(MetricVisitorBoundary.visitor_id==visitor_id,
+                    MetricVisitorBoundary.environment==self.settings.metrics_environment))
                 # Retain cost accounting while discarding the visitor association.
                 session.execute(update(WebsiteProviderAttempt).where(WebsiteProviderAttempt.subject_id==visitor_id,
                     WebsiteProviderAttempt.environment==self.settings.metrics_environment).values(subject_id=ERASED_VISITOR_ID))

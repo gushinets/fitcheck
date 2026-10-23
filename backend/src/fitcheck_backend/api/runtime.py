@@ -35,6 +35,8 @@ class AuthRuntime:
         self.crypto = AuthCrypto(bytes.fromhex(settings.auth_secret.get_secret_value()), clock)
         passwords = PasswordCodec()
         self.limiter = AuthRateLimiter(self.engine, self.crypto, clock)
+        from ..metrics.identity import IdentityRecorder
+        self.identity = IdentityRecorder(self.engine,settings,clock)
         self.mailer = mailer if mailer is not None else SMTPMailer(settings)
         metrics_environment = settings.metrics_environment if settings.metrics_enabled else None
         self.auth = AuthService(self.engine, self.crypto, passwords, self.limiter, self.mailer, clock, metrics_environment=metrics_environment)

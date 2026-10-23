@@ -48,7 +48,7 @@ class GuestClaimService:
                 # Profile and receipt are still in the encompassing atomic transaction.
                 count=transfer_guest_analyses(s,guest.owner_id,account.owner_id)
                 if imported:create_profile(s,account.owner_id,profile.profile)
-                s.add(GuestClaimReceipt(account_owner_id=account.owner_id,guest_owner_id=guest.owner_id,
+                s.add(GuestClaimReceipt(created_at=self.clock(),account_owner_id=account.owner_id,guest_owner_id=guest.owner_id,
                     idempotency_key=idempotency_key,request_hash=digest,claimed_count=count,profile_imported=imported))
                 s.flush()
                 return GuestClaimResult(claimedCount=count,profileImported=imported)

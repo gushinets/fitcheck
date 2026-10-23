@@ -58,4 +58,8 @@ async def claim_guest(request: Request,proofs=Depends(claim_proofs),key=Depends(
     runtime=required_runtime(request)
     account,identity=proofs
     from starlette.concurrency import run_in_threadpool
-    return await run_in_threadpool(runtime.claims.claim,account=account,guest=identity,idempotency_key=key)
+    from ..metrics.identity import visitor_context
+    context=visitor_context(request)
+    result=await run_in_threadpool(runtime.claims.claim,account=account,guest=identity,idempotency_key=key)
+    await run_in_threadpool(runtime.identity.claim,context,account,identity,key)
+    return result

@@ -64,7 +64,7 @@ describe('demo observations', () => {
     await screen.findByText('displayed result'); view.unmount()
     render(<DemoAnalysis server={server as unknown as ServerWebsite} locale='en' onAccount={() => {}} observe={observe} />)
     await screen.findByText('displayed result')
-    expect(observe.mock.calls.map(c => c[0])).toEqual(['analysis_result_viewed','analysis_result_viewed'])
+    await waitFor(() => expect(observe.mock.calls.map(c => c[0])).toEqual(['analysis_result_viewed','analysis_result_viewed']))
   })
   it('does not observe an asynchronous result after leaving the demo', async () => {
     const server = setup(); const observe = vi.fn(); let resolve!: (v: typeof completed) => void

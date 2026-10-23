@@ -29,7 +29,12 @@ def cleanup(engine, *, now, execute=False, limit=100):
                                  ('tokens',AuthToken,func.coalesce(AuthToken.consumed_at,AuthToken.expires_at))]:
             ids = session.scalars(select(model.id).where(end<now-timedelta(days=7)).order_by(model.id).limit(limit).with_for_update(skip_locked=True)).all()
             counts[name] = len(ids)
-            if execute and ids: session.execute(delete(model).where(model.id.in_(ids)))
+            if execute and ids:
+                if model is AuthSession:
+                    from ..metrics.identity import archive_sessions
+                    if not archive_sessions(session,ids,now):
+                        continue
+                session.execute(delete(model).where(model.id.in_(ids)))
         reserved = exists().where(QuotaReservation.job_id==Job.id,QuotaReservation.status=='reserved')
         unsettled = exists().where(ProviderCall.job_id==Job.id,ProviderCall.state=='started')
         provider_reserved_job = select(ProviderCall.id).join(CallReservation,CallReservation.provider_call_id==ProviderCall.id).where(ProviderCall.job_id==Job.id,CallReservation.status=='reserved').exists()

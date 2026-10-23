@@ -62,7 +62,7 @@ def transfer_guest_analyses(session: Session, guest_owner_id: UUID, user_owner_i
         raise OwnershipConflict("Guest data conflicts with account data") from None
 
 
-def delete_owner(session: Session, owner_id: UUID) -> None:
+def delete_owner(session: Session, owner_id: UUID, *, now=None) -> None:
     # Claimed guest profiles remain private guest data and must disappear with
     # their account; their transferred analyses are owned by the account now.
     user = session.scalar(select(User).where(User.owner_id==owner_id))
@@ -72,6 +72,8 @@ def delete_owner(session: Session, owner_id: UUID) -> None:
     else:
         ids = [owner_id]
     session.scalars(select(Owner).where(Owner.id.in_(ids)).order_by(Owner.id).with_for_update()).all()
+    from ..metrics.identity import account_boundary
+    account_boundary(session,ids,now or utcnow())
     from .metrics import MetricJournal, MetricDemoLink
     session.execute(delete(MetricJournal).where(MetricJournal.event_id.in_(
         select(MetricDemoLink.event_id).where(MetricDemoLink.guest_owner_id.in_(ids)))))

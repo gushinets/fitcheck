@@ -63,7 +63,7 @@ class AccountDeletionService:
                     if current != guest_ids:
                         raise _OwnershipGraphChanged()
                     erase_account_metrics(session, principal.owner_id)
-                    delete_owner(session, principal.owner_id)
+                    delete_owner(session, principal.owner_id, now=self.clock())
                     append_account_deleted(session, environment=self.metrics_environment, occurred_at=self.clock())
                 return
             except _OwnershipGraphChanged:

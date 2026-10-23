@@ -12,6 +12,7 @@ class MaintenanceResult:
     processed: int = 0
     deleted: int = 0
     tombstones_deleted: int = 0
+    identity_deleted: int = 0
     backfill_target_at: datetime | None = None
     backfill_complete_through: datetime | None = None
     backfill_complete: bool | None = None
@@ -36,8 +37,17 @@ def cleanup_metrics(engine, *, now, dry_run=True, limit=1000) -> MaintenanceResu
             .where(MetricErasedVisitor.erased_at < now-timedelta(days=181))
             .order_by(MetricErasedVisitor.erased_at, MetricErasedVisitor.environment, MetricErasedVisitor.visitor_digest)
             .limit(limit-len(rows)).with_for_update(skip_locked=True)).all()
+        from ..storage.metric_identity import MetricIdentityTransition as Link, MetricVisitorBoundary as Boundary
+        remaining=limit-len(rows)-len(tombstones)
+        identities=list(session.scalars(select(Link.id).where(Link.occurred_at<cutoff)
+            .order_by(Link.occurred_at,Link.id).limit(remaining).with_for_update(skip_locked=True)))
+        remaining-=len(identities)
+        boundaries=session.execute(select(Boundary.environment,Boundary.visitor_id)
+            .where(Boundary.anonymous_floor<cutoff).order_by(Boundary.anonymous_floor,Boundary.environment,Boundary.visitor_id)
+            .limit(remaining).with_for_update(skip_locked=True)).all()
+        processed=len(rows)+len(tombstones)+len(identities)+len(boundaries)
         if dry_run:
-            return MaintenanceResult(processed=len(rows)+len(tombstones))
+            return MaintenanceResult(processed=processed)
         if rows:
             session.execute(delete(MetricJournal).where(MetricJournal.event_id.in_([row.event_id for row in rows])))
             # Advancing only affected sources is conservative. Browser occurred_at
@@ -52,7 +62,11 @@ def cleanup_metrics(engine, *, now, dry_run=True, limit=1000) -> MaintenanceResu
         for environment, digest in tombstones:
             session.execute(delete(MetricErasedVisitor).where(MetricErasedVisitor.environment==environment,
                 MetricErasedVisitor.visitor_digest==digest))
-        return MaintenanceResult(processed=len(rows)+len(tombstones), deleted=len(rows), tombstones_deleted=len(tombstones))
+        if identities:session.execute(delete(Link).where(Link.id.in_(identities)))
+        for environment,visitor in boundaries:
+            session.execute(delete(Boundary).where(Boundary.environment==environment,Boundary.visitor_id==visitor))
+        return MaintenanceResult(processed=processed, deleted=len(rows), tombstones_deleted=len(tombstones),
+            identity_deleted=len(identities)+len(boundaries))
 
 
 def maintenance_guard(session):

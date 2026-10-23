@@ -1,4 +1,5 @@
-/** Same-origin cookie relay. No service credentials or provider access here. */
+/** Same-origin cookie relay; identity attestations are server-generated only. */
+import { visitorProof } from "@/lib/metrics/identity-proof"
 export async function relayBackend(request: Request, backendUrl = process.env.FITCHECK_BACKEND_URL, transport = fetch) {
   const url = new URL(request.url)
   const prefix = "/api/backend/"
@@ -15,6 +16,11 @@ export async function relayBackend(request: Request, backendUrl = process.env.FI
     const value = request.headers.get(name)
     if (value) headers.set(name, value)
   }
+  const proof = visitorProof(request, `/${path}`, {
+    cookieSecret: process.env.METRICS_COOKIE_SECRET, bridgeKey: process.env.METRICS_BRIDGE_KEY,
+    environment: process.env.METRICS_ENVIRONMENT,
+  })
+  if (proof) headers.set("X-FitCheck-Visitor-Proof", proof)
   const cookies = (request.headers.get("cookie") ?? "").split(";").map(v => v.trim()).filter(v => /^(?:__Host-)?fitcheck_(?:session|auth_csrf|guest)=/.test(v))
   if (cookies.length) headers.set("cookie", cookies.join("; "))
   try {

@@ -1,6 +1,6 @@
 # ANY-736 — implementation and verification
 
-Status: implemented locally; not deployed by the agent.
+Status: deployed by the user; basic development smoke verified by the agent.
 Parent ANY-734. Depends on deployed ANY-735 (`9f2dca3`).
 
 ## Behavior
@@ -58,7 +58,46 @@ backend migration step to head `0010` before starting the new API/worker; the
 migration adds only the demo proof table and indexes. Rebuild/restart website,
 API and worker from the same revision. No new environment variables are needed.
 
-Live development smoke remains pending deployment: verify a real demo's safe
-input/request events, then view/reload classification and one admitted job.
-Use a provider stub for job completion if available; this implementation has not
-made a paid live analysis or claimed a live email-verified account check.
+Basic live development smoke is recorded below. A complete live analysis,
+view/reload classification and account claim remain untested. Use a provider
+stub for any additional job-completion smoke; no paid live analysis or live
+email-verified account check is claimed.
+
+
+## Post-deployment development smoke — 2026-10-23
+
+User reported successful migration/deployment. Dokploy lists website, API and
+worker deployments as Done on the same commit
+`95ae2233a3dfe21758424ab861ed18de126a7b5a` (ANY-736).
+
+- API container `56b553500138`: database schema `0010`,
+  `metric_demo_links` exists; internal `/health/ready` returned 200;
+  metrics enabled with environment development.
+- Worker container `e7ee1a30cf4d`: packaged migration head `0010`;
+  `python -m fitcheck_backend.worker.health` exited 0.
+- Opened the deployed website in the real Firefox browser, entered RU guest
+  demo without registration and filled a synthetic React profile manually.
+  No skill-generation action was used.
+- Filled a synthetic text vacancy, opened review and returned to source.
+  Then loaded the public example.com page through URL extraction; the review
+  displayed Example Domain. No analysis button was pressed.
+- A separate SQLAlchemy read in the deployed API container confirmed the
+  following committed visitor observations after smoke start
+  `2026-10-23T17:25:25.652604Z`, each with a server-verified demo link:
+
+  | Event | Input mode | Locale | Guest proof |
+  | --- | --- | --- | --- |
+  | vacancy_input_started | text | ru | present |
+  | vacancy_input_started | url | ru | present |
+  | extraction_requested | url | ru | present |
+
+- New Job rows and ProviderCall rows since smoke start were both zero. This
+  confirms that this smoke did not admit an analysis or make a model call.
+- Closed diagnostic terminals and returned the demo to the account entry screen.
+  No deployment settings, credentials or database rows were edited directly.
+
+Limits: live `analysis_requested`, result view/reload/first-view classification
+and account claim were not exercised; they remain covered by the local stubbed
+component and PostgreSQL tests above. No SMTP setup or paid-provider validation
+was performed. The observed live delivery/ownership result is limited to input
+and extraction events, not an end-to-end completed analysis.
