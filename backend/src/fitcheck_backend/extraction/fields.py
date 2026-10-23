@@ -50,7 +50,10 @@ def unique_skills(values: list[str]) -> list[str]:
 
 def competition_lines(text: str) -> list[str]:
     """Join an isolated statistic label with its adjacent value, in either order."""
-    lines = [line for raw in text.splitlines() if (line := re.sub(r'\s+', ' ', raw).strip())]
+    # A paragraph can contain several labelled facts. Split sentence/clause
+    # boundaries, preserving decimal points and the supported abbreviations.
+    clauses = re.split(r'(?<!avg\.)(?<=[.!?])\s+|;\s*|\n', text, flags=re.I)
+    lines = [line for raw in clauses if (line := re.sub(r'[.;!?]$', '', re.sub(r'\s+', ' ', raw).strip()))]
     count_label = re.compile(PROPOSAL_LABEL + r'\s*:?$', re.I).fullmatch
     bid_label = re.compile(BID_LABEL + r'\s*:?$', re.I).fullmatch
     count = re.compile(r'[+−-]?\d').match
@@ -84,7 +87,10 @@ def extract_description_fields(text: str) -> dict:
         explicit.extend(re.split(r'[,;|]', match[1]))
     mentioned = [skill for skill in KNOWN_SKILLS if re.search(r'(?<![^\W_])' + re.escape(skill) + r'(?![^\W_])', text, re.I)]
     candidates = []
-    for line in competition_lines(text):
+    # Period qualifiers may be separated by punctuation ("USD 3000; per
+    # month"). Preserve the original paragraph's conservative exclusion.
+    budget_text = '\n'.join(line for line in text.splitlines() if not UNSUPPORTED_PERIOD.search(line))
+    for line in competition_lines(budget_text):
         if UNSUPPORTED_PERIOD.search(line) or re.search(r'client\s+spend|' + BID_LABEL, line, re.I):
             continue
         labelled = LABEL.search(line)

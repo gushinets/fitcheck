@@ -154,7 +154,9 @@ def extract_content(body: str, *, content_type: str, source_url: str | None = No
         if fields['skills']:
             provenance['skills'] = 'json_ld' if structured_skills or structured_description and not page_skills else 'html'
         if freelancer:
-            stats_nodes = soup.select('.Project-heading, .Project-stats, .Project-statistics')
+            stats_nodes = [node for node in soup.select(
+                '.Project-heading, .Project-stats, .Project-statistics, app-project-view-logged-out-about')
+                if not node.find_parent(class_=re.compile(r'User-bid|proposal', re.I))]
             statistics = '\n'.join(BeautifulSoup(str(node), 'html.parser').get_text('\n') for node in stats_nodes)
         else:
             statistics = description

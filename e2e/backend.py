@@ -61,7 +61,7 @@ def captured_task_page(url):
     if url != 'https://tasks.example.test/projects/n8n/task?ref=history#details':
         raise ExtractionError('fetch_failed')
     return PublicPageResponse('https://tasks.example.test/projects/n8n/canonical-task', 'text/plain',
-        'n8n integration task\nBuild reliable n8n automations connecting customer tools and CRM APIs.\nSkills: n8n, TypeScript')
+        'n8n integration task\nBuild reliable n8n automations connecting customer tools and CRM APIs.\nSkills: n8n, TypeScript\nProposals: 171')
 
 
 # Replace only the external page fetch; extraction/auth/API/storage remain real.

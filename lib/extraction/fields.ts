@@ -32,7 +32,11 @@ function amount(value: string) {
 
 function moneyFields(text: string): Omit<DescriptionFields, "skills"> {
   const candidates: Omit<DescriptionFields, "skills">[] = []
-  const lines = text.split(/\n/).map(line => line.trim()).filter(Boolean)
+  // Keep unsupported period context before separating facts in a paragraph.
+  const lines = text.split(/\n/)
+    .filter(line => !/per\s+(?:day|week|month|year|annum)\b|\/\s*(?:day|week|month|year|annum)\b|\b(?:daily|weekly|monthly|yearly|annual|annually)\b|в\s+(?:день|неделю|месяц|год)\b/i.test(line))
+    .flatMap(line => line.split(/(?<!avg\.)(?<=[.!?])\s+|;\s*/i))
+    .map(line => line.trim().replace(/[.;!?]$/, "")).filter(Boolean)
   const bidLabel = new RegExp(`^${averageBidPattern}\\s*:?$`, "i")
   const bidMention = new RegExp(averageBidPattern, "i")
   const bareMoney = new RegExp(`^(?:${currencyPattern})?\\s*${numberPattern}(?:\\s*[-–—]\\s*(?:${currencyPattern})?\\s*${numberPattern})?\\s*(?:${currencyPattern})?$`, "u")

@@ -8,6 +8,7 @@ from ..auth.errors import AuthError
 from ..auth.access import require_verified
 from ..auth.service import active_session
 from ..contracts.resources import ProfileComparison, ProfileUpdate, Preferences, DraftResource
+from ..extraction.competition import with_competition
 from ..storage.auth_repository import AuthRepository
 from ..storage.database import unit_of_work
 from ..storage.models import User
@@ -77,5 +78,7 @@ class ProfileService:
             return preferences.get_draft(session, principal.owner_id)
 
     def update_draft(self, principal, value: DraftResource | None):
+        if value is not None:
+            value = value.model_copy(update={'vacancy': with_competition(value.vacancy)})
         with self._transaction(principal, mutation=True) as session:
             return preferences.save_draft(session, principal.owner_id, value)

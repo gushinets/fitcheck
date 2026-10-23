@@ -21,6 +21,7 @@ from .envelope import AnalysisEnvelopeV2, SuggestionsEnvelopeV2, FrozenLimits, e
 from .types import AdmissionResult
 from .errors import JobError
 from ..metrics.lifecycle import append_domain_event, job_key
+from ..extraction.competition import with_competition
 
 
 class JobAdmission:
@@ -114,7 +115,7 @@ class JobAdmission:
                         profile=get_profile(s,owner_id,revision)
                         if profile is None:raise JobError('not_found')
                     envelope=AnalysisEnvelopeV2(envelopeVersion=2,mode=mode,sessionId=identity.session_id if identity else None,
-                        profileRevision=profile.revision,profile=profile.profile,vacancy=request.vacancy,locale=request.locale,
+                        profileRevision=profile.revision,profile=profile.profile,vacancy=with_competition(request.vacancy),locale=request.locale,
                         memory=[] if mode=='guest' else get_calibration(s,owner_id),limits=limits,
                         versions=execution_versions(kind,model=self.model))
                 else:

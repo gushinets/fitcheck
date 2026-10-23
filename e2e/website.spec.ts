@@ -63,11 +63,11 @@ async function profile(page: Page, locale: Locale = "en") {
   await page.getByRole("button", { name: copy.saveProfile, exact: true }).click()
   await expect(page.getByRole("heading", { name: copy.chooseVacancyTitle })).toBeVisible()
 }
-async function task(page: Page, title: string, locale: Locale = "en") {
+async function task(page: Page, title: string, locale: Locale = "en", description = "Build a React application with TypeScript and accessible forms for customers.") {
   const copy = webMessages[locale]
   await page.getByRole("button", { name: copy.pasteText, exact: true }).click()
   await page.getByLabel(copy.vacancyTitle, { exact: true }).fill(title)
-  await page.getByLabel(copy.vacancyDescription, { exact: true }).fill("Build a React application with TypeScript and accessible forms for customers.")
+  await page.getByLabel(copy.vacancyDescription, { exact: true }).fill(description)
   await page.getByRole("button", { name: copy.reviewVacancy, exact: true }).click()
   const [admission] = await Promise.all([
     page.waitForResponse(response => response.url().endsWith("/v1/analysis-jobs") && response.request().method() === "POST"),
@@ -251,6 +251,7 @@ test("URL and manual analysis leave clipboard untouched; source survives publica
   const saved = await (await page.request.get("/api/backend/v1/history?limit=100")).json()
   expect(saved.items).toHaveLength(1)
   expect(saved.items[0].snapshot.vacancy.url).toBe(sourceUrl)
+  expect(saved.items[0].snapshot.vacancy.proposalCount).toBe(171)
 
   // Resolve the external destination locally while exercising a real new tab.
   await context.route("https://tasks.example.test/**", route => route.fulfill({ contentType: "text/html", body: "<title>Original task</title><p>Original task</p>" }))
@@ -265,7 +266,7 @@ test("URL and manual analysis leave clipboard untouched; source survives publica
   await expectClipboardUntouched(page)
 
   await page.getByRole("button", { name: "New analysis", exact: true }).first().click()
-  await task(page, "Manual task without URL")
+  await task(page, "Manual task without URL", "en", "Build reliable n8n workflows connecting webhooks and customer APIs. Remote work, all communication in English. Hourly budget: USD 25-35. Proposals: 248. Average bid: 500 USD.")
   await expect(page.getByText("Manual task without URL", { exact: true })).toBeVisible({ timeout: 15_000 })
   await expectClipboardUntouched(page)
   await page.reload()
@@ -274,6 +275,9 @@ test("URL and manual analysis leave clipboard untouched; source survives publica
   const history = await (await page.request.get("/api/backend/v1/history?limit=100")).json()
   expect(history.items).toHaveLength(2)
   expect(history.items.find((item: { snapshot: { vacancy: { title: string } } }) => item.snapshot.vacancy.title === "Manual task without URL").snapshot.vacancy).not.toHaveProperty("url")
+  expect(history.items.find((item: { snapshot: { vacancy: { title: string } } }) => item.snapshot.vacancy.title === "Manual task without URL").snapshot.vacancy).toMatchObject({
+    proposalCount: 248, averageBid: 500, averageBidCurrency: "USD", hourlyRateMin: 25, hourlyRateMax: 35, budgetCurrency: "USD",
+  })
   await page.getByRole("button", { name: /Manual task without URL/ }).click()
   await expect(page.getByText("Manual task without URL", { exact: true })).toBeVisible()
   await expectClipboardUntouched(page)

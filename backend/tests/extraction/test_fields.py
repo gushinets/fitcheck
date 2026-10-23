@@ -3,6 +3,37 @@ import pytest
 from fitcheck_backend.extraction.fields import extract_competition, extract_description_fields
 
 
+INLINE = ('Build reliable n8n workflows connecting webhooks and customer APIs. '
+    'Remote work, all communication in English. Hourly budget: USD 25-35. '
+    'Proposals: 248. Average bid: 500 USD.')
+
+
+def test_inline_competition_and_budget_are_separate_evidence():
+    assert extract_competition(INLINE) == {'proposalCount': 248, 'averageBid': 500, 'averageBidCurrency': 'USD'}
+    assert extract_description_fields(INLINE) == {'skills': ['n8n', 'Webhooks'],
+        'hourlyRateMin': 25, 'hourlyRateMax': 35, 'budgetCurrency': 'USD'}
+
+
+@pytest.mark.parametrize('text,expected', [
+    ('Build workflows; Proposals: 9; Average bid: 500 EUR.', {'proposalCount': 9, 'averageBid': 500, 'averageBidCurrency': 'EUR'}),
+    ('Build workflows. 248 proposals. Avg. bid: $500.50.', {'proposalCount': 248, 'averageBid': 500.5, 'averageBidCurrency': 'USD'}),
+    ('Build workflows. Proposals: 10. Proposals: 248. Average bid: 500 USD.', {'averageBid': 500, 'averageBidCurrency': 'USD'}),
+    ('Build workflows. Proposals: 50+. Average bid: €300. Average bid: $500.', {}),
+    ('Build workflows. Proposals: 1.5. Average bid: CHF500.', {}),
+    ('Build 248 workflows. A bidder claims Proposals: 999 and Average bid: $500.', {}),
+    ('Build workflows. Average bid: 500 руб. Proposals: 248.', {'proposalCount': 248, 'averageBid': 500, 'averageBidCurrency': 'RUB'}),
+    ('Build workflows. Avg. bid: 500 руб. Proposals: 248.', {'proposalCount': 248, 'averageBid': 500, 'averageBidCurrency': 'RUB'}),
+    ('Build workflows. Proposals: 50...', {}),
+])
+def test_inline_statistics_remain_conservative(text, expected):
+    assert extract_competition(text) == expected
+
+
+@pytest.mark.parametrize('text', ['Budget: USD 3000; per month', 'Budget: USD 3000. Per month. Proposals: 248.'])
+def test_inline_budget_keeps_unsupported_period_context(text):
+    assert extract_description_fields(text) == {'skills': []}
+
+
 @pytest.mark.parametrize(('text', 'expected'), [
     ('Budget: €250–750', {'fixedBudget': 250, 'fixedBudgetMax': 750, 'budgetCurrency': 'EUR'}),
     ('Project budget: $250-750 USD', {'fixedBudget': 250, 'fixedBudgetMax': 750, 'budgetCurrency': 'USD'}),

@@ -6,6 +6,24 @@ import pytest
 from fitcheck_backend.extraction.content import extract_content
 
 FIXTURES = Path(__file__).resolve().parents[3] / 'lib/extraction/__fixtures__'
+CURRENT = Path(__file__).resolve().parents[1] / 'fixtures/freelancer-current'
+
+
+@pytest.mark.parametrize('name,count', [('lead', 9), ('n8n', 171), ('shopify', 406), ('whatsapp', 106)])
+def test_current_freelancer_statistics_outside_legacy_heading(name, count):
+    body = (CURRENT / f'{name}.html').read_text()
+    body += '<div class="User-bid-text">Proposals: 999\nAverage bid: $9000</div>'
+    result = html(body, f'https://www.freelancer.com/projects/test/{name}')
+    assert result['proposalCount'] == count
+    assert result['provenance']['proposalCount'] == 'html'
+    assert 'averageBid' not in result  # These pages do not publish an average bid.
+    assert len(result['description']) > 30
+
+
+def test_current_and_legacy_project_statistics_conflict_without_selecting_one():
+    body = (CURRENT / 'shopify.html').read_text() + '<div class="Project-stats">248 proposals</div>'
+    result = html(body, 'https://www.freelancer.com/projects/shopify/bridge')
+    assert 'proposalCount' not in result
 
 
 def html(body, url='https://jobs.example/42'):

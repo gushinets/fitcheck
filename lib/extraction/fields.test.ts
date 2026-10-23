@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest"
 import { extractDescriptionFields } from "./fields"
 
 describe("task fields in free text", () => {
+  it("keeps an inline hourly budget separate from proposal statistics and average bid", () => {
+    expect(extractDescriptionFields("Build workflows. Hourly budget: USD 25-35. Proposals: 248. Average bid: 500 USD.")).toEqual({
+      skills: [], hourlyRateMin: 25, hourlyRateMax: 35, budgetCurrency: "USD",
+    })
+  })
+  it.each(["Budget: USD 3000; per month", "Budget: USD 3000. Per month. Proposals: 248."])("keeps unsupported budget period context: %s", text => {
+    expect(extractDescriptionFields(text)).toEqual({ skills: [] })
+  })
   it.each([
     ["Budget: €250–750", { fixedBudget: 250, fixedBudgetMax: 750, budgetCurrency: "EUR" }],
     ["Project budget: $250-750 USD", { fixedBudget: 250, fixedBudgetMax: 750, budgetCurrency: "USD" }],
