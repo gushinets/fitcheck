@@ -9,6 +9,17 @@ from bs4 import BeautifulSoup
 from .fields import currency, extract_competition, extract_description_fields, unique_skills
 
 
+SITE_CHROME = (
+    'script, style, noscript, nav, header, footer, form, [hidden], [aria-hidden="true"], '
+    '[role~="navigation" i], [role~="banner" i], [role~="contentinfo" i]'
+)
+
+
+def remove_site_chrome(soup: BeautifulSoup) -> None:
+    for node in soup.select(SITE_CHROME):
+        node.decompose()
+
+
 def normalized_lines(value: str) -> str:
     # Repeated labels may belong to different statistics; keep every occurrence
     # so downstream conflict detection sees all supplied evidence.
@@ -18,8 +29,7 @@ def normalized_lines(value: str) -> str:
 def fragment_text(value: str) -> str:
     value = re.sub(r'</(p|div|li|section|article|h[1-6])>', r'</\1>\n', value, flags=re.I)
     soup = BeautifulSoup(value, 'html.parser')
-    for node in soup.select('script, style, noscript, nav, header, footer, form, [hidden], [aria-hidden="true"]'):
-        node.decompose()
+    remove_site_chrome(soup)
     for node in soup.find_all('br'):
         node.replace_with('\n')
     return normalized_lines(soup.get_text())
@@ -93,8 +103,7 @@ def extract_content(body: str, *, content_type: str, source_url: str | None = No
     else:
         soup = BeautifulSoup(body, 'html.parser')
         job = structured_job(soup) or {}
-        for node in soup.select('script, style, noscript, nav, header, footer, form, [hidden], [aria-hidden="true"]'):
-            node.decompose()
+        remove_site_chrome(soup)
         def text(value):
             return value.strip() if isinstance(value, str) else ''
         meta = soup.select_one('meta[property="og:title"]')
@@ -106,15 +115,22 @@ def extract_content(body: str, *, content_type: str, source_url: str | None = No
         parsed_url = urlsplit(source_url or '')
         freelancer = parsed_url.hostname in ('freelancer.com', 'www.freelancer.com') and bool(re.match(r'^/projects/[^/]+/[^/]+', parsed_url.path))
         structured_description = text(job.get('description'))
-        selection = soup.select_one('.Project-description') if freelancer else soup.select_one('article, [class*="job-description"], [data-test*="description"], main, body')
+        # Selector lists return the first DOM match, so a surrounding body/main
+        # would otherwise win over the actual description nested inside it.
+        selection = soup.select_one('.Project-description') if freelancer else next(
+            (node for selector in ('[class*="job-description"], [data-test*="description"]', 'article', 'main', 'body')
+             if (node := soup.select_one(selector)) is not None), None)
         if not selection and not freelancer:
             selection = soup
         if structured_description:
             description = fragment_text(structured_description)
         elif selection:
             copy = BeautifulSoup(str(selection), 'html.parser')
-            for heading in copy.select('h1, h2, h3'):
-                heading.decompose()
+            # Only omit a duplicated task title; section headings can contain
+            # requirements, delivery constraints and the only budget evidence.
+            for heading in copy.select('h1'):
+                if normalized_lines(heading.get_text()) == normalized_lines(title):
+                    heading.decompose()
             description = fragment_text(str(copy))
         else:
             description = ''

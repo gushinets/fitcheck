@@ -63,6 +63,54 @@ def test_cleanup_and_first_dom_match():
     assert result['description'] == 'Build APIs with Python.'
 
 
+def test_description_container_wins_over_page_chrome_and_keeps_requirement_headings():
+    result = html('''<html><head><title>API project</title></head><body>
+        <div>Hire freelancers Log In Post a Project</div>
+        <main><div>Recommended projects: Budget: $9000</div>
+        <article><h1>API project</h1><h2>Requirements</h2>
+        <p>Implement the “Log In” and “Post a Project” screens with Python.</p>
+        <h3>Budget: €250–750</h3><h4>Delivery in two weeks</h4></article></main>
+        <div>Related projects: Proposals: 999</div></body></html>''')
+    assert result['description'] == ('Requirements\n'
+        'Implement the “Log In” and “Post a Project” screens with Python.\n'
+        'Budget: €250–750\nDelivery in two weeks')
+    assert result['fixedBudget'] == 250 and result['fixedBudgetMax'] == 750
+    assert result['budgetCurrency'] == 'EUR'
+    assert 'proposalCount' not in result
+
+
+@pytest.mark.parametrize('structured', [False, True])
+def test_navigation_roles_are_removed_before_description_fields(structured):
+    description = '''<div role="navigation">Hire freelancers Log In Post a Project
+        <ul class="skills"><li>Docker</li></ul><p>Budget: $9000</p>
+        <p>Proposals: 999</p></div><h2>Requirements</h2>
+        <p>Build reliable Python workflows.</p><h3>Budget: €250–750</h3>
+        <div role="contentinfo">Help Center</div>'''
+    if structured:
+        job = {'@type': 'JobPosting', 'title': 'API project', 'description': description}
+        body = '<script type="application/ld+json">' + json.dumps(job) + '</script>'
+    else:
+        body = '<h1>API project</h1><article>' + description + '</article>'
+    result = html(body)
+    assert result['description'] == 'Requirements\nBuild reliable Python workflows.\nBudget: €250–750'
+    assert result['skills'] == ['Python']
+    assert result['fixedBudget'] == 250 and result['fixedBudgetMax'] == 750
+    assert 'proposalCount' not in result
+
+
+@pytest.mark.parametrize('name', ['n8n', 'whatsapp', 'lead-generation', 'shopify'])
+def test_parent_report_pages_keep_every_requirement_and_budget_without_site_chrome(name):
+    body = (FIXTURES / f'freelancer-{name}.html').read_text()
+    url = f'https://www.freelancer.com/projects/test/{name}'
+    baseline = html(body, url)
+    # The same task pages with alternate accessible site navigation wrappers.
+    noisy = body.replace('<nav>', '<div role="navigation">').replace('</nav>', '</div>')
+    noisy = noisy.replace('</body>', '<div role="contentinfo">Log In Post a Project</div></body>')
+    result = html(noisy, url)
+    assert result == baseline
+    assert all(label not in result['description'] for label in ('Hire freelancers', 'Log In', 'Post a Project'))
+
+
 def test_freelancer_competition_ignores_bidder_labels():
     body = '<h1>Task</h1><div class="Project-heading"><h2>$250-750 USD</h2><span>Proposals: 18</span><span>Average bid: $330 USD</span></div><p class="Project-description">Build workflows with Python.</p><div class="User-bid-text">Proposals: 999\nAverage bid: €1000</div>'
     result = html(body, 'https://freelancer.com/projects/python/task')

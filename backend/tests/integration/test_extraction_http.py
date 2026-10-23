@@ -43,6 +43,32 @@ def test_url_extraction_preserves_final_source_and_competition(profile_http, mon
     assert vacancy['fixedBudget'] == 250 and vacancy['budgetCurrency'] == 'EUR'
 
 
+def test_url_extraction_returns_clean_requirements_before_field_extraction(profile_http, monkeypatch):
+    from fitcheck_backend.extraction.network import PublicPageResponse
+    _, client, runtime, _, headers = profile_http
+
+    def fetch(url):
+        return PublicPageResponse(url, 'text/html', '''<html><body>
+            <div>Hire freelancers Log In Post a Project</div>
+            <article><h1>Python workflows</h1><h2>Requirements</h2>
+            <p>Build reliable Python workflows for our operations team.</p>
+            <h3>Budget: €250–750</h3>
+            <div role="navigation"><p>Budget: $9000</p><p>Proposals: 999</p>
+            <ul class="skills"><li>Docker</li></ul></div></article>
+            </body></html>''')
+
+    monkeypatch.setattr(runtime.extraction, 'fetch_page', fetch)
+    response = client.post('/v1/extractions', headers=headers,
+        json={'type': 'url', 'url': 'https://jobs.example/task'})
+    assert response.status_code == 200, response.text
+    vacancy = response.json()['vacancy']
+    assert vacancy['description'] == ('Requirements\n'
+        'Build reliable Python workflows for our operations team.\nBudget: €250–750')
+    assert vacancy['fixedBudget'] == 250 and vacancy['fixedBudgetMax'] == 750
+    assert vacancy['budgetCurrency'] == 'EUR' and vacancy['skills'] == ['Python']
+    assert 'proposalCount' not in vacancy
+
+
 def test_auth_and_csrf_guard_all_extraction_before_network(profile_http, monkeypatch):
     a, client, runtime, issued, headers = profile_http
     def unexpected(_):
