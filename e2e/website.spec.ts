@@ -5,6 +5,41 @@ import { webMessages } from "../lib/i18n/web-messages"
 import type { Locale } from "../lib/types"
 
 const password = "correct horse battery staple"
+
+async function watchClipboard(page: Page) {
+  // Replace the external clipboard boundary, never the user's system clipboard.
+  // The probe is installed before application scripts and again after reload.
+  await page.addInitScript(() => {
+    const probe = { value: "User clipboard content", writes: [] as string[], permissions: [] as string[] }
+    Object.assign(window, { fitcheckClipboardProbe: probe })
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: {
+      readText: async () => probe.value,
+      writeText: async (value: string) => { probe.writes.push("writeText"); probe.value = value },
+      write: async () => { probe.writes.push("write"); probe.value = "Replaced by ClipboardItem" },
+    } })
+    const execCommand = document.execCommand.bind(document)
+    document.execCommand = (command, ...args) => {
+      if (/^(copy|cut)$/i.test(command)) {
+        probe.writes.push(command)
+        probe.value = "Replaced by execCommand"
+        return true
+      }
+      return execCommand(command, ...args)
+    }
+    const query = navigator.permissions.query.bind(navigator.permissions)
+    navigator.permissions.query = descriptor => {
+      if (String(descriptor.name).startsWith("clipboard-")) probe.permissions.push(descriptor.name)
+      return query(descriptor)
+    }
+  })
+}
+
+async function expectClipboardUntouched(page: Page) {
+  expect(await page.evaluate(() => (window as unknown as {
+    fitcheckClipboardProbe: { value: string; writes: string[]; permissions: string[] }
+  }).fitcheckClipboardProbe)).toEqual({ value: "User clipboard content", writes: [], permissions: [] })
+}
+
 async function register(page: Page, email: string, locale: Locale = "en") {
   const copy = webMessages[locale]
   await page.goto("/")
@@ -189,18 +224,23 @@ test("legacy import retries preserve server records and do not duplicate history
   expect(history.items[0].snapshot.vacancy).not.toHaveProperty("url")
 })
 
-test("URL survives extraction, review, publication and reload; manual tasks have no source action", async ({ page, context }) => {
+test("URL and manual analysis leave clipboard untouched; source survives publication and reload", async ({ page, context }) => {
+  await watchClipboard(page)
   const errors: string[] = []
   page.on("pageerror", error => errors.push(error.message))
   const sourceUrl = "https://tasks.example.test/projects/n8n/task?ref=history#details"
   await register(page, `source-link-${Date.now()}@example.com`)
   await profile(page)
+  await expectClipboardUntouched(page)
   await page.getByLabel("Task URL", { exact: true }).fill(sourceUrl)
   await page.getByRole("button", { name: "Load task", exact: true }).click()
   await expect(page.getByRole("heading", { name: "Review the task" })).toBeVisible()
+  await expectClipboardUntouched(page)
   await page.getByLabel("Task title", { exact: true }).fill("Reviewed n8n task")
+  await expectClipboardUntouched(page)
   await page.getByRole("button", { name: "Analyze task", exact: true }).click()
   await expect(page.getByText("Reviewed n8n task", { exact: true })).toBeVisible({ timeout: 15_000 })
+  await expectClipboardUntouched(page)
   await page.reload()
   await page.getByRole("button", { name: "History", exact: true }).first().click()
   const source = page.getByRole("link", { name: "Task URL", exact: true })
@@ -222,10 +262,12 @@ test("URL survives extraction, review, publication and reload; manual tasks have
   expect(await original.evaluate(() => document.referrer)).toBe("")
   await original.close()
   await expect(page.getByRole("heading", { name: "Analysis history" })).toBeVisible()
+  await expectClipboardUntouched(page)
 
   await page.getByRole("button", { name: "New analysis", exact: true }).first().click()
   await task(page, "Manual task without URL")
   await expect(page.getByText("Manual task without URL", { exact: true })).toBeVisible({ timeout: 15_000 })
+  await expectClipboardUntouched(page)
   await page.reload()
   await page.getByRole("button", { name: "History", exact: true }).first().click()
   await expect(source).toHaveCount(1)
@@ -234,5 +276,6 @@ test("URL survives extraction, review, publication and reload; manual tasks have
   expect(history.items.find((item: { snapshot: { vacancy: { title: string } } }) => item.snapshot.vacancy.title === "Manual task without URL").snapshot.vacancy).not.toHaveProperty("url")
   await page.getByRole("button", { name: /Manual task without URL/ }).click()
   await expect(page.getByText("Manual task without URL", { exact: true })).toBeVisible()
+  await expectClipboardUntouched(page)
   expect(errors).toEqual([])
 })
