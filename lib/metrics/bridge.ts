@@ -30,7 +30,7 @@ function diagnose(operation: string, outcome: Outcome, status?: number) {
     else console.warn('fitcheck_metrics_bridge', entry)
   } catch { /* Diagnostics cannot block product operations. */ }
 }
-async function deliver(path: string, method: string, body: string | undefined, config: BridgeConfig, fetchImpl: typeof fetch, expectedCount?: number): Promise<boolean> {
+async function deliver(path: string, method: string, body: string | undefined, config: BridgeConfig, fetchImpl: typeof fetch, expectedCount?: number, guestCookie?: string): Promise<boolean> {
   const operation = method === 'DELETE' ? 'delete' : path.endsWith('/attempts') ? 'attempts' : 'events'
   const readiness = bridgeReadiness(config)
   if (!readiness.configured) { diagnose(operation, readiness.reason as 'missing_configuration' | 'invalid_destination'); return false }
@@ -45,7 +45,7 @@ async function deliver(path: string, method: string, body: string | undefined, c
     })
     const delivery: Promise<Result> = Promise.resolve().then(() => fetchImpl(new URL(path, url).href, {
       method, redirect: 'error', signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', 'X-FitCheck-Metrics-Key': config.bridgeKey! },
+      headers: { 'Content-Type': 'application/json', 'X-FitCheck-Metrics-Key': config.bridgeKey!, ...(guestCookie ? { Cookie: guestCookie } : {}) },
       body,
     })).then(async (response): Promise<Result> => {
       if (!response.ok) return { outcome: 'collector_rejected', status: response.status }
@@ -65,8 +65,8 @@ async function deliver(path: string, method: string, body: string | undefined, c
   } catch { diagnose(operation, 'network_error'); return false }
   finally { if (timer !== undefined) clearTimeout(timer) }
 }
-export async function sendMetrics(batch: WebsiteBatch, config: BridgeConfig, fetchImpl: typeof fetch = fetch): Promise<boolean> {
-  try { return await deliver('/internal/metrics/events', 'POST', JSON.stringify(batch), config, fetchImpl, batch.events.length) }
+export async function sendMetrics(batch: WebsiteBatch, config: BridgeConfig, fetchImpl: typeof fetch = fetch, guestCookie?: string): Promise<boolean> {
+  try { return await deliver('/internal/metrics/events', 'POST', JSON.stringify(batch), config, fetchImpl, batch.events.length, guestCookie) }
   catch { return false }
 }
 export async function deleteVisitorMetrics(visitorId: string, config: BridgeConfig, fetchImpl: typeof fetch = fetch): Promise<boolean> {

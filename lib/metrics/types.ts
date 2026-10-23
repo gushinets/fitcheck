@@ -13,7 +13,7 @@ export interface ClientProperties {
   vacancy_input_started: OptionalProperties<Contract['InputProperties']>
   extraction_requested: OptionalProperties<Contract['InputProperties']>
   analysis_requested: OptionalProperties<Contract['InputProperties']>
-  analysis_result_viewed: Pick<Contract['ResultProperties'], 'resultId'> & OptionalProperties<Pick<Contract['ResultProperties'], 'predictedScore'>>
+  analysis_result_viewed: Pick<Contract['ResultProperties'], 'resultId'> & OptionalProperties<Omit<Contract['ResultProperties'], 'resultId'>>
   skills_requested: OptionalProperties<Contract['LocaleProperties']>
   skills_accepted: OptionalProperties<Contract['SkillsProperties']>
   history_viewed: Contract['EmptyProperties']
@@ -21,6 +21,7 @@ export interface ClientProperties {
   history_cleared: Contract['EmptyProperties']
   local_account_deleted: Contract['EmptyProperties']
 }
+export type MetricsObserver = <N extends ClientEventName>(name: N, properties: ClientProperties[N], context?: ClientContext) => void
 export type ClientEventName = keyof ClientProperties
 export type ClientContext = Pick<Contract['MetricEvent'], 'operationId'>
 export const clientContextSchema = z.strictObject({ operationId: z.string().uuid().nullable().optional() })
@@ -37,8 +38,10 @@ const locale = z.enum(['en', 'ru']).nullable().optional()
 const empty = z.strictObject({})
 const localized = z.strictObject({ locale })
 const score = z.number().int().min(0).max(100)
-const input = z.strictObject({ locale, inputMode: z.enum(['url', 'text']).nullable().optional(), platform: z.enum(['freelancer', 'upwork', 'other', 'text']).nullable().optional() })
-const result = z.strictObject({ resultId: uuidSchema, predictedScore: score.nullable().optional() })
+const flow = z.enum(['demo', 'account']).nullable().optional()
+const requestId = uuidSchema.nullable().optional()
+const input = z.strictObject({ locale, flow, requestId, inputMode: z.enum(['url', 'text']).nullable().optional(), platform: z.enum(['freelancer', 'upwork', 'other', 'text']).nullable().optional() })
+const result = input.extend({ resultId: uuidSchema, predictedScore: score.nullable().optional() })
 export const clientPropertySchemas = {
   page_viewed: z.strictObject({ locale, campaign: z.string().regex(/^[a-z][a-z0-9_]{0,79}$/).nullable().optional() }),
   session_started: empty,

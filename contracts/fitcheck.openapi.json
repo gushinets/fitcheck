@@ -1392,6 +1392,22 @@
       "InputProperties": {
         "additionalProperties": false,
         "properties": {
+          "flow": {
+            "anyOf": [
+              {
+                "enum": [
+                  "demo",
+                  "account"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Flow"
+          },
           "inputMode": {
             "anyOf": [
               {
@@ -1441,6 +1457,19 @@
             ],
             "default": null,
             "title": "Platform"
+          },
+          "requestId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Requestid"
           }
         },
         "title": "InputProperties",
@@ -2268,6 +2297,72 @@
       "ResultProperties": {
         "additionalProperties": false,
         "properties": {
+          "flow": {
+            "anyOf": [
+              {
+                "enum": [
+                  "demo",
+                  "account"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Flow"
+          },
+          "inputMode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "url",
+                  "text"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Inputmode"
+          },
+          "locale": {
+            "anyOf": [
+              {
+                "enum": [
+                  "en",
+                  "ru"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Locale"
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "enum": [
+                  "freelancer",
+                  "upwork",
+                  "other",
+                  "text"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Platform"
+          },
           "predictedScore": {
             "anyOf": [
               {
@@ -2281,6 +2376,19 @@
             ],
             "default": null,
             "title": "Predictedscore"
+          },
+          "requestId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Requestid"
           },
           "resultId": {
             "format": "uuid",

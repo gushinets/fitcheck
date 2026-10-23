@@ -28,16 +28,19 @@ class ActivityProperties(DTO):
 
 
 class InputProperties(LocaleProperties):
+    flow: Literal['demo', 'account'] | None = None
+    request_id: UUID | None = None
     input_mode: Literal['url', 'text'] | None = None
     platform: Literal['freelancer', 'upwork', 'other', 'text'] | None = None
 
 
-class ResultProperties(DTO):
+class ResultProperties(InputProperties):
     result_id: UUID
     predicted_score: Score | None = None
 
 
-class FeedbackProperties(ResultProperties):
+class FeedbackProperties(DTO):
+    result_id: UUID
     predicted_score: Score
     corrected_score: Score
 

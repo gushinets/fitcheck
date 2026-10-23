@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, Numeric, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from .base import Base, UTCDateTime
@@ -103,3 +103,24 @@ class MetricErasedVisitor(Base):
     __table_args__ = (CheckConstraint(ENVIRONMENTS, name='environment'),
         CheckConstraint("visitor_digest ~ '^[0-9a-f]{64}$'", name='digest'),
         Index('ix_metric_erased_visitors_expiry', 'erased_at'))
+
+
+class MetricDemoLink(Base):
+    """Verified guest context; journal identity stays a website visitor."""
+    __tablename__ = 'metric_demo_links'
+    event_id: Mapped[UUID] = mapped_column(ForeignKey('metric_journal.event_id', ondelete='CASCADE'), primary_key=True)
+    guest_owner_id: Mapped[UUID] = mapped_column(ForeignKey('owners.id', ondelete='CASCADE'))
+    environment: Mapped[str] = mapped_column(String(20))
+    visitor_id: Mapped[UUID]
+    request_id: Mapped[UUID | None]
+    job_id: Mapped[UUID | None]
+    result_id: Mapped[UUID | None]
+    first_view: Mapped[bool] = mapped_column(default=False)
+    __table_args__ = (
+        CheckConstraint(ENVIRONMENTS, name='environment'),
+        CheckConstraint('result_id IS NULL OR job_id IS NOT NULL', name='result_job'),
+        CheckConstraint('NOT first_view OR result_id IS NOT NULL', name='first_view'),
+        Index('ix_metric_demo_request', 'guest_owner_id', 'request_id'),
+        Index('uq_metric_demo_first_view', 'environment', 'visitor_id', 'result_id', unique=True,
+              postgresql_where=text('first_view')),
+    )

@@ -82,7 +82,11 @@ export function createMetricsHandlers(config: HandlerConfig) {
         try { console.warn('fitcheck_metrics_relay', { outcome: 'cookie_unconfigured' }) } catch { /* Best effort only. */ }
         return response({ delivered: false }, 202)
       }
-      const delivered = await sendMetrics({ source: 'website_client', events: events.map(event => ({ ...event!, subjectId: visitor.visitorId, subjectKind: 'visitor' })) }, config.bridge, config.fetchImpl)
+      const guestCookies = (request.headers.get('cookie') ?? '').split(';').map(value => value.trim())
+        .filter(value => /^(?:__Host-)?fitcheck_guest=/.test(value))
+      const guestCookie = events.some(event => event?.properties && 'flow' in event.properties && event.properties.flow === 'demo') &&
+        guestCookies.length === 1 && /^(?:__Host-)?fitcheck_guest=[A-Za-z0-9_-]+$/.test(guestCookies[0]) ? guestCookies[0] : undefined
+      const delivered = await sendMetrics({ source: 'website_client', events: events.map(event => ({ ...event!, subjectId: visitor.visitorId, subjectKind: 'visitor' })) }, config.bridge, config.fetchImpl, guestCookie)
       const reply = response({ delivered }, 202)
       if (visitor.isNew) cookie(reply, visitor)
       return reply

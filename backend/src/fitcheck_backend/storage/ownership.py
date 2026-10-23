@@ -72,6 +72,9 @@ def delete_owner(session: Session, owner_id: UUID) -> None:
     else:
         ids = [owner_id]
     session.scalars(select(Owner).where(Owner.id.in_(ids)).order_by(Owner.id).with_for_update()).all()
+    from .metrics import MetricJournal, MetricDemoLink
+    session.execute(delete(MetricJournal).where(MetricJournal.event_id.in_(
+        select(MetricDemoLink.event_id).where(MetricDemoLink.guest_owner_id.in_(ids)))))
     for target in [value for value in ids if value != owner_id] + [owner_id]:
         session.execute(delete(Owner).where(Owner.id==target))
     session.flush()

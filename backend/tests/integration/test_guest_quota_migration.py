@@ -24,7 +24,7 @@ def test_new_schema_capacity_and_session_digest_uniqueness(engine,storage_factor
                 limit_calls=8,limit_tokens=40000,limit_usd=Decimal('0.02'),calls=1,exposure_tokens=1,exposure_usd=Decimal('0.03')))
             s.flush()
     with engine.connect() as c:
-        assert c.scalar(text('select version_num from alembic_version')) == '0009'
+        assert c.scalar(text('select version_num from alembic_version')) == '0010'
 
 
 def test_upgrade_preserves_existing_result(engine,storage_factory):

@@ -27,8 +27,22 @@ metadata = {'x-fitcheck-owner-task':'fitcheck-metrics', 'x-fitcheck-implementati
 
 
 @router.post('/internal/metrics/events', response_model=IngestResult, operation_id='ingestWebsiteMetrics', openapi_extra=metadata)
-def events(body: WebsiteBatch, value=Depends(collector)):
-    return value.ingest(body)
+def events(body: WebsiteBatch, request: Request, value=Depends(collector)):
+    from ..auth.errors import AuthError
+    from ..guests.sessions import guest_cookie_name
+    runtime = request.app.state.auth_runtime
+    identity = None
+    if runtime is not None and any(event.properties.get('flow') == 'demo' for event in body.events):
+        name = guest_cookie_name(runtime.settings)
+        cookies = [item.strip() for item in request.headers.get('cookie', '').split(';')
+                   if item.strip().startswith(name + '=')]
+        if len(cookies) == 1:
+            try:
+                identity = runtime.guests.resolve(cookies[0][len(name)+1:], allow_claim_receipt=True)
+            except AuthError as exc:
+                if exc.code != 'unauthenticated':
+                    raise
+    return value.ingest(body, guest_identity=identity)
 
 
 @router.post('/internal/metrics/attempts', response_model=IngestResult, operation_id='ingestWebsiteAttempts', openapi_extra=metadata)

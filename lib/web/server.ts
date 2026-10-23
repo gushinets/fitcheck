@@ -15,6 +15,15 @@ export class WebsiteServerError extends Error {
 }
 const storage = () => typeof window === "undefined" ? undefined : window.localStorage
 const guestStorage = () => typeof window === "undefined" ? undefined : window.sessionStorage
+const DEMO_RESULT = "fitcheck.demo-result"
+function demoReceipt(value?: string | null): string | null {
+  try {
+    if (value === null) guestStorage()?.removeItem(DEMO_RESULT)
+    else if (value !== undefined) guestStorage()?.setItem(DEMO_RESULT, value)
+    const saved = guestStorage()?.getItem(DEMO_RESULT)
+    return saved && z.object({ jobId: z.string().min(1) }).safeParse(JSON.parse(saved)).success ? saved : null
+  } catch { return null }
+}
 function read(key: string) { try { return storage()?.getItem(key) ?? null } catch { return null } }
 function write(key: string, value: string | null) {
   try { if (value === null) storage()?.removeItem(key); else storage()?.setItem(key, value) } catch { /* Server jobs remain available in history. */ }
@@ -80,7 +89,10 @@ export function createServerWebsite(config: { fetch?: typeof fetch; delay?: () =
   }
   async function completed(jobId: string, receipt: string | null) {
     const key = pendingKey()
-    const clear = () => { if (read(key) === receipt) write(key, null) }
+    const clear = () => {
+      if (read(key) === receipt) write(key, null)
+      if (!user && demoReceipt() === receipt) demoReceipt(null)
+    }
     let job
     try { job = await poll(jobId) } catch (error) {
       if (error instanceof WebsiteServerError && error.code !== "poll_timeout" && error.code !== "session_changed" || error instanceof BackendApiError && [400, 403, 404, 410].includes(error.status)) clear()
@@ -88,9 +100,11 @@ export function createServerWebsite(config: { fetch?: typeof fetch; delay?: () =
     }
     if (job.type !== "analysis") throw new WebsiteServerError("invalid_response")
     clear()
-    return { analysis: job.result.analysis, entry: entry(job.result) }
+    if (!user) demoReceipt(JSON.stringify({ jobId }))
+    return { analysis: job.result.analysis, entry: entry(job.result), jobId }
   }
-  async function analyze(input: AnalysisRequest, guest = false) {
+  async function analyze(input: AnalysisRequest, guest = false, onRequest?: (requestId: string) => void) {
+    const observeRequest = (id: string) => { try { onRequest?.(id) } catch { /* Telemetry cannot prevent admission. */ } }
     const started = generation
     // Persist the admission key before sending: a lost response retries the same job.
     const key = pendingKey()
@@ -98,6 +112,7 @@ export function createServerWebsite(config: { fetch?: typeof fetch; delay?: () =
     if (existing) {
       const saved = z.object({ key: z.string(), body: z.unknown(), jobId: z.string().optional() }).safeParse(JSON.parse(existing))
       if (saved.success) {
+        observeRequest(saved.data.key)
         const jobId = saved.data.jobId ?? (await request("v1/analysis-jobs", s.admissionSchema, "POST", saved.data.body, { "Idempotency-Key": saved.data.key })).jobId
         return completed(jobId, existing)
       }
@@ -107,6 +122,7 @@ export function createServerWebsite(config: { fetch?: typeof fetch; delay?: () =
     const pending = { key: crypto.randomUUID(), body }
     let receipt = JSON.stringify(pending)
     write(key, receipt)
+    observeRequest(pending.key)
     try {
       const admitted = await request("v1/analysis-jobs", s.admissionSchema, "POST", body, { "Idempotency-Key": pending.key })
       if (generation !== started) throw new WebsiteServerError("session_changed")
@@ -197,15 +213,15 @@ export function createServerWebsite(config: { fetch?: typeof fetch; delay?: () =
   }
   return {
     repository, api,
-    hasPendingAnalysis: () => Boolean(read(pendingKey())),
+    hasPendingAnalysis: () => Boolean(read(pendingKey()) ?? (!user ? demoReceipt() : null)),
     async resumeAnalysis() {
-      const value = read(pendingKey())
+      const value = read(pendingKey()) ?? (!user ? demoReceipt() : null)
       if (!value) return null
       const saved = JSON.parse(value)
       const jobId = saved.jobId ?? (await request("v1/analysis-jobs", s.admissionSchema, "POST", saved.body, { "Idempotency-Key": saved.key })).jobId
       return completed(jobId, value)
     },
-    forgetPendingAnalysis() { pendingGeneration++; write(pendingKey(), null) },
+    forgetPendingAnalysis() { pendingGeneration++; write(pendingKey(), null); if (!user) demoReceipt(null) },
     loadHistory,
     async setApplicationStatus(id: string, applicationStatus: NonNullable<WebHistoryEntry["applicationStatus"]>) {
       await request(`v1/analyses/${encodeURIComponent(id)}/application-status`, z.unknown(), "PUT", { applicationStatus })
@@ -226,10 +242,11 @@ export function createServerWebsite(config: { fetch?: typeof fetch; delay?: () =
     async createGuest() {
       reset(); csrf = (await bootstrap()).csrfToken
       const session = await request("v1/guest-sessions", s.csrfSchema, "POST")
+      if (guestStorage()?.getItem("fitcheck.guest-csrf") !== session.csrfToken) demoReceipt(null)
       csrf = session.csrfToken
       guestStorage()?.setItem("fitcheck.guest-csrf", csrf)
     },
-    analyzeGuest: (input: AnalysisRequest) => analyze(input, true),
+    analyzeGuest: (input: AnalysisRequest, onRequest?: (requestId: string) => void) => analyze(input, true, onRequest),
     hasGuestClaim: () => Boolean(guestStorage()?.getItem("fitcheck.guest-csrf")),
     async claimGuest() {
       const guestCsrf = guestStorage()?.getItem("fitcheck.guest-csrf")
@@ -238,7 +255,7 @@ export function createServerWebsite(config: { fetch?: typeof fetch; delay?: () =
       if (!key) { key = crypto.randomUUID(); guestStorage()?.setItem("fitcheck.claim-key", key) }
       await request("v1/guest-claims", z.object({ claimedCount: z.number(), profileImported: z.boolean() }), "POST", {}, { "X-Guest-CSRF-Token": guestCsrf, "Idempotency-Key": key })
       guestStorage()?.removeItem("fitcheck.guest-csrf"); guestStorage()?.removeItem("fitcheck.claim-key")
-      write("fitcheck.pending-analysis.guest", null)
+      write("fitcheck.pending-analysis.guest", null); demoReceipt(null)
     },
     async importLocal(email: string, password: string) {
       const legacy = createWebsiteRepository()

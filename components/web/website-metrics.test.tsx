@@ -18,10 +18,11 @@ vi.mock('@/lib/metrics/client', () => ({
     }),
     sendBrowserMetrics: vi.fn(), deleteBrowserVisitor: vi.fn(),
 }));
-vi.mock('./auth-screen', () => ({ AuthScreen: ({ onCreate, onSignIn }: {
+vi.mock('./auth-screen', () => ({ AuthScreen: ({ onCreate, onSignIn, onDemo }: {
+        onDemo?: () => void;
         onCreate: (v: unknown) => Promise<void>;
         onSignIn: (v: unknown) => Promise<void>;
-    }) => <><button onClick={() => void onCreate({ name: 'Private', email: 'secret@example.com', password: 'password123' })}>register</button><button onClick={() => void onSignIn({ email: 'secret@example.com', password: 'password123' })}>login</button></> }));
+    }) => <><button onClick={() => void onCreate({ name: 'Private', email: 'secret@example.com', password: 'password123' })}>register</button><button onClick={() => void onSignIn({ email: 'secret@example.com', password: 'password123' })}>login</button>{onDemo ? <button onClick={onDemo}>demo</button> : null}</> }));
 vi.mock('./profile-editor', () => ({ ProfileEditor: ({ onSave, onSuggestSkills, onSkillsAccepted }: {
         onSave: (p: unknown) => Promise<void>;
         onSuggestSkills: (p: unknown) => Promise<string[]>;
@@ -73,7 +74,7 @@ it('test_ordered_local_registration_profile_analysis_view_events', async () => {
     fireEvent.click(await screen.findByText('analyze'));
     await screen.findByText('result 82');
     expect(names().filter(n => ['page_viewed', 'local_registration_completed', 'profile_saved', 'analysis_requested', 'analysis_result_viewed'].includes(String(n)))).toEqual(['page_viewed', 'local_registration_completed', 'profile_saved', 'analysis_requested', 'analysis_result_viewed']);
-    expect(metrics.track).toHaveBeenCalledWith('analysis_result_viewed', { resultId: operationId, predictedScore: 82 }, { operationId });
+    expect(metrics.track).toHaveBeenCalledWith('analysis_result_viewed', { flow: 'account', resultId: operationId, predictedScore: 82 }, { operationId });
     expect(JSON.stringify(metrics.track.mock.calls)).not.toMatch(/secret|private|password|example.com/);
 });
 it('test_failed_profile_save_does_not_emit_saved', async () => {
@@ -185,7 +186,7 @@ it('legacy injected APIs remain unlinked and produce no fabricated server succes
     await screen.findByText('result 82');
     const [entry] = (await repository.loadSnapshot()).history;
     expect(entry.providerOperationId).toBeUndefined();
-    expect(metrics.track).toHaveBeenCalledWith('analysis_result_viewed', { resultId: entry.id, predictedScore: 82 }, {});
+    expect(metrics.track).toHaveBeenCalledWith('analysis_result_viewed', { flow: 'account', resultId: entry.id, predictedScore: 82 }, {});
     expect(names()).not.toContain('analysis_finished');
 });
 it('pending analysis after deletion cannot associate its result with the rotated visitor', async () => {
@@ -224,7 +225,7 @@ it('login, extraction and committed history clearing emit safe observations', as
     fireEvent.click(screen.getByRole('button', { name: 'Clear history' }));
     await waitFor(() => expect(names()).toContain('history_cleared'));
     expect(metrics.track).toHaveBeenCalledWith('local_login_completed', { locale: 'en' });
-    expect(metrics.track).toHaveBeenCalledWith('extraction_requested', { locale: 'en', inputMode: 'url' });
+    expect(metrics.track).toHaveBeenCalledWith('extraction_requested', { flow: 'account', locale: 'en', inputMode: 'url' });
     expect(JSON.stringify(metrics.track.mock.calls)).not.toMatch(/secret|private|example.com/);
 });
 it('pending history clearing cannot emit an old mutation for the rotated visitor', async () => {
@@ -243,3 +244,22 @@ it('pending history clearing cannot emit an old mutation for the rotated visitor
   await act(async () => complete())
   expect(names()).not.toContain('history_cleared')
 })
+
+it('guest demo reuses the existing metrics client and visitor session', async () => {
+    const repository = createMemoryWebsiteRepository();
+    const resultId = '22222222-2222-4222-8222-222222222222';
+    const entry = { ...createHistoryEntry({ userId: 'guest', profile: defaultProfile, job: { id: 'job', title: 'private task', description: 'private description', skills: [] }, analysis: goAnalysis }), id: resultId };
+    const server = { repository, api, createGuest: vi.fn(async () => {}), hasPendingAnalysis: () => false,
+        analyzeGuest: vi.fn(async (_input, onRequest) => { onRequest(operationId); return { analysis: goAnalysis, entry, jobId: operationId } }),
+    } as unknown as import('@/lib/web/server').ServerWebsite;
+    render(<WebsiteApp server={server} metricsEnabled />);
+    fireEvent.click(await screen.findByText('demo'));
+    fireEvent.click(await screen.findByText('save'));
+    fireEvent.click(await screen.findByText('review'));
+    fireEvent.click(await screen.findByText('analyze'));
+    await screen.findByText('result 82');
+    expect(metrics.clients).toHaveLength(1);
+    expect(metrics.track).toHaveBeenCalledWith('analysis_requested', { flow: 'demo', locale: 'en', inputMode: 'text', requestId: operationId });
+    expect(metrics.track).toHaveBeenCalledWith('analysis_result_viewed', expect.objectContaining({ flow: 'demo', resultId }), { operationId });
+    expect(JSON.stringify(metrics.track.mock.calls)).not.toMatch(/private|secret|password|description/);
+});

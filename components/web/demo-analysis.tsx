@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import type { MetricsObserver } from "@/lib/metrics/types"
 import { Button } from "@/components/ui/button"
 import type { FreelancerProfile, Locale } from "@/lib/types"
 import type { ServerWebsite } from "@/lib/web/server"
@@ -13,20 +14,29 @@ import { VacancySource } from "./vacancy-source"
 import { VacancyReview } from "./vacancy-review"
 import { AnalysisResult } from "./analysis-result"
 
-export function DemoAnalysis({ server, locale, onAccount }: { server: ServerWebsite; locale: Locale; onAccount: () => void }) {
+export function DemoAnalysis({ server, locale, onAccount, observe }: { server: ServerWebsite; locale: Locale; onAccount: () => void; observe?: MetricsObserver }) {
   const copy = getWebMessages(locale)
   const ru = locale === "ru"
   const [ready, setReady] = useState(false)
   const [profile, setProfile] = useState<FreelancerProfile | null>(null)
   const [draft, setDraft] = useState<VacancyDraft | null>(null)
   const [result, setResult] = useState<WebHistoryEntry | null>(null)
+  const [jobId, setJobId] = useState<string | undefined>()
+  const viewed = useRef(new Set<string>())
+  const inputMode = useRef<"text" | "url">("text")
+  function track(...args: Parameters<MetricsObserver>) { try { observe?.(...args) } catch { /* Best effort observations. */ } }
   const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    if (!result || busy || viewed.current.has(result.id)) return
+    viewed.current.add(result.id)
+    try { observe?.("analysis_result_viewed", { flow: "demo", locale, inputMode: inputMode.current, resultId: result.id, predictedScore: result.analysis.score }, { operationId: jobId }) } catch { /* Best effort observations. */ }
+  }, [result, busy, locale, jobId, observe])
   const [error, setError] = useState("")
   async function initialize() {
     setError(""); setBusy(true)
     try {
       await server.createGuest(); setReady(true)
-      if (server.hasPendingAnalysis()) { const resumed = await server.resumeAnalysis(); if (resumed) setResult(resumed.entry) }
+      if (server.hasPendingAnalysis()) { const resumed = await server.resumeAnalysis(); if (resumed) { inputMode.current = resumed.entry.job.url ? "url" : "text"; setJobId(resumed.jobId); setResult(resumed.entry) } }
     } catch (e) { setError(serverErrorMessage(e, locale)) } finally { setBusy(false) }
   }
   // A guest session is issued once on entry; the backend reuses an existing cookie.
@@ -37,7 +47,12 @@ export function DemoAnalysis({ server, locale, onAccount }: { server: ServerWebs
   async function analyze(value: VacancyDraft) {
     if (!profile) return
     setBusy(true); setError("")
-    try { setResult((await server.analyzeGuest(createAnalysisRequest({ profile, draft: value, locale, history: [] }))).entry) }
+    inputMode.current = value.sourceMode
+    try {
+      const completed = await server.analyzeGuest(createAnalysisRequest({ profile, draft: value, locale, history: [] }),
+        requestId => track("analysis_requested", { flow: "demo", locale, inputMode: value.sourceMode, requestId }))
+      setJobId(completed.jobId); setResult(completed.entry)
+    }
     catch (e) { setError(serverErrorMessage(e, locale)) } finally { setBusy(false) }
   }
   return <main className="mx-auto max-w-6xl space-y-6 p-6">
@@ -47,6 +62,6 @@ export function DemoAnalysis({ server, locale, onAccount }: { server: ServerWebs
     {busy ? <p role="status">{copy.analyzingVacancy}</p> : result ? <AnalysisResult entry={result} copy={copy} onBack={onAccount} onAnalyzeAnother={onAccount} onSaveFeedback={async () => { setError(ru ? "Сохраните демо в аккаунт, чтобы оставить исправление." : "Save the demo to an account to add feedback.") }} />
       : !ready ? null : !profile ? <ProfileEditor profile={null} locale={locale} copy={copy} onSave={async value => { setProfile(value) }} onSuggestSkills={async input => { try { return await server.api.suggestSkills(input) } catch (error) { throw new Error(serverErrorMessage(error, locale)) } }} />
       : draft ? <VacancyReview draft={draft} copy={copy} onBack={async () => setDraft(null)} onAnalyze={analyze} />
-      : <VacancySource copy={copy} onLoadUrl={server.api.extractVacancy} onReview={setDraft} />}
+      : <VacancySource copy={copy} onInputStarted={inputMode => track("vacancy_input_started", { flow: "demo", locale, inputMode })} onLoadUrl={url => { track("extraction_requested", { flow: "demo", locale, inputMode: "url" }); return server.api.extractVacancy(url) }} onReview={setDraft} />}
   </main>
 }

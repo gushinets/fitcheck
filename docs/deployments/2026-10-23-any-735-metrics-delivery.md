@@ -1,8 +1,8 @@
 # ANY-735 delivery verification — development
 
-Date: 2026-10-23. Target: existing Dokploy development. Local base: `d82b64d`;
-changes described here are uncommitted and **not deployed**. This is evidence for
-the existing runtime and local patch, not acceptance of the patched deployment.
+Date: 2026-10-23. Target: existing Dokploy development. Implementation commit:
+`9f2dca3855053fec2b8e2753181111f165e04580` (base `d82b64d`). The user deployed it;
+post-deployment checks follow below. Earlier observations describe the previous runtime.
 
 ## Live observations
 
@@ -67,13 +67,91 @@ COMMIT;
   DELETE rejected by the outer body boundary before routing is in general HTTP
   counters but not the dedicated delete counter.
 
-## Remaining acceptance
+## Acceptance scope
 
-Patched runtime deployment and post-deployment smoke remain pending. Record exact
-deployed commits/images, repeat the real browser action, prove one non-paid backend
-lifecycle action and worker publication, and compare report coverage with those
-control rows. No production outage/configuration failure was induced in the used
-development; those scenarios ran automatically in isolated tests instead.
-No live backfill or historical view reconstruction was performed. A report with
-unavailable rows is evidence of its ability to read and declare limitations, not
-proof of all ANY-738 funnel formulas. Do not close ANY-735 as fully accepted yet.
+The implementation is deployed and the account-free post-deployment smoke passed
+(see below). The user explicitly requested proceeding without SMTP or a mail stub.
+Live account registration/profile lifecycle and worker job publication therefore
+remain unverified; their isolated integration checks passed during implementation.
+Do not describe these live paths as accepted or close every original criterion
+solely on the basis of this reduced smoke. No live outage was induced, no provider
+call was made, and no backfill or historical view reconstruction was performed.
+
+## Post-deployment checks
+
+User reported deployment. Dokploy deployment lists for API and website both show
+**Done** for `9f2dca3855053fec2b8e2753181111f165e04580` / ANY-735.
+
+- API container: `589f6e22bc18`, running.
+- Website container: `18b7493a0376`, running.
+- API private exporter, using the existing configured ops token: HTTP 200,
+  `fitcheck_database_up=1`, enabled/collector-configured/lifecycle-configured/
+  database-scope-configured all 1. No token value was printed.
+- New journal diagnostics were present: website_client observed=1/count=61,
+  website_server observed=1/count=3; backend_server and reconstructed_backend
+  observed=0/count=0. These are retained rows, not proof of zero real activity.
+- A fresh browser page load displayed the normal registration page. A test-account
+  session is needed for a real non-paid backend lifecycle operation; the user was
+  asked to sign in and save a profile without launching an analysis.
+
+Post-deployment replay, independent database read, worker readiness and CLI checks
+completed successfully; details follow.
+
+
+### Registration blocker found during acceptance
+
+The user could not create a test account. Investigation of the deployed API
+confirmed `auth_enabled=true`, `SMTPMailer(settings).available()=false`, and all
+six SMTP fields absent (host, port, username, password, from, security), while
+`auth_web_base_url` is set. Bootstrap GET returns HTTP 200 with a CSRF value both
+through the website relay and directly to the configured backend (the CSRF value
+was not printed). This isolates the observed configuration blocker from relay
+connectivity and bootstrap authorization.
+
+`AuthService.register` explicitly stops with `email_unavailable` before creating
+a user when the mailer is unavailable. The UI has no specific translation for that
+code and displays a generic request failure. No password, email, SMTP credential
+or registration request body was read or logged for this investigation. No email
+was sent by these diagnostic probes. Configure the existing SMTP fields in the
+API deployment before attempting the account lifecycle acceptance step again.
+This is an external environment prerequisite, not evidence of a telemetry defect.
+
+
+### Completed checks without mail/account creation
+
+At the user’s explicit request, no SMTP service or stub was added and no account
+verification was bypassed. API, website and worker Dokploy deployment lists show
+Done for `9f2dca3855053fec2b8e2753181111f165e04580`.
+
+| Check | Actual result |
+| --- | --- |
+| Deployed worker | `c4996fb39b5a`, running; metrics enabled, development environment, independent database scope development, healthy heartbeat |
+| Control event | `73500000-0000-4000-8000-000000000005`, history_viewed, occurred `2026-10-23T16:44:39.749Z` |
+| Actual website relay | two identical POSTs preserving the signed visitor cookie; HTTP 202 and delivered true on both |
+| Independent worker-container SQL transaction | exactly one row after replay, website_client/development/visitor; received `2026-10-23T16:44:39.815383Z` |
+| Real browser event after deployment | page_viewed `43d973de-fc5d-4595-a8d3-a8770c5b0478`, website_client/development/visitor, occurred `2026-10-23T16:37:43.331Z`, received `2026-10-23T16:37:43.409540Z` |
+| Live schema | 0009 |
+| Existing CLI JSON and CSV | both exit 0, 100 metric rows each, development/visitor, period `[2026-10-23T16:44:00Z, 2026-10-23T16:45:00Z)` |
+| Control report row | feature_adoption/history, website_observed visitor: available true, numerator 1, denominator 1, value 100 in both formats |
+| Report coverage | data_start `2026-10-16T11:55:06.881Z`; explicitly observed-only, client blockers/failed delivery not exhaustively measurable |
+
+The history figure describes the named synthetic control, not organic engagement.
+It demonstrates delivery/replay/CLI consistency and does not accept the unrelated
+funnel formulas in ANY-738. The new private exporter was already verified on the
+deployed API: HTTP 200, database_up=1 and all four configuration gauges=1.
+
+Reproduction SQL uses the read-only transaction above with control UUID ending
+`...000005`. The real-browser lookup selects only event ID, event name, source,
+environment, subject kind and timestamps; it does not expose visitor identity.
+CLI invocation (from the deployed worker, using packaged Python):
+
+```sh
+/app/.venv/bin/python -m fitcheck_backend.metrics report \
+  --start 2026-10-23T16:44:00+00:00 --end 2026-10-23T16:45:00+00:00 \
+  --environment development --population visitor --format json
+# Repeat the same command with --format csv.
+```
+
+No product code, deployment settings or secrets were modified during this final
+smoke. Only this evidence document was updated locally. The deferred pre-routing
+DELETE counter limitation and unverified live account lifecycle remain explicit.

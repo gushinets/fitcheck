@@ -1100,6 +1100,11 @@ export interface components {
         /** InputProperties */
         InputProperties: {
             /**
+             * Flow
+             * @default null
+             */
+            flow: ("demo" | "account") | null;
+            /**
              * Inputmode
              * @default null
              */
@@ -1114,6 +1119,11 @@ export interface components {
              * @default null
              */
             platform: ("freelancer" | "upwork" | "other" | "text") | null;
+            /**
+             * Requestid
+             * @default null
+             */
+            requestId: string | null;
         };
         /** JobAdmissionResource */
         JobAdmissionResource: {
@@ -1426,10 +1436,35 @@ export interface components {
         /** ResultProperties */
         ResultProperties: {
             /**
+             * Flow
+             * @default null
+             */
+            flow: ("demo" | "account") | null;
+            /**
+             * Inputmode
+             * @default null
+             */
+            inputMode: ("url" | "text") | null;
+            /**
+             * Locale
+             * @default null
+             */
+            locale: ("en" | "ru") | null;
+            /**
+             * Platform
+             * @default null
+             */
+            platform: ("freelancer" | "upwork" | "other" | "text") | null;
+            /**
              * Predictedscore
              * @default null
              */
             predictedScore: number | null;
+            /**
+             * Requestid
+             * @default null
+             */
+            requestId: string | null;
             /**
              * Resultid
              * Format: uuid

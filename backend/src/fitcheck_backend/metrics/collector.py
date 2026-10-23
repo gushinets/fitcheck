@@ -20,7 +20,7 @@ class MetricsCollector:
         lock = int(fingerprint({'environment':self.settings.metrics_environment, 'visitor':str(subject_id)})[:16],16)
         session.execute(text('SELECT pg_advisory_xact_lock(:key)'), {'key':lock-(1 << 64) if lock >= (1 << 63) else lock})
 
-    def ingest(self, batch: WebsiteBatch) -> IngestResult:
+    def ingest(self, batch: WebsiteBatch, *, guest_identity=None) -> IngestResult:
         batch = WebsiteBatch.model_validate(batch.model_dump())
         received = self.clock()
         accepted = 0
@@ -44,9 +44,16 @@ class MetricsCollector:
                         campaign = event.properties.get('campaign')
                         event.properties['campaign'] = (first.properties['campaign'] if first else
                             'direct' if campaign is None else campaign if campaign in {'direct', 'other'} or campaign in self.settings.metrics_campaign_codes else 'other')
-                    accepted += repository.append(event, source=batch.source,
+                    inserted = repository.append(event, source=batch.source,
                         environment=self.settings.metrics_environment, received_at=received,
                         clock_adjusted=adjusted, submitted_hash=fingerprint(payload))
+                    if inserted and batch.source == 'website_client':
+                        from .demo import demo_link
+                        link = demo_link(session, event, guest_identity, self.settings.metrics_environment, received)
+                        if link is not None:
+                            session.add(link)
+                            session.flush()
+                    accepted += inserted
         except SQLAlchemyError:
             raise MetricsError('service_unavailable') from None
         return IngestResult(accepted=accepted, duplicates=len(batch.events)-accepted)

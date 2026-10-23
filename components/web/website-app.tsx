@@ -291,7 +291,7 @@ export function WebsiteApp({
     const task = taskGeneration.current
     await store.saveDraft(snapshot.user.id, nextDraft)
     if (generation !== observationGeneration.current || task !== taskGeneration.current) return
-    observe("analysis_requested", { locale, inputMode: nextDraft.sourceMode })
+    observe("analysis_requested", { flow: "account", locale, inputMode: nextDraft.sourceMode })
     setDraft(nextDraft)
     setAnalysisStep("analyzing")
     setAnalysisError(null)
@@ -415,7 +415,7 @@ export function WebsiteApp({
     const id = resultId(activeEntry)
     if (viewedResults.current.has(id)) return
     viewedResults.current.add(id)
-    observe("analysis_result_viewed", { resultId: id, predictedScore: activeEntry.analysis.score }, resultContext(activeEntry))
+    observe("analysis_result_viewed", { flow: "account", resultId: id, predictedScore: activeEntry.analysis.score }, resultContext(activeEntry))
   }, [view, analysisStep, activeEntry, observe])
 
   function openHistory(entry: WebHistoryEntry) {
@@ -518,7 +518,7 @@ export function WebsiteApp({
     if (analysisStep === "result" && activeEntry) {
       return <div className="space-y-4">{server ? <Button onClick={() => guarded(() => reanalyze(activeEntry))}>{copy.reanalyzeCurrentProfile}</Button> : null}<AnalysisResult key={activeEntry.id} entry={activeEntry} copy={copy} onBack={() => setAnalysisStep("source")} onAnalyzeAnother={() => guarded(analyzeAnother)} onSaveFeedback={value => guarded(() => saveFeedback(value))} /></div>
     }
-    return <VacancySource key={sourceVersion} copy={copy} initialDraft={draft} onInputStarted={(inputMode) => observe("vacancy_input_started", { locale, inputMode })} onLoadUrl={(url) => { observe("extraction_requested", { locale, inputMode: "url" }); return api.extractVacancy(url) }} onReview={value => guarded(() => reviewDraft(value))} />
+    return <VacancySource key={sourceVersion} copy={copy} initialDraft={draft} onInputStarted={(inputMode) => observe("vacancy_input_started", { flow: "account", locale, inputMode })} onLoadUrl={(url) => { observe("extraction_requested", { flow: "account", locale, inputMode: "url" }); return api.extractVacancy(url) }} onReview={value => guarded(() => reviewDraft(value))} />
   }
 
   if (!initialized) {
@@ -526,7 +526,7 @@ export function WebsiteApp({
   }
 
   if (!snapshot.user) {
-    if (server && demo) return <DemoAnalysis server={server} locale={locale} onAccount={() => { setDemo(false) }} />
+    if (server && demo) return <DemoAnalysis server={server} locale={locale} observe={observe} onAccount={() => { setDemo(false) }} />
     return (
       <div className="relative">
         <div className="absolute right-4 top-4 z-10"><LanguageSwitch locale={locale} label={copy.language} onChange={changeLocale} /></div>

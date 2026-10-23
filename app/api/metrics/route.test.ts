@@ -123,3 +123,14 @@ it('diagnoses missing cookie configuration without forwarding', async () => {
     expect(log).toHaveBeenCalledWith('fitcheck_metrics_relay', { outcome: 'cookie_unconfigured' })
   } finally { log.mockRestore() }
 })
+
+it.each(['fitcheck_guest', '__Host-fitcheck_guest'])('forwards only the unambiguous guest proof for demo observations (%s)', async name => {
+  const { POST, fetcher } = setup()
+  const payload = { ...event(), name: 'analysis_requested', properties: { flow: 'demo', locale: 'ru', inputMode: 'text', requestId: crypto.randomUUID() } }
+  expect((await POST(request({ events: [payload] }, { cookie: `${name}=guest-proof; fitcheck_session=private; unrelated=secret` }))).status).toBe(202)
+  expect(new Headers(fetcher.mock.calls[0][1]?.headers).get('cookie')).toBe(`${name}=guest-proof`)
+  await POST(request({ events: [payload] }, { cookie: `${name}=a; ${name}=b` }))
+  expect(new Headers(fetcher.mock.calls[1][1]?.headers).get('cookie')).toBeNull()
+  await POST(request({ events: [event()] }, { cookie: `${name}=guest-proof` }))
+  expect(new Headers(fetcher.mock.calls[2][1]?.headers).get('cookie')).toBeNull()
+})

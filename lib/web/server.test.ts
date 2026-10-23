@@ -241,3 +241,39 @@ describe("server website", () => {
     await expect(server.api.analyzeVacancy(input)).rejects.toMatchObject({ reason: "invalid_response" })
   })
 })
+
+it('exposes the stable guest request key before admission, reuses it after transport loss and returns job context', async () => {
+  const h = harness(); const server = h.server(); await server.createGuest()
+  const requested = vi.fn()
+  h.overrides.set('v1/analysis-jobs', () => { throw new TypeError('lost response') })
+  await expect(server.analyzeGuest(input, requested)).rejects.toThrow()
+  expect(requested).toHaveBeenCalledOnce()
+  const key = requested.mock.calls[0][0]
+  expect(key).toMatch(/^[0-9a-f-]{36}$/)
+  h.overrides.delete('v1/analysis-jobs')
+  const result = await server.analyzeGuest(input, requested)
+  expect(requested.mock.calls[1][0]).toBe(key)
+  expect(h.calls.filter(c => c.path === 'v1/analysis-jobs').every(c => c.headers.get('idempotency-key') === key)).toBe(true)
+  expect(result.jobId).toBe('job-1')
+})
+
+it('guest observation callback failure cannot block an analysis', async () => {
+  const h = harness(); const server = h.server(); await server.createGuest()
+  expect((await server.analyzeGuest(input, () => { throw new Error('telemetry failed') })).entry.id).toBe('analysis-1')
+})
+
+it('reopens a completed demo by its stable job ID after reload without another admission', async () => {
+  const h = harness(); const first = h.server(); await first.createGuest()
+  await first.analyzeGuest(input)
+  const second = h.server(); await second.createGuest()
+  expect(second.hasPendingAnalysis()).toBe(true)
+  expect((await second.resumeAnalysis())?.jobId).toBe('job-1')
+  expect(h.calls.filter(c => c.path === 'v1/analysis-jobs')).toHaveLength(1)
+})
+
+it('does not restore a completed demo into a different guest session', async () => {
+  const h = harness(); const first = h.server(); await first.createGuest(); await first.analyzeGuest(input)
+  h.overrides.set('v1/guest-sessions', () => Response.json({ csrfToken: 'different-guest' }))
+  const second = h.server(); await second.createGuest()
+  expect(second.hasPendingAnalysis()).toBe(false)
+})
