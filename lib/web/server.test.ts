@@ -39,6 +39,45 @@ function harness() {
 beforeEach(() => { localStorage.clear(); sessionStorage.clear() })
 
 describe("server website", () => {
+  it("does not attach a late reanalysis admission to a new task", async () => {
+    const h = harness(); const server = h.server(); await server.repository.loadSnapshot()
+    let release!: (response: Response) => void
+    const admission = new Promise<Response>(resolve => { release = resolve })
+    let started!: () => void
+    const reached = new Promise<void>(resolve => { started = resolve })
+    h.overrides.set("v1/analyses/analysis-1/reanalyses", () => { started(); return admission })
+    const previous = server.reanalyze("analysis-1")
+    await reached
+    server.forgetPendingAnalysis()
+    h.overrides.set("v1/analysis-jobs", () => Response.json({ jobId: "job-2" }, { status: 202 }))
+    h.overrides.set("v1/jobs/job-2", () => Response.json({ jobId: "job-2", type: "analysis", status: "running" }))
+    await expect(server.api.analyzeVacancy(input)).rejects.toMatchObject({ code: "poll_timeout" })
+    release(Response.json({ jobId: "job-1" }, { status: 202 }))
+    await previous
+    h.overrides.set("v1/jobs/job-2", () => Response.json({ jobId: "job-2", type: "analysis", status: "succeeded", analysisId: "analysis-2", result: { ...resource, analysisId: "analysis-2" } }))
+    expect((await server.resumeAnalysis())?.entry.id).toBe("analysis-2")
+  })
+  it.each([false, true])("keeps the next task admission when an abandoned request settles (admitting: %s)", async admitting => {
+    const h = harness(); const server = h.server(); await server.repository.loadSnapshot()
+    let release!: (response: Response) => void
+    const pending = new Promise<Response>(resolve => { release = resolve })
+    let started!: () => void
+    const reached = new Promise<void>(resolve => { started = resolve })
+    h.overrides.set(admitting ? "v1/analysis-jobs" : "v1/jobs/job-1", () => { started(); return pending })
+    const first = server.api.analyzeVacancyWithContext!(input)
+    await reached
+    server.forgetPendingAnalysis()
+    h.overrides.set("v1/analysis-jobs", () => Response.json({ jobId: "job-2" }, { status: 202 }))
+    h.overrides.set("v1/jobs/job-2", () => Response.json({ jobId: "job-2", type: "analysis", status: "running" }))
+    await expect(server.api.analyzeVacancy(input)).rejects.toMatchObject({ code: "poll_timeout" })
+    h.overrides.delete("v1/jobs/job-1")
+    release(admitting ? Response.json({ jobId: "job-1" }, { status: 202 }) : Response.json({ jobId: "job-1", type: "analysis", status: "succeeded", analysisId: "analysis-1", result: resource }))
+    await first
+    expect(server.hasPendingAnalysis()).toBe(true)
+    h.overrides.set("v1/jobs/job-2", () => Response.json({ jobId: "job-2", type: "analysis", status: "succeeded", analysisId: "analysis-2", result: { ...resource, analysisId: "analysis-2" } }))
+    expect((await server.resumeAnalysis())?.entry.id).toBe("analysis-2")
+    expect(h.calls.filter(call => call.path === "v1/analysis-jobs")).toHaveLength(2)
+  })
   it("keeps both history filters during snapshot refresh and pagination, and omits them on reset", async () => {
     const h = harness(); const server = h.server()
     const saved = { ...resource, analysisId: "filtered", analysis: { ...goAnalysis, score: 40, status: "NO_GO" }, applicationStatus: "applied" }

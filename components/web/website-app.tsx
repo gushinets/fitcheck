@@ -95,6 +95,8 @@ export function WebsiteApp({
   const [view, setView] = useState<WebView>("analyze")
   const [analysisStep, setAnalysisStep] = useState<"source" | "review" | "analyzing" | "result">("source")
   const [draft, setDraft] = useState<VacancyDraft | null>(null)
+  const [sourceVersion, setSourceVersion] = useState(0)
+  const taskGeneration = useRef(0)
   const [activeEntry, setActiveEntry] = useState<WebHistoryEntry | null>(null)
   const [analysisError, setAnalysisError] = useState<string | null>(null)
   const [globalError, setGlobalError] = useState<string | null>(null)
@@ -181,12 +183,13 @@ export function WebsiteApp({
     if (!server || !snapshot.user?.emailVerified || resumed.current || !server.hasPendingAnalysis()) return
     resumed.current = true
     let active = true
+    const task = taskGeneration.current
     setAnalysisStep("analyzing")
     void server.resumeAnalysis().then(result => {
-      if (!active || !result) return
+      if (!active || !result || task !== taskGeneration.current) return
       setActiveEntry(result.entry); setAnalysisStep("result"); setView("analyze")
       void refresh().catch(error => setGlobalError(serverErrorMessage(error, locale)))
-    }).catch(error => { if (active) { setGlobalError(serverErrorMessage(error, locale)); setAnalysisStep("source") } })
+    }).catch(error => { if (active && task === taskGeneration.current) { setGlobalError(serverErrorMessage(error, locale)); setAnalysisStep("source") } })
     return () => { active = false }
   }, [server, snapshot.user?.id, snapshot.user?.emailVerified]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -268,8 +271,9 @@ export function WebsiteApp({
   }
 
   async function reviewDraft(nextDraft: VacancyDraft) {
-    if (!snapshot.user) return
+    if (!snapshot.user || sourceVersion !== taskGeneration.current) return
     await store.saveDraft(snapshot.user.id, nextDraft)
+    if (sourceVersion !== taskGeneration.current) return
     setDraft(nextDraft)
     setAnalysisStep("review")
   }
@@ -284,8 +288,9 @@ export function WebsiteApp({
   async function startAnalysis(nextDraft: VacancyDraft) {
     if (!snapshot.user || !snapshot.profile) return
     const generation = observationGeneration.current
+    const task = taskGeneration.current
     await store.saveDraft(snapshot.user.id, nextDraft)
-    if (generation !== observationGeneration.current) return
+    if (generation !== observationGeneration.current || task !== taskGeneration.current) return
     observe("analysis_requested", { locale, inputMode: nextDraft.sourceMode })
     setDraft(nextDraft)
     setAnalysisStep("analyzing")
@@ -300,11 +305,15 @@ export function WebsiteApp({
       await store.addHistory(entry)
       if (generation !== observationGeneration.current) return
       if (!server) setSnapshot((current) => ({ ...current, history: [entry, ...current.history].slice(0, 50) }))
+      if (task !== taskGeneration.current) {
+        if (server) await guarded(refresh)
+        return
+      }
       setActiveEntry(entry)
       setAnalysisStep("result")
       if (server) await guarded(refresh)
     } catch (error) {
-      if (generation !== observationGeneration.current) return
+      if (generation !== observationGeneration.current || task !== taskGeneration.current) return
       setAnalysisError(analysisErrorMessage(error))
       setAnalysisStep("review")
     }
@@ -312,9 +321,13 @@ export function WebsiteApp({
 
   function navigate(nextView: WebView) {
     navigationGeneration.current++
+    if (nextView === "analyze") {
+      void guarded(analyzeAnother)
+      return
+    }
     if (nextView === "history" && view !== "history") observe("history_viewed", {})
-    setView(nextView === "analyze" && !snapshot.profile ? "profile" : nextView)
-    if (nextView === "analyze" || analysisStep === "analyzing") setAnalysisStep("source")
+    setView(nextView)
+    if (analysisStep === "analyzing") setAnalysisStep("source")
   }
 
   function analysisErrorMessage(error: unknown) {
@@ -429,10 +442,26 @@ export function WebsiteApp({
 
   async function analyzeAnother() {
     if (!snapshot.user) return
-    await store.saveDraft(snapshot.user.id, null)
+    const previousGeneration = taskGeneration.current
+    const generation = ++taskGeneration.current
+    const navigation = navigationGeneration.current
+    try {
+      await store.saveDraft(snapshot.user.id, null)
+    } catch (error) {
+      if (generation === taskGeneration.current) taskGeneration.current = previousGeneration
+      throw error
+    }
+    if (generation !== taskGeneration.current) return
+    server?.forgetPendingAnalysis()
     setDraft(null)
-    setActiveEntry(null)
-    setAnalysisStep("source")
+    setSourceVersion(generation)
+    setSnapshot(current => ({ ...current, draft: null }))
+    setAnalysisError(null)
+    if (navigation === navigationGeneration.current) {
+      setActiveEntry(null)
+      setAnalysisStep("source")
+      setView(snapshot.profile ? "analyze" : "profile")
+    }
   }
 
   async function clearHistory() {
@@ -489,7 +518,7 @@ export function WebsiteApp({
     if (analysisStep === "result" && activeEntry) {
       return <div className="space-y-4">{server ? <Button onClick={() => guarded(() => reanalyze(activeEntry))}>{copy.reanalyzeCurrentProfile}</Button> : null}<AnalysisResult key={activeEntry.id} entry={activeEntry} copy={copy} onBack={() => setAnalysisStep("source")} onAnalyzeAnother={() => guarded(analyzeAnother)} onSaveFeedback={value => guarded(() => saveFeedback(value))} /></div>
     }
-    return <VacancySource copy={copy} initialDraft={draft} onInputStarted={(inputMode) => observe("vacancy_input_started", { locale, inputMode })} onLoadUrl={(url) => { observe("extraction_requested", { locale, inputMode: "url" }); return api.extractVacancy(url) }} onReview={value => guarded(() => reviewDraft(value))} />
+    return <VacancySource key={sourceVersion} copy={copy} initialDraft={draft} onInputStarted={(inputMode) => observe("vacancy_input_started", { locale, inputMode })} onLoadUrl={(url) => { observe("extraction_requested", { locale, inputMode: "url" }); return api.extractVacancy(url) }} onReview={value => guarded(() => reviewDraft(value))} />
   }
 
   if (!initialized) {

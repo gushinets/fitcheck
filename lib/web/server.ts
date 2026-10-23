@@ -27,6 +27,7 @@ export function createServerWebsite(config: { fetch?: typeof fetch; delay?: () =
   let revision: string | null = null
   let locale: Locale = "en"
   let generation = 0
+  let pendingGeneration = 0
   const delay = config.delay ?? (() => new Promise<void>(resolve => setTimeout(resolve, 1500)))
   async function request<T>(path: string, schema: z.ZodType<T>, method = "GET", body?: unknown, extra?: Record<string, string>) {
     const started = generation
@@ -77,15 +78,16 @@ export function createServerWebsite(config: { fetch?: typeof fetch; delay?: () =
     if (!resource) return null
     return { ...resource.vacancy, sourceMode: resource.vacancy.url ? "url" : "text", sourceUrl: resource.vacancy.url, updatedAt: new Date().toISOString() }
   }
-  async function completed(jobId: string) {
+  async function completed(jobId: string, receipt: string | null) {
     const key = pendingKey()
+    const clear = () => { if (read(key) === receipt) write(key, null) }
     let job
     try { job = await poll(jobId) } catch (error) {
-      if (error instanceof WebsiteServerError && error.code !== "poll_timeout" && error.code !== "session_changed" || error instanceof BackendApiError && [400, 403, 404, 410].includes(error.status)) write(key, null)
+      if (error instanceof WebsiteServerError && error.code !== "poll_timeout" && error.code !== "session_changed" || error instanceof BackendApiError && [400, 403, 404, 410].includes(error.status)) clear()
       throw error
     }
     if (job.type !== "analysis") throw new WebsiteServerError("invalid_response")
-    write(key, null)
+    clear()
     return { analysis: job.result.analysis, entry: entry(job.result) }
   }
   async function analyze(input: AnalysisRequest, guest = false) {
@@ -97,21 +99,27 @@ export function createServerWebsite(config: { fetch?: typeof fetch; delay?: () =
       const saved = z.object({ key: z.string(), body: z.unknown(), jobId: z.string().optional() }).safeParse(JSON.parse(existing))
       if (saved.success) {
         const jobId = saved.data.jobId ?? (await request("v1/analysis-jobs", s.admissionSchema, "POST", saved.data.body, { "Idempotency-Key": saved.data.key })).jobId
-        return completed(jobId)
+        return completed(jobId, existing)
       }
     }
     const body = guest ? { mode: "guest", vacancy: input.job, profile: input.profile, locale: input.locale }
       : { mode: "account", vacancy: input.job, profileRevision: revision, locale: input.locale }
     const pending = { key: crypto.randomUUID(), body }
-    write(key, JSON.stringify(pending))
+    let receipt = JSON.stringify(pending)
+    write(key, receipt)
     try {
       const admitted = await request("v1/analysis-jobs", s.admissionSchema, "POST", body, { "Idempotency-Key": pending.key })
       if (generation !== started) throw new WebsiteServerError("session_changed")
-      write(key, JSON.stringify({ ...pending, jobId: admitted.jobId }))
-      return await completed(admitted.jobId)
+      // A user may have started another task while admission was in flight.
+      // The old request owns only its receipt, never the newer recovery record.
+      if (read(key) === receipt) {
+        receipt = JSON.stringify({ ...pending, jobId: admitted.jobId })
+        write(key, receipt)
+      }
+      return await completed(admitted.jobId, receipt)
     } catch (error) {
       // Transport failures/timeouts retain admission proof for an explicit retry.
-      if (error instanceof BackendApiError && error.status < 500 || error instanceof WebsiteServerError && error.code !== "poll_timeout" && error.code !== "session_changed") write(key, null)
+      if (read(key) === receipt && (error instanceof BackendApiError && error.status < 500 || error instanceof WebsiteServerError && error.code !== "poll_timeout" && error.code !== "session_changed")) write(key, null)
       throw error
     }
   }
@@ -195,17 +203,21 @@ export function createServerWebsite(config: { fetch?: typeof fetch; delay?: () =
       if (!value) return null
       const saved = JSON.parse(value)
       const jobId = saved.jobId ?? (await request("v1/analysis-jobs", s.admissionSchema, "POST", saved.body, { "Idempotency-Key": saved.key })).jobId
-      return completed(jobId)
+      return completed(jobId, value)
     },
-    forgetPendingAnalysis() { write(pendingKey(), null) },
+    forgetPendingAnalysis() { pendingGeneration++; write(pendingKey(), null) },
     loadHistory,
     async setApplicationStatus(id: string, applicationStatus: NonNullable<WebHistoryEntry["applicationStatus"]>) {
       await request(`v1/analyses/${encodeURIComponent(id)}/application-status`, z.unknown(), "PUT", { applicationStatus })
     },
     async reanalyze(id: string) {
+      const started = pendingGeneration
+      const key = pendingKey()
+      const previous = read(key)
       const admitted = await request(`v1/analyses/${encodeURIComponent(id)}/reanalyses`, s.admissionSchema, "POST", {}, { "Idempotency-Key": crypto.randomUUID() })
-      write(pendingKey(), JSON.stringify({ jobId: admitted.jobId }))
-      return completed(admitted.jobId)
+      const receipt = JSON.stringify({ jobId: admitted.jobId })
+      if (started === pendingGeneration && read(key) === previous) write(key, receipt)
+      return completed(admitted.jobId, receipt)
     },
     requestVerification: (email: string) => request("v1/auth/verify-email/request", voidSchema, "POST", { email }),
     verifyEmail: (token: string) => request("v1/auth/verify-email", voidSchema, "POST", { token }),
