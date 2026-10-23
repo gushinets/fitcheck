@@ -2,7 +2,7 @@ groups:
   - name: fitcheck
     rules:
       - alert: FitCheckApiUnavailable
-        expr: up{job="fitcheck-api"} == 0
+        expr: up{job="fitcheck-api"} == 0 or fitcheck_database_up{job="fitcheck-api"} == 0
         for: 2m
         labels: { severity: critical }
         annotations: { summary: "API metrics or database unavailable; check readiness and DB before restarting." }

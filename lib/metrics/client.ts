@@ -41,6 +41,7 @@ export function createMetricsClient(options: ClientOptions) {
   let inFlight = 0
   let abortDelivery: (() => void) | undefined
   let delivered = 0, failed = 0, dropped = 0
+  let reportedDropped = 0
   const visible = () => !doc || doc.visibilityState === 'visible'
   const bytes = (events: ClientEvent[]) => new TextEncoder().encode(JSON.stringify({ events })).length
   function enqueue(event: ClientEvent) {
@@ -95,6 +96,7 @@ export function createMetricsClient(options: ClientOptions) {
     }
   }
   async function drain() {
+    const previousFailed = failed
     const epoch = generation
     while (!disposed && epoch === generation && queue.length) {
       const batch: ClientEvent[] = []
@@ -111,6 +113,10 @@ export function createMetricsClient(options: ClientOptions) {
         if (success) delivered += batch.length
         else failed += batch.length
       }
+    }
+    if (epoch === generation && !disposed && (failed !== previousFailed || dropped !== reportedDropped)) {
+      reportedDropped = dropped
+      try { console.warn('fitcheck_metrics_client_loss', { failed, dropped }) } catch { /* Best effort only. */ }
     }
   }
   function flush(): Promise<void> {

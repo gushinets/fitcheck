@@ -13,13 +13,18 @@ class Counters:
         self._lock = threading.Lock()
         self.requests = Counter()
         self.denials = Counter()
+        self.collector_requests = Counter()
         self.seconds = 0.0
 
-    def observe(self, method, status, seconds, code=None):
+    def observe(self, method, status, seconds, code=None, route=None):
         if method not in {'GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'}: method = 'OTHER'
         with self._lock:
             self.requests[method, str(status)] += 1
             self.seconds += seconds
+            operation = {'/internal/metrics/events':'events', '/internal/metrics/attempts':'attempts',
+                         '/internal/metrics/visitors/{visitorId}':'delete'}.get(route)
+            if operation:
+                self.collector_requests[operation, str(status)] += 1
             if code in {'quota_exceeded', 'budget_exceeded', 'rate_limited'}: self.denials[code] += 1
 
     def render(self):
@@ -29,15 +34,44 @@ class Counters:
             lines += ['# TYPE fitcheck_http_duration_seconds_sum counter', f'fitcheck_http_duration_seconds_sum {self.seconds}']
             lines += ['# TYPE fitcheck_admission_denials_total counter']
             lines += [f'fitcheck_admission_denials_total{{reason="{code}"}} {self.denials[code]}' for code in ('quota_exceeded', 'budget_exceeded', 'rate_limited')]
+            lines += ['# TYPE fitcheck_metrics_collector_requests_total counter']
+            lines += [f'fitcheck_metrics_collector_requests_total{{operation="{operation}",status="{status}"}} {count}'
+                      for (operation, status), count in sorted(self.collector_requests.items())]
             return '\n'.join(lines) + '\n'
 
 
-def database_metrics(engine):
+def collection_configuration(settings):
+    values = {
+        'enabled': settings.metrics_enabled,
+        'collector_configured': settings.metrics_configured,
+        'lifecycle_configured': bool(settings.metrics_enabled and settings.database_url and settings.metrics_environment),
+        'database_scope_configured': settings.metrics_database_environment is not None,
+    }
+    return ''.join(f'# TYPE fitcheck_metrics_{name} gauge\nfitcheck_metrics_{name} {int(value)}\n' for name, value in values.items())
+
+
+def database_metrics(engine, *, metrics_environment=None):
     lines = ['# TYPE fitcheck_database_up gauge', 'fitcheck_database_up 1']
     with engine.connect() as conn, conn.begin():
         conn.execute(text('SET TRANSACTION READ ONLY'))
         conn.execute(text("SET LOCAL statement_timeout='3s'"))
         conn.execute(text("SET LOCAL lock_timeout='500ms'"))
+        if metrics_environment in {'development', 'production', 'test'}:
+            journal = conn.execute(text("""SELECT source, count(*) AS count,
+                extract(epoch FROM max(received_at)) AS latest
+                FROM metric_journal WHERE environment=:environment GROUP BY source"""),
+                {'environment': metrics_environment}).mappings().all()
+            by_source = {row['source']:row for row in journal}
+            lines += ['# TYPE fitcheck_metrics_journal_events gauge',
+                      '# TYPE fitcheck_metrics_journal_observed gauge',
+                      '# TYPE fitcheck_metrics_journal_latest_received_timestamp_seconds gauge']
+            for source in ('website_client', 'website_server', 'backend_server', 'reconstructed_backend'):
+                row = by_source.get(source)
+                labels = f'source="{source}",environment="{metrics_environment}"'
+                lines.append(f'fitcheck_metrics_journal_observed{{{labels}}} {int(row is not None)}')
+                lines.append(f'fitcheck_metrics_journal_events{{{labels}}} {row["count"] if row else 0}')
+                if row:
+                    lines.append(f'fitcheck_metrics_journal_latest_received_timestamp_seconds{{{labels}}} {float(row["latest"])}')
         jobs = conn.execute(text("""SELECT type, status, count(*) AS count,
             coalesce(max(extract(epoch FROM now()-created_at)) FILTER (WHERE status='queued' AND available_at<=now()),0) AS lag
             FROM jobs WHERE status IN ('queued','running') GROUP BY type,status""")).mappings().all()
@@ -72,9 +106,12 @@ def metrics(request: Request):
     if not token or not hmac.compare_digest(proof.encode('utf-8'), ('Bearer '+token).encode('utf-8')):
         return Response(status_code=404, headers={'Cache-Control':'no-store'})
     runtime = request.app.state.auth_runtime
+    diagnostics = request.app.state.ops_counters.render() + collection_configuration(settings)
     try:
-        if runtime is None: raise ValueError('Unavailable')
-        output = request.app.state.ops_counters.render() + database_metrics(runtime.engine)
+        collector = request.app.state.metrics_collector
+        engine = runtime.engine if runtime is not None else getattr(collector, 'engine', None)
+        if engine is None: raise ValueError('Unavailable')
+        output = diagnostics + database_metrics(engine, metrics_environment=settings.metrics_environment)
         for kind in ('backup','restore'):
             try:
                 value = float((Path(settings.ops_state_dir)/f'{kind}.timestamp').read_text(encoding='utf-8'))
@@ -83,4 +120,4 @@ def metrics(request: Request):
             output += f'# TYPE fitcheck_last_{kind}_success_timestamp_seconds gauge\nfitcheck_last_{kind}_success_timestamp_seconds {value}\n'
         return Response(output, media_type='text/plain; version=0.0.4', headers={'Cache-Control':'no-store'})
     except Exception:
-        return Response('fitcheck_database_up 0\n', status_code=503, media_type='text/plain', headers={'Cache-Control':'no-store'})
+        return Response(diagnostics + 'fitcheck_database_up 0\n', status_code=200, media_type='text/plain', headers={'Cache-Control':'no-store'})

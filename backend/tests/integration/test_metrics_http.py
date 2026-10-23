@@ -201,3 +201,22 @@ def test_client_mapped_campaign_preserves_reserved_codes_and_first_touch(metrics
         rows = session.scalars(select(MetricJournal).where(MetricJournal.subject_id == subject)).all()
         assert len(rows) == 2
         assert [row.properties['campaign'] for row in rows] == [expected, expected]
+
+def test_collector_only_monitoring_proves_committed_rows_and_replay(engine):
+    settings = Settings(metrics_enabled=True, metrics_environment='test', metrics_database_environment='test',
+        metrics_ingest_key='test-bridge-secret', ops_token='a'*32, database_url='postgresql://placeholder/test')
+    value = MetricsCollector(engine, settings, lambda: NOW)
+    with TestClient(create_app(settings, metrics_collector=value)) as client:
+        payload = event()
+        assert send(client, [payload]).json() == {'accepted':1, 'duplicates':0}
+        assert count(engine) == 1
+        assert send(client, [payload]).json() == {'accepted':0, 'duplicates':1}
+        assert count(engine) == 1
+        assert client.post('/internal/metrics/events',json={'source':'website_client','events':[event()]}).status_code == 401
+        response = client.get('/internal/operations/metrics', headers={'Authorization':'Bearer '+'a'*32})
+        assert response.status_code == 200
+        assert 'fitcheck_metrics_collector_configured 1' in response.text
+        assert 'fitcheck_metrics_collector_requests_total{operation="events",status="401"} 1' in response.text
+        assert 'fitcheck_metrics_journal_events{source="website_client",environment="test"} 1' in response.text
+        assert 'fitcheck_metrics_journal_observed{source="website_client",environment="test"} 1' in response.text
+        assert payload['subjectId'] not in response.text

@@ -78,7 +78,10 @@ export function createMetricsHandlers(config: HandlerConfig) {
       const events = batch.data.events.map(validateClientEvent)
       if (events.some(event => event === null)) return response({ error: 'invalid_request' }, 400)
       const visitor = resolveVisitor(incomingCookie(request), config.secret, now())
-      if (!visitor) return response({ delivered: false }, 202)
+      if (!visitor) {
+        try { console.warn('fitcheck_metrics_relay', { outcome: 'cookie_unconfigured' }) } catch { /* Best effort only. */ }
+        return response({ delivered: false }, 202)
+      }
       const delivered = await sendMetrics({ source: 'website_client', events: events.map(event => ({ ...event!, subjectId: visitor.visitorId, subjectKind: 'visitor' })) }, config.bridge, config.fetchImpl)
       const reply = response({ delivered }, 202)
       if (visitor.isNew) cookie(reply, visitor)

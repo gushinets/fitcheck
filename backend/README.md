@@ -449,8 +449,10 @@ matching explicit database scope, legacy metrics are unavailable; scoped journal
 observations remain reportable. Mixed historical database environments need future
 reconciliation. Mirror public campaign codes as backend JSON array (for example
 `["launch"]`) and website comma-separated `METRICS_CAMPAIGN_CODES=launch`; unknown
-values map to `other`, absent values to `direct`. Website enabled/campaign props are
-prerendered and require configuration at build time plus rebuild/deploy on changes.
+values map to `other`, absent values to `direct`. The current website page calls `connection()` and reads enabled/campaign props at
+request time. Restart/redeploy processes after changing runtime configuration;
+server route configuration is cached for each process. Never use `NEXT_PUBLIC_`
+for bridge keys or cookie secrets.
 
 Reports are operator CLI only, with database access; there is no public report API.
 From `backend/` with explicitly exported settings (dotenv is not automatically read):

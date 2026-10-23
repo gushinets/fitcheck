@@ -152,3 +152,24 @@ describe('browser telemetry', () => {
     client.dispose()
   })
 })
+
+it('reports queue loss and exhausted retries without event data', async () => {
+  vi.useFakeTimers()
+  const log = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const client = createMetricsClient({ send: vi.fn().mockResolvedValue(false), eventId: uuid })
+  try {
+    for (let i = 0; i < 120; i++) client.track('page_viewed', {})
+    await client.flush()
+    expect(log).toHaveBeenCalledWith('fitcheck_metrics_client_loss', { failed: 100, dropped: 21 })
+    expect(JSON.stringify(log.mock.calls)).not.toContain('eventId')
+  } finally { client.dispose(); log.mockRestore() }
+})
+it('does not let diagnostic logging break delivery', async () => {
+  const log = vi.spyOn(console, 'warn').mockImplementation(() => { throw new Error('diagnostic unavailable') })
+  const client = createMetricsClient({ send: vi.fn().mockResolvedValue(false), eventId: uuid })
+  try {
+    client.track('page_viewed', {})
+    await expect(client.flush()).resolves.toBeUndefined()
+    expect(client.stats().failed).toBe(2)
+  } finally { client.dispose(); log.mockRestore() }
+})

@@ -191,3 +191,101 @@ claim результата → перезагрузка → второй бра�
 используют настоящую БД/API и детерминированный executor без платного LLM;
 PostgreSQL recovery/concurrency тесты проверяют рестарт и fencing. После выпуска
 нужен короткий ручной smoke с реальным провайдером и SMTP.
+
+
+## Проверка доставки продуктовой аналитики (ANY-735)
+
+Целевое окружение этой задачи — **development в Dokploy**. Статус deployment,
+зелёный healthcheck и HTTP 202 сами по себе не подтверждают запись аналитики.
+Сначала проверьте process env сайта, API, worker и процесса отчёта. Выводите только
+наличие секретов и булевы результаты сравнения, никогда `env`, значения ключей,
+cookie, пароль БД или тела событий. Сайт: HTTPS `METRICS_BACKEND_URL`, непустые
+`METRICS_BRIDGE_KEY` и отдельный `METRICS_COOKIE_SECRET`, точный публичный origin
+в `ALLOWED_ORIGINS`, `METRICS_ENVIRONMENT=development`. API: совпадающий ingest key,
+включённый сбор и то же metrics environment. Worker: включённый сбор и то же
+metrics environment. API/worker/report: независимый
+`FITCHECK_METRICS_DATABASE_ENVIRONMENT=development`; это область исторических
+доменов, а не переключатель среды событий. Проверяйте схему packaged migrations.
+
+Приватный `/internal/operations/metrics` с существующим Bearer ops token показывает:
+
+- `fitcheck_metrics_enabled`, `fitcheck_metrics_collector_configured`,
+  `fitcheck_metrics_lifecycle_configured`, `fitcheck_metrics_database_scope_configured`:
+  настройки, а не обещание доступности сети/БД. Lifecycle не требует bridge key.
+- `fitcheck_metrics_collector_requests_total{operation,status}`: `events`, `attempts`,
+  `delete`; 400/413 — контракт/размер, 401 — ключ, 403 — Origin, 429 — лимит,
+  503 — отключённый/неготовый collector или БД. Дедупликацию проверять в БД,
+  число HTTP-запросов не равно числу сохранённых событий.
+- `fitcheck_metrics_journal_events{source,environment}`: текущие сохранённые строки,
+  уменьшаются при retention/удалении. `journal_observed=0` означает отсутствие
+  сохранённых наблюдений, а не доказанный нулевой продуктовый трафик.
+  `journal_latest_received_timestamp_seconds` существует только при наличии строк.
+  `website_server` здесь означает journal-факты, а не число provider attempts.
+
+Счётчики process-local: после restart сбрасываются, реплики scrape отдельно.
+При ошибке БД endpoint сохраняет конфигурационные gauges и counters в ответе 200
+вместе с `fitcheck_database_up 0`, не выдавая недоступные DB-измерения за ноль.
+Prometheus продолжает собирать независимые от БД показатели. Alert недоступности
+API проверяет как `up`, так и `fitcheck_database_up`; это exporter, не readiness.
+
+Website server logs: `fitcheck_metrics_bridge` с фиксированными operation/outcome
+и HTTP status. Причины: `missing_configuration`, `invalid_destination`,
+`body_too_large`, `collector_rejected`, `unconfirmed`, `timeout`, `network_error`;
+`delivered` требует HTTP 200 и JSON receipt коллектора: accepted + duplicates
+равно размеру batch либо неотрицательный deleted для удаления. HTML, пустой 204,
+некорректный receipt и ответ collector 202 считаются неподтверждёнными. Нет URL, ключей, текстов исключений или идентификаторов
+посетителей. `fitcheck_metrics_relay` / `cookie_unconfigured` означает отсутствие
+cookie secret. Проверяйте фактическую запись в отдельной транзакции даже при
+`delivered:true`.
+
+В DevTools Console браузера фильтруйте `fitcheck_metrics_client_loss`. После drain
+там доступны накопленные `failed` (исчерпаны три попытки) и `dropped` (переполнение
+очереди/размера). Это локальные счётчики вкладки, они не передаются автоматически
+на сервер и не дают глобального процента потерь. Закрытие вкладки до drain,
+блокировщик и отключённая телеметрия могут оставить потери ненаблюдаемыми. Ошибки
+диагностики не прерывают продуктовые операции. Постоянной outbox нет.
+
+Smoke-проверка без платных LLM-вызовов:
+
+1. Запишите commit/image сайта/API/worker, UTC начало и обезличенные результаты
+   проверки конфигурации. Откройте сайт новым тестовым браузером, выполните обычное
+   неплатное действие. В Network выберите POST `/api/metrics`, запишите только
+   контрольный eventId и occurredAt. Сохраните состояние `delivered`, не cookie.
+2. Через доступный оператору SQL runner выполните запрос ниже **в отдельной
+   read-only транзакции**. Подставляйте только контрольный UUID; ожидается одна
+   строка нужных source/environment/subject_kind после commit. Не выводите
+   `properties`, cookie или пользовательские тексты.
+3. Повторите тот же POST с теми же eventId/временем и той же cookie в этом браузере.
+   Collector при прямой проверке отвечает accepted=0, duplicates=1; relay —
+   delivered=true. SQL count должен остаться 1. Смена visitor между повторами
+   меняет payload и должна дать conflict, это другой сценарий.
+4. Выполните штатную неплатную серверную операцию тестового аккаунта (например,
+   сохранение профиля), сверив соответствующий backend_server domain key и время.
+   Worker проверяйте на существующей job или с заглушкой LLM в изолированной
+   тестовой среде; не создавайте job с платным provider ради smoke.
+5. Проверки неверного ключа, collector outage и отключения выполняйте на
+   изолированной копии; не выключайте используемый development для теста.
+   Убедитесь, что основной продукт продолжает работать, а failed растёт после
+   исчерпания повторов, и что queue overflow увеличивает dropped.
+6. Запустите существующий CLI report с явными start/end/environment/population
+   после commit. Сверяйте coverage/data start, а не только значения. Отсутствие
+   источника, неполную историю и период простоя фиксируйте как неизвестное покрытие.
+   Ретроспективные просмотры не создавать; backfill — только восстанавливаемые
+   серверные факты с явным происхождением. Исправление формул относится к ANY-738.
+
+```sql
+BEGIN READ ONLY;
+SELECT event_id, name, source, environment, subject_kind, occurred_at, received_at
+FROM metric_journal
+WHERE event_id = '73500000-0000-4000-8000-000000000001';
+SELECT count(*) AS persisted_once
+FROM metric_journal
+WHERE event_id = '73500000-0000-4000-8000-000000000001';
+SELECT source, environment, started_at, available_from, retention_floor
+FROM metric_collections WHERE environment = 'development';
+COMMIT;
+```
+
+Контрольные UUID в примере — шаблон; используйте фактически отправленный eventId.
+Не удаляйте чужие события для очистки smoke. Синтетические действия явно укажите
+в evidence, чтобы не считать их реальным пользовательским спросом.

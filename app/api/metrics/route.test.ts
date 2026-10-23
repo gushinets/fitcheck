@@ -5,7 +5,7 @@ const origin = 'https://website.example'
 const event = () => ({ eventId: crypto.randomUUID(), name: 'page_viewed', schemaVersion: 1, occurredAt: new Date().toISOString(), sessionId: crypto.randomUUID(), properties: {} })
 const request = (body: unknown, headers: Record<string, string> = {}, method = 'POST') => new Request(`${origin}/api/metrics`, { method, headers: { origin, 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) })
 const setup = () => {
-  const fetcher = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+  const fetcher = vi.fn(async (_url: RequestInfo | URL, options?: RequestInit) => options?.method === 'DELETE' ? Response.json({deleted:0}) : Response.json({accepted:JSON.parse(String(options?.body)).events.length,duplicates:0}))
   const handlers = createMetricsHandlers({ secret: 'test-secret', allowedOrigins: [origin], bridge: { backendUrl: 'https://collector.example', bridgeKey: 'secret', environment: 'development', runtime: 'production' }, fetchImpl: fetcher })
   return { ...handlers, fetcher }
 }
@@ -68,7 +68,7 @@ describe('browser metrics boundary', () => {
     expect(response.status).toBe(202)
     expect(response.headers.get('set-cookie')).toMatch(/HttpOnly/)
     expect(response.headers.get('set-cookie')).toMatch(/Secure/)
-    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({ source: 'website_client', events: [{ subjectKind: 'visitor' }] })
+    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ source: 'website_client', events: [{ subjectKind: 'visitor' }] })
     expect((await POST(request({ events: Array.from({ length: 21 }, event) }))).status).toBe(400)
     expect((await POST(request('x'.repeat(32769)))).status).toBe(413)
     for (let i = 0; i < 57; i++) await POST(request({ events: [event()] }))
@@ -77,7 +77,7 @@ describe('browser metrics boundary', () => {
   it('does not renew an existing visitor and sets expiry from issuance on rotation', async () => {
     const time = Date.now()
     const visitor = resolveVisitor(undefined, 'test-secret', time)!
-    const fetcher = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    const fetcher = vi.fn(async (_url: RequestInfo | URL, options?: RequestInit) => options?.method === 'DELETE' ? Response.json({deleted:0}) : Response.json({accepted:JSON.parse(String(options?.body)).events.length,duplicates:0}))
     const handlers = createMetricsHandlers({ secret: 'test-secret', now: () => time + 1000, allowedOrigins: [origin], bridge: { backendUrl: 'https://collector.example', bridgeKey: 'secret', environment: 'development', runtime: 'production' }, fetchImpl: fetcher })
     const existing = await handlers.POST(request({ events: [event()] }, { cookie: `${VISITOR_COOKIE}=${visitor.cookieValue}` }))
     expect(existing.headers.get('set-cookie')).toBeNull()
@@ -111,4 +111,15 @@ describe('browser metrics boundary', () => {
     expect(response.headers.get('set-cookie')).not.toContain(visitor.cookieValue)
     expect((await DELETE(request({ visitorId: crypto.randomUUID() }, {}, 'DELETE'))).status).toBe(400)
   })
+})
+
+it('diagnoses missing cookie configuration without forwarding', async () => {
+  const log = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const fetcher = vi.fn()
+  try {
+    const handlers = createMetricsHandlers({ allowedOrigins: [origin], bridge: {}, fetchImpl: fetcher })
+    expect(await (await handlers.POST(request({ events: [event()] }))).json()).toEqual({ delivered: false })
+    expect(fetcher).not.toHaveBeenCalled()
+    expect(log).toHaveBeenCalledWith('fitcheck_metrics_relay', { outcome: 'cookie_unconfigured' })
+  } finally { log.mockRestore() }
 })

@@ -99,8 +99,11 @@ class RequestBoundaryMiddleware:
             await fail(500, "internal_error", "Internal server error")
         finally:
             elapsed = time.monotonic()-began
-            if self.counters: self.counters.observe(scope['method'],status,elapsed,scope.get('state',{}).get('error_code'))
             route = getattr(scope.get('route'), 'path', '/unmatched')
+            metric_route = route
+            if scope['path'] in {'/internal/metrics/events', '/internal/metrics/attempts'}:
+                metric_route = scope['path']
+            if self.counters: self.counters.observe(scope['method'],status,elapsed,scope.get('state',{}).get('error_code'), route=metric_route)
             logger.info('http_request', extra={'event':'http_request','request_id':request_id,
                 'method':scope['method'],'route':route,'status':status,'duration_ms':elapsed*1000,
                 'owner_ref':scope.get('state',{}).get('owner_ref')})
