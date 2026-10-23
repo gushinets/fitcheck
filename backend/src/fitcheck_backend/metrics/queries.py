@@ -15,7 +15,7 @@ from .report_types import Event, Attempt, Operation, Snapshot
 
 MAX_ROWS = 100_000
 PROPERTY_KEYS = ('campaign', 'resultId', 'predictedScore', 'correctedScore', 'activeMs',
-                 'outcome', 'durationMs', 'errorCode', 'jobType', 'attempts', 'executionToken')
+                 'outcome', 'durationMs', 'errorCode', 'jobType', 'attempts', 'executionToken', 'flow', 'requestId')
 
 
 def bounded(conn, statement):
@@ -36,7 +36,7 @@ def load_snapshot(conn, options, backend_database_environment=None):
     scope_reason = ('Backend database environment scope is not configured' if backend_database_environment is None
                     else 'Backend database environment does not match report environment'
                     if backend_database_environment != options.environment else None)
-    data = Snapshot(backend_scope_reason=scope_reason, history_floor=floor)
+    data = Snapshot(server_backed=True, backend_scope_reason=scope_reason, history_floor=floor)
     for row in conn.execute(select(MetricCollection.source, MetricCollection.available_from,
             MetricCollection.retention_floor, MetricCollection.backfill_complete_through)
             .where(MetricCollection.environment == options.environment)).mappings():
@@ -45,7 +45,7 @@ def load_snapshot(conn, options, backend_database_environment=None):
             data.retention_floors[row['source']] = row['retention_floor']
         if row['source'] == 'reconstructed_backend':
             data.backfill_complete_through = row['backfill_complete_through']
-    columns = [getattr(MetricJournal, key) for key in ('name', 'occurred_at', 'source', 'subject_kind',
+    columns = [getattr(MetricJournal, key) for key in ('event_id', 'received_at', 'name', 'occurred_at', 'source', 'subject_kind',
                'subject_id', 'session_id', 'operation_id', 'domain_key')]
     columns += [MetricJournal.properties[key].label(key) for key in PROPERTY_KEYS]
     statement = select(*columns).where(MetricJournal.environment == options.environment,
@@ -71,6 +71,8 @@ def load_snapshot(conn, options, backend_database_environment=None):
                     values[key] = None
                 values.update(state='started', cost_basis='unknown')
             data.attempts.append(Attempt(source='website_server', **values))
+    from .server_projection import load_server_projection
+    load_server_projection(conn, options, data)
     if scope_reason is not None or options.population == 'visitor':
         return data
     # SDK costs are estimates, even for historical calls with a successful state.
@@ -97,7 +99,8 @@ def load_snapshot(conn, options, backend_database_environment=None):
     # User is one-to-one with owner. Guest jobs never become registered people.
     statement = select(Job.id, Job.owner_id, Job.type, Job.created_at, Job.started_at,
         Job.finished_at, Job.status, Job.available_at, Job.attempts, Job.error['code'].as_string().label('error_code'))\
-        .join(User, User.owner_id == Job.owner_id).where(Job.created_at >= floor, Job.created_at < options.end)
+        .join(User, User.owner_id == Job.owner_id).where(Job.created_at >= floor, Job.created_at < options.end,
+            Job.input['mode'].as_string().is_distinct_from('guest'))
     for row in bounded(conn, statement):
         finished = row['finished_at'] if row['finished_at'] is not None and row['finished_at'] < options.end else None
         started = row['started_at'] if row['started_at'] is not None and row['started_at'] < options.end else None

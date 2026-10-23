@@ -304,11 +304,15 @@ def website_metrics(out, events, by_subject, registered, activation, active, dim
 def operation_metrics(out, ops, active_by_population):
     opt, data = out.options, out.data
     selected_sources = ['website_server'] if opt.population == 'visitor' else ['backend_server'] if opt.population == 'account' else ['website_server', 'backend_server']
+    if data.server_backed and opt.population=='visitor':selected_sources.append('backend_server')
     partitions = [(source, provenance) for source in selected_sources
                   for provenance in sorted({op.provenance or source for op in ops if op.source == source} or {source})]
+    if data.server_backed:
+        partitions=sorted(set(partitions)|{('backend_server','server_guest_domain')})
     for source, provenance in partitions:
-        population = 'visitor' if source == 'website_server' else 'account'
-        kinds = ('analysis', 'skill_suggestions', 'extraction') if population == 'visitor' else ('analysis', 'skill_suggestions', 'import')
+        population = 'visitor' if source == 'website_server' or provenance=='server_guest_domain' else 'account'
+        if opt.population!='all' and opt.population!=population:continue
+        kinds = ('analysis',) if provenance=='server_guest_domain' else ('analysis', 'skill_suggestions', 'extraction') if population == 'visitor' else ('analysis', 'skill_suggestions', 'import')
         scoped = [op for op in ops if op.source == source and (op.provenance or source) == provenance]
         for kind in kinds:
             values = [op for op in scoped if op.kind == kind]
@@ -317,12 +321,14 @@ def operation_metrics(out, ops, active_by_population):
             cohort = [op for op in values if op.created_at and opt.start <= op.created_at < opt.end]
             pending = [op for op in cohort if op.state not in {'succeeded', 'failed'}]
             dims = {'population': population, 'source': source, 'operation': kind, 'provenance': provenance}
-            sources = (provenance,) if provenance != 'deployment_database_scope' else ()
+            sources = () if provenance in {'deployment_database_scope','server_guest_domain'} else (provenance,)
             reason = None
             if source == 'backend_server' and data.backend_scope_reason and provenance not in data.collections:
                 reason = data.backend_scope_reason
             coverage = {'creation_basis': 'terminal_minus_recorded_nonclamped_duration' if source == 'website_server' else 'admission',
-                        'legacy_database_limit': LEGACY_LIMIT if not data.backend_scope_reason and source == 'backend_server' else None}
+                        'legacy_database_limit': LEGACY_LIMIT if not data.backend_scope_reason and source == 'backend_server' else None,
+                        'origin_basis': 'original_guest_job_mode_survives_claim' if provenance=='server_guest_domain' else 'source_local_operation',
+                        'formula_version': 'server_v2' if data.server_backed else 'legacy_v1'}
             out.add('successful_operations', dims=dims, sources=sources, reason=reason, value=len(successful), coverage=coverage)
             out.add('operation_success_rate', dims=dims, sources=sources, reason=reason,
                     value=ratio(len(successful), len(terminal)), numerator=len(successful), denominator=len(terminal), coverage=coverage)
@@ -344,7 +350,8 @@ def operation_metrics(out, ops, active_by_population):
                 active = active_by_population.get((population, provenance), active_by_population.get(population, set()))
                 # Attempts retained after erasure count financially, not as people.
                 attributable = [op for op in successful if person(op.subject_id) and op.subject_id in active]
-                out.add('usage_intensity', dims=dims, sources=(('backend_server',) if provenance == 'deployment_database_scope' else sources), reason=reason,
+                out.add('usage_intensity', dims=dims, sources=(('backend_server',) if provenance == 'deployment_database_scope' else sources),
+                        reason=('Guest operation-to-active-visitor linkage is unavailable' if provenance=='server_guest_domain' else reason),
                         value=len(attributable)/len(active) if active else None, numerator=len(attributable), denominator=len(active))
             if population == 'account':
                 executions = defaultdict(set)
@@ -356,7 +363,7 @@ def operation_metrics(out, ops, active_by_population):
                 out.add('jobs_recovered', dims=dims, sources=('backend_server',), value=sum(op.recovered for op in cohort))
                 out.add('jobs_exhausted', dims=dims, sources=sources, reason=reason,
                         value=sum(op.state == 'failed' and op.executions >= 2 for op in cohort))
-    if opt.population in {'visitor', 'all'}:
+    if opt.population in {'visitor', 'all'} and not data.server_backed:
         cohort = [op for op in ops if op.source == 'website_server' and op.kind == 'analysis' and
                   op.state == 'succeeded' and op.created_at and opt.start <= op.created_at < opt.end and op.created_at+WEEK <= opt.end]
         feedback = defaultdict(list)
@@ -388,7 +395,8 @@ def attempt_metrics(out, ops):
         priced = lambda a: a.cost is not None and a.currency is not None and a.cost_basis in {'estimated', 'reported'}
         known = [a for a in calls if priced(a)]
         coverage = {'basis': 'observed_calls_only', 'delivery_loss_rate': 'unknown',
-                    'legacy_database_limit': LEGACY_LIMIT if source == 'backend_server' else None}
+                    'legacy_database_limit': LEGACY_LIMIT if source == 'backend_server' else None,
+                    'population_scope': 'backend_deployment_including_guest_costs_not_account_people' if source=='backend_server' else 'website_provider_attempts'}
         out.add('provider_attempts', dims=dims, sources=sources, reason=reason, value=len(calls), coverage=coverage)
         out.add('unpriced_calls', dims=dims, sources=sources, reason=reason, value=len(calls)-len(known), coverage=coverage)
         out.add('cost_coverage', dims=dims, sources=sources, reason=reason, value=ratio(len(known), len(calls)),
@@ -457,10 +465,13 @@ def calculate(options, data):
     out = Rows(options, data)
     ops = operations(data)
     active = {}
-    if options.population in {'visitor', 'all'}:
+    if data.server_backed:
+        from .server_calculations import calculate_server
+        active=calculate_server(out)
+    if not data.server_backed and options.population in {'visitor', 'all'}:
         events = [e for e in data.events if e.source in {'website_client', 'website_server'} and e.subject_kind == 'visitor' and e.occurred_at < options.end]
         active['visitor'] = population_metrics(out, events, 'visitor', 'website_observed')
-    if options.population in {'account', 'all'}:
+    if not data.server_backed and options.population in {'account', 'all'}:
         # Reconstructed facts remain a separate cohort; never silently combine
         # their subjects with the independently observed live-account cohort.
         active['account'] = set()
@@ -491,9 +502,9 @@ def calculate(options, data):
         'cac': 'No acquisition expense ledger or paying-customer attribution', 'ltv': 'No realized customer revenue or lifetime history',
         'margins': 'No revenue and complete expense ledger', 'sales': 'No sales pipeline or CRM',
         'nps': 'No NPS survey responses', 'csat': 'No CSAT survey responses; corrected scores are not surveys',
-        'ces': 'No CES survey responses', 'outcome_conversion': 'No recorded application-status transitions; ANY-650 is not implemented'}
+        'ces': 'No CES survey responses', 'outcome_conversion': 'Current saved statuses do not establish historical application-status transitions'}
     if options.population == 'visitor':
-        missing['current_application_status'] = 'Website application-status functionality is not implemented'
+        missing['current_application_status'] = ('Application status snapshot requires account or all population' if data.server_backed else 'Website application-status functionality is not implemented')
     for metric, reason in missing.items():
         out.add(metric, dims={'population': options.population}, reason=reason)
     return sorted(out.rows, key=lambda row: (row.metric, sorted(row.dimensions.items())))

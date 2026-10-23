@@ -53,7 +53,8 @@ def test_join_fanout_cannot_multiply_calls_or_feedback(engine):
     person,op=seed(engine)
     report=MetricReportService(engine,clock=lambda:END).build(opts())
     assert metric(report,'provider_attempts',source='website_server').value==4
-    assert metric(report,'feedback_coverage').numerator==1
+    # Legacy client feedback cannot establish current saved account state.
+    assert not metric(report,'feedback_coverage').available
     assert metric(report,'successful_operations',operation='analysis',source='website_server').value==1
     output=json.dumps(report.to_json())
     assert str(person) not in output and str(op) not in output
@@ -105,7 +106,9 @@ def test_scoped_backend_journal_survives_missing_legacy_scope(engine,storage_fac
             repo.append(MetricEvent(eventId=uuid4(),name=name,subjectKind='account',subjectId=owner.id,
                 domainKey=key,occurredAt=when,properties=props),source='backend_server',environment='test',received_at=when)
     report=MetricReportService(engine,clock=lambda:END).build(opts(population='account'))
-    assert metric(report,'activation',provenance='backend_server').value==100
+    # Completion remains a scoped fact but is not an observed product view.
+    assert metric(report,'registrations',provenance='backend_server').value==1
+    assert not metric(report,'activation',provenance='backend_server').available
     assert not metric(report,'provider_attempts',source='backend_server').available
     other=MetricReportService(engine,clock=lambda:END).build(opts(environment='production',population='account'))
     assert metric(other,'activation',provenance='backend_server').value is None

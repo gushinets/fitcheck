@@ -179,8 +179,12 @@ def test_partial_backfill_with_mature_outcomes_requires_complete_drain(engine,li
         result=backfill_metrics(engine,environment='test',limit=1)
         if result.processed==0: break
     else: pytest.fail('bounded backfill never drained')
-    for value in metrics().values():
-        assert value.available and value.value==100
+    for name,value in metrics().items():
+        if name=='activation':
+            # Reconstructed completions do not establish a product view.
+            assert not value.available and value.value is None
+        else:
+            assert value.available and value.value==100
     with unit_of_work(engine) as s:
         collection=s.get(MetricCollection,('reconstructed_backend','test'))
         assert collection.backfill_complete_through >= end
@@ -192,8 +196,9 @@ def test_partial_backfill_with_mature_outcomes_requires_complete_drain(engine,li
         with unit_of_work(engine) as s:
             s.execute(update(MetricJournal).where(MetricJournal.source=='backend_server').values(received_at=start))
         assert cleanup_metrics(engine,now=start+timedelta(days=200),dry_run=False).deleted==3
-        for value in metrics().values():
-            assert not value.available and value.value is None and 'retention' in value.reason.lower()
+        for name,value in metrics().items():
+            assert not value.available and value.value is None
+            if name!='activation':assert 'retention' in value.reason.lower()
 
 
 @pytest.mark.parametrize('source',['website_client','reconstructed_backend'])

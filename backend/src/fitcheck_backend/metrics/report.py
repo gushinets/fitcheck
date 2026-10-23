@@ -24,4 +24,5 @@ class MetricReportService:
                 conn.execute(text("SET LOCAL lock_timeout='1s'"))
                 conn.execute(text("SET LOCAL idle_in_transaction_session_timeout='10s'"))
                 data = load_snapshot(conn, options, self.backend_database_environment)
+                data.snapshot_at = self.clock()
         return MetricReport(options=options, rows=calculate(options, data))

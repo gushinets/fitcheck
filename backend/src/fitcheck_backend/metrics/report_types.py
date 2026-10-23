@@ -78,6 +78,8 @@ class Event:
     operation_id: UUID | None = None
     domain_key: str | None = None
     properties: dict = field(default_factory=dict)
+    event_id: UUID | None = None
+    received_at: datetime | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -126,8 +128,35 @@ class Operation:
     provenance: str = ''
 
 
+@dataclass(frozen=True, kw_only=True)
+class AnalysisFact:
+    analysis_id: UUID
+    owner_id: UUID
+    job_id: UUID | None
+    created_at: datetime
+    finished_at: datetime | None
+    state: str | None
+    account_owned: bool
+    mode: str | None
+    predicted_score: int | None
+    corrected_score: int | None
+    feedback_at: datetime | None
+
+
+@dataclass(frozen=True, kw_only=True)
+class DemoProof:
+    guest_owner_id: UUID
+    job_id: UUID | None
+    result_id: UUID | None
+
+
 @dataclass
 class Snapshot:
+    server_backed: bool = False
+    snapshot_at: datetime | None = None
+    identities: dict = field(default_factory=dict)
+    demo_proofs: dict[UUID, DemoProof] = field(default_factory=dict)
+    analyses: list[AnalysisFact] = field(default_factory=list)
     events: list[Event] = field(default_factory=list)
     attempts: list[Attempt] = field(default_factory=list)
     operations: list[Operation] = field(default_factory=list)

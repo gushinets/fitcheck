@@ -80,6 +80,11 @@ def identity_snapshot(session,environment,visitor_id,now):
         .where(Link.environment==environment,Link.visitor_id==visitor_id,
                Link.occurred_at>=now-timedelta(days=180),Link.occurred_at<=now)
         .order_by(Link.occurred_at,Link.id))
+    return project_identity(rows)
+
+
+def project_identity(rows):
+    """Pure temporal resolver shared by per-visitor and bulk report reads."""
     windows=[]
     switches=_switches([link for link,_ in rows if link.kind!='claim'])
     for link,auth in rows:

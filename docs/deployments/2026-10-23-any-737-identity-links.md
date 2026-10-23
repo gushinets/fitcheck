@@ -71,3 +71,44 @@ Development smoke is pending deployment. SMTP is still unconfigured by the
 user's choice, so no live successful-registration/verified-claim acceptance is
 claimed. Automated tests use a capturing mailer and seeded guest result fixtures.
 The separate ANY-736 deployment evidence is preserved.
+
+## Post-deployment check — 2026-10-23
+
+User reports deployment and migration steps completed. Local checkout is clean
+at `6d020b4` (ANY-737); deployed commit/schema have not been independently read.
+External read-only checks returned:
+
+- Development website `/`: HTTP 200.
+- Development API `/health/live`: HTTP 502, `Bad Gateway`.
+- Development API `/health/ready`: HTTP 502, `Bad Gateway`.
+- Website `/api/backend/v1/auth/session`: HTTP 502, `Bad Gateway`.
+
+The website-to-backend path is not accepted yet. These responses do not establish
+whether the cause is API startup, service health or Dokploy routing. Inspect
+api-dev deployment/runtime logs and internal container readiness before advancing
+rollout acceptance. No live account registration/claim or paid analysis was run.
+
+### Recovery and follow-up smoke
+
+User confirmed the database was still at migration `0010` and applied `0011`.
+Follow-up development checks passed:
+
+- API `/health/live`: 200, `status=ok`, `stage=auth_storage`.
+- API `/health/ready`: 200, `database=ready`, `email=unconfigured`.
+  This readiness implementation checks the database revision against the image's
+  migration head; raw schema rows were not separately queried remotely.
+- Website relay `/api/backend/v1/auth/session`: expected 401/unauthenticated
+  without an account cookie, replacing the earlier 502.
+- Website relay GET `/api/backend/v1/auth/csrf` with matching Origin: 200 and a
+  CSRF token. Cookie/token values were kept in memory and not logged.
+- Login with invalid CSRF and a synthetic visitor-proof header: expected
+  403/forbidden, before any successful auth/identity transition.
+- Guest claim without an account session: expected 401/unauthenticated.
+
+The observed readiness failure is resolved after the migration correction.
+Basic deployed availability, relay connectivity and negative auth/claim guards
+are verified. No account was created, no email sent and no analysis started.
+These checks do not validate successful visitor attestation persistence or the
+full register/demo/claim chain in development. That chain remains covered by
+PostgreSQL automated tests; live acceptance still needs a suitable test account
+and email setup. ANY-738 implementation can proceed with this limitation recorded.
