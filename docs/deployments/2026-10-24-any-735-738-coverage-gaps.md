@@ -75,8 +75,10 @@ suite; no other Critical/Important or Minor findings were reported.
 
 ## Dokploy development rollout
 
-Deploy matching API and worker backend code containing migration **0013**. In the
-updated `api-dev` container terminal run each command separately:
+Build matching API and worker backend code containing migration **0013**. Apply
+the migration from that new image in a one-off release container with the same
+development database configuration and Docker network, **before** replacing the
+API/worker services. Run these commands separately in that release container:
 
 ```sh
 /app/.venv/bin/python -m fitcheck_backend.storage.migrate upgrade
@@ -84,10 +86,35 @@ updated `api-dev` container terminal run each command separately:
 ```
 
 Expected schema check: `No new upgrade operations detected.` Application startup
-does not run migrations. Restart/start the matching API and worker after migration;
+does not run migrations. The API's Docker healthcheck uses readiness and requires
+the database revision to match the packaged migration head. Trying to deploy a new
+API first and migrate via its terminal afterwards can leave no usable new
+container; the old running image cannot apply migrations it does not contain.
+Restart/start the matching API and worker after migration;
 check `/health/live` and `/health/ready` return 200. No new environment variables or
 frontend changes. Check the existing metrics-enabled/environment settings of both
 backend services: an intentionally disabled writer correctly limits coverage.
 
 Do not disable collection, remove domain data or invoke cleanup in development to
 reproduce F01. Controlled interruption tests use only disposable local PostgreSQL.
+
+## Deployment diagnosis — 2026-10-24
+
+Read-only inspection of the actual Dokploy development API confirmed:
+
+- Deployment `7f83c76e60f18f68715f217d3fc73243d8d2b4bf` is listed Done;
+  its build log completed successfully and produced image
+  `sha256:72b257a551496a0260a52f59f55d1b666d6b1d5e1b896af52266dd7b9cb95d6e`.
+- New container `e97542037a56` logged repeated readiness HTTP 503 at
+  17:16–17:17 UTC, then exited (0). It is selected by default in Docker Terminal.
+- Explicitly selecting running container `b6ad3e9bcb98` and executing a SELECT
+  confirmed packaged head **0012** and actual database revision **0012**.
+- All three listed API containers share the same service prefix. The selector
+  is showing old/new tasks of that service, not another application's terminal.
+
+The build succeeded but migration0013 is still unapplied. Readiness gates the new
+image on that migration; repeating upgrade in the old0012 image cannot solve it.
+Swarm's precise update/rollback state was not read; configured Update Config fields
+were unset in the UI. No deployment settings, schema or service state were changed
+during diagnosis. The prior deploy-then-terminal rollout wording above was corrected
+to require a release migration before API/worker replacement.
