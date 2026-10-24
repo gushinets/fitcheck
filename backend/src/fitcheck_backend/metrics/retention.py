@@ -13,6 +13,7 @@ class MaintenanceResult:
     deleted: int = 0
     tombstones_deleted: int = 0
     identity_deleted: int = 0
+    analysis_proofs_deleted: int = 0
     backfill_target_at: datetime | None = None
     backfill_complete_through: datetime | None = None
     backfill_complete: bool | None = None
@@ -45,7 +46,13 @@ def cleanup_metrics(engine, *, now, dry_run=True, limit=1000) -> MaintenanceResu
         boundaries=session.execute(select(Boundary.environment,Boundary.visitor_id)
             .where(Boundary.anonymous_floor<cutoff).order_by(Boundary.anonymous_floor,Boundary.environment,Boundary.visitor_id)
             .limit(remaining).with_for_update(skip_locked=True)).all()
-        processed=len(rows)+len(tombstones)+len(identities)+len(boundaries)
+        from ..storage.analysis_operation import AnalysisOperationProof as Proof
+        remaining-=len(boundaries)
+        from .analysis_operation import retained_result_reference
+        proofs=list(session.scalars(select(Proof.analysis_id).where(Proof.finished_at<cutoff,
+            ~retained_result_reference(Proof.analysis_id,cutoff))
+            .order_by(Proof.finished_at,Proof.analysis_id).limit(remaining).with_for_update(skip_locked=True)))
+        processed=len(rows)+len(tombstones)+len(identities)+len(boundaries)+len(proofs)
         if dry_run:
             return MaintenanceResult(processed=processed)
         if rows:
@@ -65,8 +72,9 @@ def cleanup_metrics(engine, *, now, dry_run=True, limit=1000) -> MaintenanceResu
         if identities:session.execute(delete(Link).where(Link.id.in_(identities)))
         for environment,visitor in boundaries:
             session.execute(delete(Boundary).where(Boundary.environment==environment,Boundary.visitor_id==visitor))
+        if proofs:session.execute(delete(Proof).where(Proof.analysis_id.in_(proofs)))
         return MaintenanceResult(processed=processed, deleted=len(rows), tombstones_deleted=len(tombstones),
-            identity_deleted=len(identities)+len(boundaries))
+            identity_deleted=len(identities)+len(boundaries), analysis_proofs_deleted=len(proofs))
 
 
 def maintenance_guard(session):

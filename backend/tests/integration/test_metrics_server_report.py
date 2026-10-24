@@ -217,6 +217,13 @@ def test_cli_current_json_csv_and_financial_totals_are_identical(engine,storage_
     assert metric(result,'known_spend',source='backend_server',currency='USD').value==Decimal('2.50')
     assert metric(result,'ai_tokens',source='backend_server',token_type='input_tokens').value==200
     assert str(value[0].id) not in json.dumps(payload)
+    from fitcheck_backend.operations.retention import cleanup
+    assert cleanup(engine,now=END,execute=True)['jobs']==1
+    after=report(engine)
+    assert metric(after,'provider_attempts',source='backend_server').value==2
+    assert metric(after,'known_spend',source='backend_server',currency='USD').value==Decimal('2.50')
+    assert metric(after,'ai_tokens',source='backend_server',token_type='input_tokens').value==200
+    assert metric(after,'successful_operations',operation='analysis',provenance='deployment_database_scope').value==1
 
 
 def test_demo_before_registration_claim_stays_one_guest_operation(engine,storage_factory):
@@ -265,6 +272,18 @@ def test_demo_before_registration_claim_stays_one_guest_operation(engine,storage
     with unit_of_work(engine) as s:
         assert s.get(AnalysisRecord,analysis.id).job_id==job.id
         assert s.get(Job,job.id).owner_id==account[0].id
+    from fitcheck_backend.operations.retention import cleanup
+    from fitcheck_backend.storage.analysis_operation import AnalysisOperationProof
+    assert cleanup(engine,now=END,execute=True)['jobs']==2
+    after=report(engine)
+    assert metric(after,'successful_operations',population='visitor',operation='analysis',provenance='server_guest_domain').value==1
+    assert metric(after,'successful_operations',population='account',operation='analysis',provenance='deployment_database_scope').value==1
+    assert metric(after,'activation',population='account',provenance='backend_server').numerator==0
+    with unit_of_work(engine) as s:
+        assert s.get(AnalysisRecord,analysis.id).job_id is None
+        proof=s.get(AnalysisOperationProof,analysis.id)
+        assert proof.job_id==job.id and proof.mode=='guest'
+        assert transfer_guest_analyses(s,owner.id,account[0].id)==0
 
 
 def test_observed_activity_does_not_require_retained_registration_event(engine,storage_factory):
@@ -315,3 +334,172 @@ def test_failed_job_is_technical_failure_not_product_activation(engine,storage_f
     assert metric(result,'operation_errors',operation='analysis',error_code='upstream_error',provenance='deployment_database_scope').value==1
     assert metric(result,'activation',population='account',provenance='backend_server').numerator==0
     assert metric(result,'time_to_value_seconds',population='account',provenance='backend_server',percentile='p50').value is None
+
+
+@pytest.mark.parametrize('viewed',[True,False])
+def test_real_job_cleanup_preserves_confirmed_product_cohorts(engine,storage_factory,viewed):
+    from sqlalchemy import select,func
+    from fitcheck_backend.operations.retention import cleanup
+    from fitcheck_backend.storage.models import AnalysisRecord,Job
+    from fitcheck_backend.storage.metrics import MetricJournal
+    with unit_of_work(engine) as s:
+        account=seed_account(s,storage_factory,view=viewed)
+        when=START+timedelta(days=31,hours=1)
+        MetricRepository(s).append(MetricEvent(eventId=uuid4(),name='profile_revision_saved',
+            subjectKind='account',subjectId=account[0].id,occurredAt=when,properties={'revision':1}),
+            source='backend_server',environment='test',received_at=when)
+    before=report(engine,'account')
+    assert cleanup(engine,now=END,execute=True)['jobs']==1
+    after=report(engine,'account')
+    for name,dims in [('activation',{'provenance':'backend_server'}),
+                      ('retention',{'provenance':'backend_server','day':'30'}),
+                      ('feedback_coverage',{})]:
+        old=metric(before,name,**dims);new=metric(after,name,**dims)
+        assert (new.value,new.numerator,new.denominator,new.available)==(old.value,old.numerator,old.denominator,old.available)
+        if viewed or name=='feedback_coverage':assert (new.value,new.numerator,new.denominator)==(100,1,1)
+    assert metric(after,'activation',provenance='backend_server').numerator==int(viewed)
+    with unit_of_work(engine) as s:
+        assert s.get(Job,account[2].id) is None
+        assert s.get(AnalysisRecord,account[3].id).job_id is None
+        assert s.scalar(select(func.count()).select_from(MetricJournal).where(MetricJournal.name=='analysis_result_viewed'))==int(viewed)
+
+
+@pytest.mark.parametrize('population',['visitor','all'])
+def test_current_session_rows_in_postgresql_cli_json_and_csv(engine,monkeypatch,tmp_path,population):
+    import csv,json
+    from fitcheck_backend.metrics.__main__ import main
+    from fitcheck_backend.config import Settings
+    import fitcheck_backend.metrics.__main__ as cli
+    visitor,sid=uuid4(),uuid4()
+    with unit_of_work(engine) as s:
+        repo=MetricRepository(s)
+        for name,props in [('session_started',{}),('visible_activity',{'activeMs':15000}),('profile_saved',{})]:
+            value=MetricEvent(eventId=uuid4(),name=name,subjectKind='visitor',subjectId=visitor,
+                sessionId=sid,occurredAt=START+timedelta(days=1),properties=props)
+            assert repo.append(value,source='website_client',environment='test',received_at=value.occurred_at)
+            assert not repo.append(value,source='website_client',environment='test',received_at=value.occurred_at)
+        s.execute(update(MetricCollection).values(available_from=START-timedelta(days=2)))
+    monkeypatch.setattr(cli,'create_engine',lambda settings:engine)
+    monkeypatch.setattr(cli,'Settings',lambda:Settings(metrics_database_environment='test'))
+    args=['report','--start',START.isoformat(),'--end',END.isoformat(),'--environment','test','--population',population]
+    for fmt in ('json','csv'):
+        assert main(args+['--format',fmt,'--output',str(tmp_path/('sessions.'+fmt))])==0
+    rows=json.loads((tmp_path/'sessions.json').read_text())['rows']
+    with (tmp_path/'sessions.csv').open() as stream:csv_rows=list(csv.DictReader(stream))
+    for name,expected in [('session_frequency',1),('session_duration_seconds',15)]:
+        row=next(r for r in rows if r['metric']==name)
+        csv_row=next(r for r in csv_rows if r['metric']==name)
+        assert row['available'] and row['value']==expected and float(csv_row['value'])==expected
+        assert row['dimensions']['population']=='visitor'
+        assert json.loads(csv_row['dimensions'])==row['dimensions']
+
+
+def test_archived_operation_is_idempotent_and_cascades_with_analysis(engine,storage_factory):
+    from sqlalchemy import select,func,delete
+    from fitcheck_backend.storage.models import AnalysisRecord
+    from fitcheck_backend.storage.analysis_operation import AnalysisOperationProof as Proof
+    from fitcheck_backend.metrics.analysis_operation import archive_analysis_operations
+    from fitcheck_backend.operations.retention import cleanup
+    with unit_of_work(engine) as s:
+        account=seed_account(s,storage_factory)
+        archive_analysis_operations(s,[account[2].id],END)
+        archive_analysis_operations(s,[account[2].id],END)
+    assert cleanup(engine,now=END,execute=True)['jobs']==1
+    assert cleanup(engine,now=END,execute=True)['jobs']==0
+    with unit_of_work(engine) as s:
+        assert s.scalar(select(func.count()).select_from(Proof))==1
+        proof=s.get(Proof,account[3].id)
+        assert proof.job_id==account[2].id and proof.mode=='account'
+        s.execute(delete(AnalysisRecord).where(AnalysisRecord.id==account[3].id))
+        archive_analysis_operations(s,[account[2].id],END)
+    with unit_of_work(engine) as s:assert s.scalar(select(func.count()).select_from(Proof))==0
+    assert metric(report(engine),'activation',population='account',provenance='backend_server').numerator==0
+
+
+def test_archival_failure_rolls_back_real_job_cleanup(engine,storage_factory,monkeypatch):
+    from sqlalchemy.exc import SQLAlchemyError
+    from fitcheck_backend.storage.models import AnalysisRecord,Job
+    from fitcheck_backend.metrics import analysis_operation
+    from fitcheck_backend.operations.retention import cleanup
+    with unit_of_work(engine) as s:account=seed_account(s,storage_factory)
+    def fail(*args):raise SQLAlchemyError('synthetic archive failure')
+    monkeypatch.setattr(analysis_operation,'archive_analysis_operations',fail)
+    with pytest.raises(SQLAlchemyError):cleanup(engine,now=END,execute=True)
+    with unit_of_work(engine) as s:
+        assert s.get(Job,account[2].id) is not None
+        assert s.get(AnalysisRecord,account[3].id).job_id==account[2].id
+    assert metric(report(engine),'activation',population='account',provenance='backend_server').value==100
+
+
+def test_proof_cannot_restore_deleted_account_or_erased_visitor(engine,storage_factory):
+    from sqlalchemy import select,func
+    from fitcheck_backend.storage.analysis_operation import AnalysisOperationProof as Proof
+    from fitcheck_backend.operations.retention import cleanup
+    from fitcheck_backend.storage.ownership import delete_owner
+    from fitcheck_backend.metrics.collector import MetricsCollector
+    from fitcheck_backend.config import Settings
+    with unit_of_work(engine) as s:account=seed_account(s,storage_factory)
+    cleanup(engine,now=END,execute=True)
+    settings=Settings(metrics_enabled=True,metrics_environment='test',metrics_ingest_key='test-key')
+    MetricsCollector(engine,settings,lambda:END).delete_visitor(account[-1])
+    # Domain provenance is not another visitor association; observations are gone.
+    assert metric(report(engine),'activation',population='account',provenance='backend_server').numerator==0
+    with unit_of_work(engine) as s:
+        delete_owner(s,account[0].id,now=END)
+        assert s.scalar(select(func.count()).select_from(Proof))==0
+    assert cleanup(engine,now=END,execute=True)['jobs']==0
+
+
+def test_proof_retention_shares_batch_and_does_not_delete_saved_result(engine,storage_factory):
+    from sqlalchemy import select,func
+    from fitcheck_backend.metrics.retention import cleanup_metrics
+    from fitcheck_backend.storage.analysis_operation import AnalysisOperationProof as Proof
+    from fitcheck_backend.storage.models import AnalysisRecord
+    from fitcheck_backend.operations.retention import cleanup
+    with unit_of_work(engine) as s:account=seed_account(s,storage_factory)
+    cleanup(engine,now=END,execute=True)
+    now=START+timedelta(days=184)
+    for _ in range(30):
+        result=cleanup_metrics(engine,now=now,dry_run=False,limit=1)
+        assert result.processed<=1
+        if result.processed==0:break
+    with unit_of_work(engine) as s:
+        assert s.scalar(select(func.count()).select_from(Proof))==0
+        assert s.get(AnalysisRecord,account[3].id) is not None
+
+
+def test_retained_late_view_keeps_required_operation_proof(engine,storage_factory):
+    from sqlalchemy import select,func
+    from fitcheck_backend.metrics.retention import cleanup_metrics
+    from fitcheck_backend.storage.analysis_operation import AnalysisOperationProof as Proof
+    from fitcheck_backend.operations.retention import cleanup
+    with unit_of_work(engine) as s:account=seed_account(s,storage_factory)
+    cleanup(engine,now=END,execute=True)
+    with unit_of_work(engine) as s:
+        append_view(s,account[-1],account[3].id,START+timedelta(days=170))
+    for _ in range(30):
+        result=cleanup_metrics(engine,now=START+timedelta(days=200),dry_run=False,limit=1)
+        if result.processed==0:break
+    with unit_of_work(engine) as s:assert s.scalar(select(func.count()).select_from(Proof))==1
+    for _ in range(30):
+        result=cleanup_metrics(engine,now=START+timedelta(days=351),dry_run=False,limit=1)
+        if result.processed==0:break
+    with unit_of_work(engine) as s:assert s.scalar(select(func.count()).select_from(Proof))==0
+
+
+def test_history_erasure_does_not_rearchive_from_surviving_job(engine,storage_factory):
+    from sqlalchemy import select,func,delete
+    from fitcheck_backend.storage.models import AnalysisRecord,Job
+    from fitcheck_backend.storage.analysis_operation import AnalysisOperationProof as Proof
+    from fitcheck_backend.metrics.analysis_operation import archive_analysis_operations
+    from fitcheck_backend.operations.retention import cleanup
+    with unit_of_work(engine) as s:
+        account=seed_account(s,storage_factory)
+        archive_analysis_operations(s,[account[2].id],END)
+        assert s.get(Proof,account[3].id) is not None
+        s.execute(delete(AnalysisRecord).where(AnalysisRecord.id==account[3].id))
+        assert s.get(Job,account[2].id) is not None
+        archive_analysis_operations(s,[account[2].id],END)
+        assert s.scalar(select(func.count()).select_from(Proof))==0
+    cleanup(engine,now=END,execute=True)
+    with unit_of_work(engine) as s:assert s.scalar(select(func.count()).select_from(Proof))==0

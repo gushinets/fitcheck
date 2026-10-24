@@ -138,3 +138,36 @@ def test_retention_exposes_immature_first_view_cohort():
     value=row(calculate(options('account'),data),'retention',population='account',provenance='backend_server',day='7')
     assert not value.available and value.value is None and value.denominator==0
     assert value.coverage['immature_first_view_cohort']==1
+
+
+@pytest.mark.parametrize('population',['visitor','all'])
+def test_current_sessions_use_observed_useful_visitors_and_foreground_pulses(population):
+    data=snapshot();visitor=uuid4();sid=uuid4()
+    for name,props in [('session_started',{}),('visible_activity',{'activeMs':15000}),('profile_saved',{})]:
+        value=event(data,name,visitor,1,**props);data.events[-1]=replace(value,session_id=sid)
+    # Duplicate delivery is one pulse, never another 15 seconds.
+    data.events.append(data.events[1])
+    rows=calculate(options(population),data)
+    frequency=row(rows,'session_frequency',population='visitor')
+    assert (frequency.value,frequency.numerator,frequency.denominator)==(1,1,1)
+    assert row(rows,'session_duration_seconds',population='visitor',percentile='p50').value==15
+    assert not any(r.dimensions.get('step')=='local_registration_completed' for r in rows)
+
+
+def test_current_sessions_multiple_sessions_pulse_cap_and_missing_coverage():
+    data=snapshot();visitor=uuid4();one,two=uuid4(),uuid4()
+    for sid,name,props in [(one,'profile_saved',{}),(one,'session_started',{}),
+                          (one,'visible_activity',{'activeMs':90000}),
+                          (one,'visible_activity',{'activeMs':15000}),
+                          (two,'session_started',{}),(two,'visible_activity',{'activeMs':15000})]:
+        value=event(data,name,visitor,1,**props);data.events[-1]=replace(value,session_id=sid)
+    rows=calculate(options('visitor'),data)
+    assert row(rows,'session_frequency').value==2
+    assert row(rows,'session_duration_seconds',percentile='p50').value==15
+    assert row(rows,'session_duration_seconds',percentile='p50').sample_count==2
+    data.events=[e for e in data.events if e.session_id==one]
+    assert row(calculate(options('visitor'),data),'session_duration_seconds',percentile='p50').value==45
+    data.collections.pop('website_client')
+    for name in ('session_frequency','session_duration_seconds'):
+        value=row(calculate(options('visitor'),data),name)
+        assert not value.available and value.value is None and value.reason

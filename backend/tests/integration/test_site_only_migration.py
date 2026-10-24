@@ -15,11 +15,11 @@ pytestmark = pytest.mark.integration
 
 
 def test_clean_initial_schema_includes_auth_and_payload_protection(engine):
-    assert schema_head() == '0011'
+    assert schema_head() == '0012'
     columns = {column['name'] for column in inspect(engine).get_columns('auth_tokens')}
     assert columns == {'id', 'user_id', 'purpose', 'token_digest', 'expires_at', 'consumed_at', 'created_at'}
     with engine.connect() as c:
-        assert c.scalar(text('SELECT version_num FROM alembic_version')) == '0011'
+        assert c.scalar(text('SELECT version_num FROM alembic_version')) == '0012'
         assert c.scalar(text("SELECT count(*) FROM pg_trigger WHERE tgname LIKE 'fitcheck_%' AND NOT tgisinternal")) == 5
     assert 'auth_rate_buckets' in inspect(engine).get_table_names()
     check_schema(Settings(database_url=os.environ['FITCHECK_TEST_DATABASE_URL']))

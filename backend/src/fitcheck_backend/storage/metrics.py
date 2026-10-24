@@ -42,6 +42,11 @@ class MetricJournal(Base):
     )
 
 
+Index('ix_metric_journal_result_reference',MetricJournal.properties['resultId'].as_string(),
+      MetricJournal.received_at,postgresql_where=text(
+          "source='website_client' AND name IN ('analysis_result_viewed','feedback_saved')"))
+
+
 class WebsiteProviderAttempt(Base):
     __tablename__ = 'website_provider_attempts'
     call_id: Mapped[UUID] = mapped_column(primary_key=True)

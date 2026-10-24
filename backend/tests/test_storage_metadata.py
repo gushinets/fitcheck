@@ -3,7 +3,7 @@ from sqlalchemy import ForeignKeyConstraint, create_mock_engine
 
 def test_metadata_contains_all_storage_tables():
     from fitcheck_backend.storage.models import Base
-    assert set(Base.metadata.tables) == {"metric_identity_transitions", "metric_visitor_boundaries", "metric_demo_links", "owners", "users", "guests", "auth_sessions", "auth_tokens", "auth_rate_buckets", "profiles", "profile_revisions", "preferences", "drafts", "vacancies", "jobs", "analyses", "analysis_annotations", "quota_buckets", "quota_reservations", "provider_calls", "import_entries", "import_items", "metric_journal", "website_provider_attempts", "metric_collections", "metric_erased_visitors","guest_sessions","guest_claim_receipts","extraction_reservations","budget_windows","call_reservations"}
+    assert set(Base.metadata.tables) == {"analysis_operation_proofs", "metric_identity_transitions", "metric_visitor_boundaries", "metric_demo_links", "owners", "users", "guests", "auth_sessions", "auth_tokens", "auth_rate_buckets", "profiles", "profile_revisions", "preferences", "drafts", "vacancies", "jobs", "analyses", "analysis_annotations", "quota_buckets", "quota_reservations", "provider_calls", "import_entries", "import_items", "metric_journal", "website_provider_attempts", "metric_collections", "metric_erased_visitors","guest_sessions","guest_claim_receipts","extraction_reservations","budget_windows","call_reservations"}
     statements = []
     engine = create_mock_engine("postgresql+psycopg://", lambda sql, *args, **kwargs: statements.append(str(sql.compile(dialect=engine.dialect))))
     Base.metadata.create_all(engine)

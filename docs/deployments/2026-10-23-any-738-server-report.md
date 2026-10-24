@@ -97,12 +97,13 @@ between the two builds and snapshot times record that. No backfill or cleanup is
 needed just to render this report. Do not interpret unavailable as a numerical
 zero, and do not add independently partitioned live/reconstructed rows blindly.
 
-Development deployment and live report-to-journal/domain reconciliation remain
-pending. The agreed deployment environment is Dokploy development; disposable
+Development deployment and reconciliation of the available rows were completed
+after rollout (see the post-deployment record below). A successful live control
+chain remains pending. The agreed deployment environment is Dokploy development; disposable
 local PostgreSQL is the automated control environment. SMTP remains unconfigured,
-so no live registration/verified claim acceptance is claimed. The final ANY-738
-acceptance checkbox requiring environment reconciliation stays pending until that
-post-deployment check, even though local formula controls are complete.
+so no live registration/verified claim acceptance is claimed. The post-deployment record distinguishes the available-data reconciliation from
+the successful registration/claim control chain; the latter must not be claimed
+as exercised in development, even though local formula controls are complete.
 
 ## Decisions and limits
 
@@ -114,3 +115,54 @@ post-deployment check, even though local formula controls are complete.
 - Financial rows retain the existing backend deployment scope, including guests,
   and state it in coverage. This preserves spend and the existing row shape;
   consumers must read that scope instead of treating costs as person counts.
+
+## Post-deployment verification — 2026-10-23
+
+User deployed the change. Dokploy deployment lists for both API and worker show
+Done at `b9eab77fd282416cc05ea3de5dc765b2d3caa156` (ANY-738).
+Development API `/health/ready` returned 200 with database ready and email
+unconfigured. API container `ca2d95156cd6` reports packaged schema head0011,
+metrics enabled, metrics environment development and database scope development.
+
+Ran the packaged CLI in the deployed API container through the existing Dokploy
+terminal. Both JSON and CSV returned exit0 and were written to
+`/tmp/any738-report.json` and `/tmp/any738-report.csv` in that container.
+The shared period was `[2026-10-09T19:17:43.972515+00:00,
+2026-10-23T19:17:43.972515+00:00)` in Europe/Moscow. Both contain **181 rows**;
+metric/dimensions and every value/numerator/denominator matched exactly. The
+current product rows declare server_v2; unchanged financial/other rows retain
+their existing calculation basis.
+
+A separate read-only repeatable-read transaction with a 5-second statement
+limit reconciled the same period against current journal/domain aggregates:
+
+| Control | Direct database | Deployed report |
+| --- | --- | --- |
+| Original guest analysis jobs | 1 failed | 1 technical error, 0 successes; success rate0/1 |
+| Saved analyses / corrections | 0 / 0 | feedback has no eligible cohort; unavailable |
+| Provider calls | 1; known input/output token sums0/0 | backend provider_attempts1, available |
+| Recorded identity transitions | 0 | no attributed registration/activation invented |
+| Recorded account_registered facts in period | 0 | missing source coverage shown as unavailable, not an asserted registration count0 |
+| Proven demo observations | vacancy_input_started2; extraction_requested1 | no proven result view or successful product activation invented |
+
+The journal also contains preexisting website-client observations (15 page views,
+18 session starts, 38 activity pulses, 3 history views, 3 vacancy inputs,
+2 extraction requests, 2 analysis requests) and website-server terminal facts
+(2 analyses and 1 extraction). Those remain their own provenance; they are not
+mapped to a nonexistent current saved analysis or account identity.
+
+The 14-day period exceeds available observation coverage. Current registrations
+and visitor activation therefore report unavailable with a source/history reason;
+account activation has no mature registration cohort. Reconstructed activation
+explicitly reports incomplete backfill coverage. These are expected coverage
+limits, not failed CLI execution and not numerical zero product conversion.
+
+No deployment/database mutation, backfill, cleanup, account creation, email or
+provider request was performed during this verification. Only read-only queries
+and report files in the API container's temporary directory were used.
+
+Deployment/report smoke and reconciliation for AVAILABLE development rows have
+passed. The environment still has no successful account registration/claim/result
+chain to reconcile. Positive end-to-end registration/claim and feedback formula
+controls remain the automated PostgreSQL evidence; a successful live control
+chain is pending suitable account/email setup and must not be claimed as tested.

@@ -329,6 +329,43 @@ def feedback_metrics(out):
             coverage={'basis':'current_snapshot_not_historical_transitions','snapshot_at':data.snapshot_at})
 
 
+def session_metrics(out):
+    """Observed visitor sessions, independent of account/result attribution."""
+    opt=out.options
+    events=[];seen=set()
+    for event in out.data.events:
+        if (event.source!='website_client' or event.subject_kind!='visitor' or not person(event.subject_id)
+                or not opt.start<=event.occurred_at<opt.end):continue
+        if event.event_id is not None:
+            if event.event_id in seen:continue
+            seen.add(event.event_id)
+        events.append(event)
+    useful={'profile_saved','analysis_result_viewed','history_viewed','skills_accepted','feedback_saved'}
+    active={e.subject_id for e in events if e.name in useful}
+    starts=set();durations=defaultdict(int)
+    for event in events:
+        if event.session_id is None:continue
+        key=(event.subject_id,event.session_id)
+        if event.name=='session_started' and event.subject_id in active:starts.add(key)
+        pulse=event.properties.get('activeMs')
+        if event.name=='visible_activity' and type(pulse) is int:
+            durations[key]+=max(0,min(30000,pulse))
+    dims={'population':'visitor','provenance':'website_observed'}
+    coverage={'active_basis':'distinct_visitors_with_observed_useful_client_actions_in_period',
+              'useful_actions':sorted(useful),'active_visitors':len(active),
+              'observation_limit':'Observed starts/pulses only; missing delivery is not inferred',
+              'identity_basis':'signed_visitor_population_not_account_attribution'}
+    add(out,'session_frequency',dims=dims,sources=('website_client',),
+        reason='No observed active visitor cohort' if not active else None,
+        value=len(starts)/len(active) if active else None,numerator=len(starts),denominator=len(active),
+        coverage=coverage|{'basis':'observed_session_starts_among_active_visitors'})
+    add(out,'session_duration_seconds',dims=dims|{'percentile':'p50'},sources=('website_client',),
+        reason='No observed foreground session pulses' if not durations else None,
+        value=nearest_rank([duration/1000 for duration in durations.values()],50),sample_count=len(durations),
+        coverage=coverage|{'basis':'observed_foreground_pulses_not_wall_clock','pulse_cap_seconds':30,
+                           'session_cohort':'sessions_with_valid_foreground_pulses_in_period'})
+
+
 def calculate_server(out):
     registrations=first_registration(out.data)
     links=registration_links(out.data,registrations)
@@ -336,6 +373,7 @@ def calculate_server(out):
     active={}
     if out.options.population in {'visitor','all'}:
         active['visitor']=visitor_metrics(out,registrations,links)
+        session_metrics(out)
         add(out,'feedback_coverage',dims={'population':'visitor','provenance':'current_domain_snapshot'},
             reason='Saved account feedback requires account or all population; client feedback is not current saved state')
     if out.options.population in {'account','all'}:

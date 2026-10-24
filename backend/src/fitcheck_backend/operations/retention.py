@@ -42,6 +42,8 @@ def cleanup(engine, *, now, execute=False, limit=100):
             Job.finished_at<now-timedelta(days=30),~reserved,~unsettled,~provider_reserved_job).order_by(Job.id).limit(limit).with_for_update(skip_locked=True)).all()
         counts['jobs'] = len(jobs)
         if execute and jobs:
+            from ..metrics.analysis_operation import archive_analysis_operations
+            archive_analysis_operations(session,jobs,now)
             session.execute(update(AnalysisRecord).where(AnalysisRecord.job_id.in_(jobs)).values(job_id=None,job_type=None))
             session.execute(update(ProviderCall).where(ProviderCall.job_id.in_(jobs)).values(job_id=None))
             session.execute(delete(Job).where(Job.id.in_(jobs)))
