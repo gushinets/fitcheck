@@ -54,8 +54,11 @@ class AuthRuntime:
 
         self.imports = ImportAdmission(self.history,settings)
         self.import_status = ImportStatusReader(self.history)
+        from ..metrics.coverage import CollectionInterruption
+        self.collection_interruption = CollectionInterruption(self.engine, settings, clock)
 
     def close(self):
+        self.collection_interruption.close()
         if self._owns_engine:
             self.engine.dispose()
 

@@ -152,6 +152,7 @@ class DemoProof:
 
 @dataclass
 class Snapshot:
+    missing_domain_registration_facts: int = 0
     server_backed: bool = False
     snapshot_at: datetime | None = None
     identities: dict = field(default_factory=dict)
@@ -160,6 +161,7 @@ class Snapshot:
     events: list[Event] = field(default_factory=list)
     attempts: list[Attempt] = field(default_factory=list)
     operations: list[Operation] = field(default_factory=list)
+    collection_interruptions: list[dict] = field(default_factory=list)
     collections: dict[str, datetime] = field(default_factory=dict)
     statuses: dict[str, int] = field(default_factory=dict)
     backend_scope_reason: str | None = 'Backend database environment scope is not configured'

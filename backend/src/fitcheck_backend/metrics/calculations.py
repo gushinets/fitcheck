@@ -134,6 +134,12 @@ class Rows:
                 reason = reason or 'Incomplete backfill coverage through the requested report end'
         if self.data.history_floor and required < self.data.history_floor:
             reason = reason or 'Required history is outside the bounded snapshot'
+        interruptions = [gap for gap in self.data.collection_interruptions
+            if gap['source'] in sources and gap['started_at'] < self.options.end
+            and (gap['ended_at'] is None or gap['ended_at'] > required)]
+        if interruptions:
+            interruption_reason = 'Required observation history overlaps a recorded collection interruption'
+            reason = f'{reason}; {interruption_reason}' if reason else interruption_reason
         dimensions = dict(dims or {})
         dimensions.setdefault('provenance', 'unavailable')
         if start is None and not sources:
@@ -148,6 +154,11 @@ class Rows:
         if retention_floor is not None:
             details['retention_floor'] = retention_floor
         details.update(coverage or {})
+        if interruptions:
+            details['collection_interruptions'] = interruptions[:10]
+            details['collection_interruption_count'] = len(interruptions)
+            details['coverage_quality'] = 'incomplete_collection'
+
         if reason:
             values['value'] = None
         self.rows.append(MetricRow(metric=metric, dimensions=dimensions, coverage=details,

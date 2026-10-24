@@ -6,7 +6,7 @@ closed instead of silently truncating cohorts or exhausting operator memory.
 from datetime import timedelta
 import re
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from ..storage.metrics import MetricJournal, MetricCollection, WebsiteProviderAttempt
 from ..storage.accounting import ProviderCall
 from ..storage.work import Job, AnalysisAnnotation
@@ -45,6 +45,11 @@ def load_snapshot(conn, options, backend_database_environment=None):
             data.retention_floors[row['source']] = row['retention_floor']
         if row['source'] == 'reconstructed_backend':
             data.backfill_complete_through = row['backfill_complete_through']
+    from ..storage.metric_collection_gap import MetricCollectionGap as Gap
+    for row in bounded(conn, select(Gap.source, Gap.started_at, Gap.ended_at).where(
+            Gap.environment == options.environment, Gap.started_at < options.end,
+            or_(Gap.ended_at.is_(None), Gap.ended_at > floor)).order_by(Gap.started_at, Gap.id)):
+        data.collection_interruptions.append(dict(row))
     columns = [getattr(MetricJournal, key) for key in ('event_id', 'received_at', 'name', 'occurred_at', 'source', 'subject_kind',
                'subject_id', 'session_id', 'operation_id', 'domain_key')]
     columns += [MetricJournal.properties[key].label(key) for key in PROPERTY_KEYS]

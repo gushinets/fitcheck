@@ -14,6 +14,7 @@ class MaintenanceResult:
     tombstones_deleted: int = 0
     identity_deleted: int = 0
     analysis_proofs_deleted: int = 0
+    collection_gaps_deleted: int = 0
     backfill_target_at: datetime | None = None
     backfill_complete_through: datetime | None = None
     backfill_complete: bool | None = None
@@ -52,7 +53,11 @@ def cleanup_metrics(engine, *, now, dry_run=True, limit=1000) -> MaintenanceResu
         proofs=list(session.scalars(select(Proof.analysis_id).where(Proof.finished_at<cutoff,
             ~retained_result_reference(Proof.analysis_id,cutoff))
             .order_by(Proof.finished_at,Proof.analysis_id).limit(remaining).with_for_update(skip_locked=True)))
-        processed=len(rows)+len(tombstones)+len(identities)+len(boundaries)+len(proofs)
+        from ..storage.metric_collection_gap import MetricCollectionGap as Gap
+        remaining-=len(proofs)
+        gaps=session.execute(select(Gap.id,Gap.source,Gap.environment).where(Gap.ended_at<cutoff)
+            .order_by(Gap.ended_at,Gap.id).limit(remaining).with_for_update(skip_locked=True)).all()
+        processed=len(rows)+len(tombstones)+len(identities)+len(boundaries)+len(proofs)+len(gaps)
         if dry_run:
             return MaintenanceResult(processed=processed)
         if rows:
@@ -73,8 +78,17 @@ def cleanup_metrics(engine, *, now, dry_run=True, limit=1000) -> MaintenanceResu
         for environment,visitor in boundaries:
             session.execute(delete(Boundary).where(Boundary.environment==environment,Boundary.visitor_id==visitor))
         if proofs:session.execute(delete(Proof).where(Proof.analysis_id.in_(proofs)))
+        if gaps:
+            # Expired interruption evidence must never turn old unknown time
+            # into complete history, even if no journal rows were pruned.
+            for source,environment in sorted({(g.source,g.environment) for g in gaps}):
+                collection=session.get(MetricCollection,(source,environment),with_for_update=True)
+                if collection is not None:
+                    collection.retention_floor=max(collection.retention_floor or cutoff,cutoff)
+                    collection.available_from=max(collection.available_from,collection.retention_floor)
+            session.execute(delete(Gap).where(Gap.id.in_([g.id for g in gaps])))
         return MaintenanceResult(processed=processed, deleted=len(rows), tombstones_deleted=len(tombstones),
-            identity_deleted=len(identities)+len(boundaries), analysis_proofs_deleted=len(proofs))
+            identity_deleted=len(identities)+len(boundaries), analysis_proofs_deleted=len(proofs), collection_gaps_deleted=len(gaps))
 
 
 def maintenance_guard(session):

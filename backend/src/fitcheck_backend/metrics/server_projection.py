@@ -37,6 +37,14 @@ def load_server_projection(conn,options,data):
     data.demo_proofs={r['event_id']:DemoProof(**{k:v for k,v in r.items() if k!='event_id'}) for r in bounded(conn,statement)}
     if data.backend_scope_reason is not None:
         return
+    # Missing current domain registrations are independent evidence of incomplete
+    # delivery, including when an interruption marker could not be persisted.
+    observed_registration = select(MetricJournal.event_id).where(
+        MetricJournal.source=='backend_server', MetricJournal.environment==options.environment,
+        MetricJournal.name=='account_registered', MetricJournal.owner_id==User.owner_id,
+        MetricJournal.occurred_at>=options.start, MetricJournal.occurred_at<options.end).exists()
+    data.missing_domain_registration_facts = conn.scalar(select(func.count()).select_from(User).where(
+        User.created_at>=options.start, User.created_at<options.end, ~observed_registration))
     # Original guest mode survives ownership transfer. Never turn it into a
     # second account-created operation when claim moves the job to a user.
     for row in bounded(conn,select(Job.id,Job.created_at,Job.finished_at,Job.status,

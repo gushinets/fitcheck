@@ -150,8 +150,11 @@ def account_metrics(out,registered,activity,views,unknown):
     for provenance in ('backend_server','reconstructed_backend'):
         registrations={p:t for (source,p),t in registered.items() if source==provenance}
         dims={'population':'account','provenance':provenance}
-        add(out,'registrations',dims=dims,sources=(provenance,),value=sum(opt.start<=t<opt.end for t in registrations.values()),
-            coverage={'basis':'distinct_account_registered_owner_facts'})
+        missing = data.missing_domain_registration_facts if provenance=='backend_server' else 0
+        add(out,'registrations',dims=dims,sources=(provenance,),
+            reason='Current domain registrations lack committed observation facts' if missing else None,
+            value=sum(opt.start<=t<opt.end for t in registrations.values()),
+            coverage={'missing_domain_registration_facts':missing,'basis':'distinct_account_registered_owner_facts'})
         mature={p:t for p,t in registrations.items() if opt.start<=t<opt.end and t+WEEK<=opt.end}
         cohort={p:t for p,t in mature.items() if any(w.start<t+WEEK and (w.end is None or w.end>t) for w in intervals[p])}
         activated={p:min(times) for p,t in cohort.items()

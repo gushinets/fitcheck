@@ -21,6 +21,7 @@ class WorkerRuntime:
             max_age=self.worker_settings.heartbeat_seconds*2+5)
         self.engine = self.llm = self.runner = None
         self.metrics_server = None
+        self.collection_interruption = None
 
     async def start(self):
         if self.settings.open_ai_key is None or not self.settings.open_ai_key.get_secret_value().strip():
@@ -31,6 +32,9 @@ class WorkerRuntime:
         await asyncio.to_thread(self.health.clear)
         await asyncio.to_thread(check_schema,self.settings)
         self.engine = create_engine(self.settings)
+        from ..metrics.coverage import CollectionInterruption
+        from ..storage.base import utcnow
+        self.collection_interruption = await asyncio.to_thread(CollectionInterruption, self.engine, self.settings, utcnow)
         self.llm = LlmRuntime(self.settings,self.engine)
         metrics_environment = self.settings.metrics_environment if self.settings.metrics_enabled else None
         self.runner = WorkerRunner(JobQueue(self.engine,lease_seconds=self.worker_settings.lease_seconds,metrics_environment=metrics_environment),
@@ -53,4 +57,6 @@ class WorkerRuntime:
                     await self.llm.aclose()
             finally:
                 if self.engine is not None:
+                    if getattr(self,'collection_interruption',None) is not None:
+                        await asyncio.to_thread(self.collection_interruption.close)
                     await asyncio.to_thread(self.engine.dispose)

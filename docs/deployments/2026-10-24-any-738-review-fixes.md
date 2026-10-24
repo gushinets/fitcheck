@@ -61,3 +61,44 @@ cleanup. No live destructive cleanup, SMTP workaround or paid LLM request was
 performed. Positive live registration/claim acceptance remains unverified without
 SMTP. Prior b9eab77 deployment evidence is retained separately and does not verify
 this new patch; post-deployment checks are pending.
+
+## Post-deployment check — 2026-10-24 12:15–12:16 UTC
+
+User reports deployment completed. Local checkout is clean at `d3344a5`
+(`fix: ANY-738`); the running image and database revision are not independently
+confirmed. External read-only requests returned:
+
+- Development website `/`: HTTP 200.
+- Development API `/health/ready`: HTTP 502, `Bad Gateway`.
+- Development API `/health/live`: HTTP 502, `Bad Gateway`.
+
+Rollout acceptance is blocked on API availability. These proxy responses do not
+identify whether the cause is container startup, routing, or another deployment
+issue. Application logs and migration check output are needed; no successful
+live check of the new report behavior is claimed.
+
+### Recheck — 2026-10-24 12:17 UTC
+
+User reran migration upgrade/check in the API container; supplied check output:
+`No new upgrade operations detected.` Fresh external requests now return HTTP 200
+for both `/health/live` and `/health/ready`. Readiness reports database `ready`
+and email `unconfigured`. The earlier API availability blocker is resolved.
+Running image/worker version and live report regression scenarios have not been
+independently confirmed by these health checks.
+
+### Supplied deployed JSON report
+
+Parsed the user's API-container export for development/all, Europe/Moscow,
+2026-10-10T12:19:54.867379Z through 2026-10-24T12:19:54.867379Z: 183 rows.
+Both restored server_v2 session rows are present. Session frequency retains
+numerator 13 and denominator 3; duration has 18 observed session samples and the
+30-second pulse cap. Both are unavailable for the requested period, with explicit
+history coverage reasons: website-client data_start is October 16, later than
+the requested October 10 start. Their null values must not be reported as zero
+or as complete-period session estimates.
+
+Account activation has no mature registration cohort; current feedback has no
+successful linked analysis cohort. The report shows one failed backend guest
+analysis, zero successful backend guest analyses and one backend provider attempt.
+These are report observations, not an independent database reconciliation. CSV
+contents and the positive registration/view/feedback chain remain unverified.
