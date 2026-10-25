@@ -1,7 +1,8 @@
 # ANY-748 — bounded browser clocks in account result proof
 
-Date: 2026-10-25 (Europe/Moscow). Local changes for
-[ANY-748](https://linear.app/paveldik/issue/ANY-748), not deployed by this task.
+Date: 2026-10-25 (Europe/Moscow). Implementation for
+[ANY-748](https://linear.app/paveldik/issue/ANY-748). The development rollout authorized
+after implementation is recorded below.
 
 ## Problem and time policy
 
@@ -121,3 +122,45 @@ FITCHECK_TEST_DATABASE_URL='postgresql+psycopg://fitcheck_test:fitcheck_test@127
 ```
 
 No paid LLM calls or live dev database changes were performed.
+
+
+## Authorized development rollout — 2026-10-25
+
+User requested deploying all completed changes to Dokploy. Existing `development`
+services were updated from `dev`, commit
+`7e27641831f074078865cec13026090da0d0d2c9` (ANY-748, including ANY-747/749/750).
+At deployment start, the user had already committed and pushed this revision;
+the checkout was clean and matched `origin/dev`. No new source commit was created.
+
+- API `fitcheck-api-dev`: temporary `/bin/sh -ec` command ran migration upgrade,
+  schema check and API startup. Container `18767d25463a` reported package head0015,
+  database head0015, exactly one `submitted_occurred_at` column and readiness200.
+- The temporary command and both arguments were then removed, saved and deployed
+  again. Final API container **`7c5746014771`** was **running / healthy** for several
+  minutes, with repeated readiness200 responses under the standard Dockerfile CMD.
+  Dokploy's completed deployment identifies the exact commit above.
+- Worker `fitcheck-worker-dev`: deployed normally after migration. Container
+  **`dbdd70dcda92`** was **running / healthy**; a read-only check returned
+  `PACKAGE_HEAD 0015` and `WORKER_HEALTH True`.
+- Website `fitcheck-dev`: completed build in1m34s at the same exact commit. Container
+  **`20b05aa2b7cb`** was running and Next.js reported Ready. The public website rendered
+  its normal account screen without an API error. This service uses its existing
+  Nixpacks startup and does not expose a Docker health status in the observed UI.
+- The raw ops compose is independent of these source changes: its existing backup
+  and private Prometheus containers were both running (Up4days). No ops configuration,
+  database container, credentials, ingress or public ports were modified.
+
+External read-only HTTPS checks at approximately **16:26 Moscow**:
+
+| Endpoint | Result | Evidence |
+| --- | --- | --- |
+| `https://dev-fitcheck.dokploy.gcexp.ru/` | 200 | Normal account UI also verified in Firefox |
+| `https://dev-fitcheck-api.dokploy.gcexp.ru/health/ready` | 200 | status=ok, database=ready; request ID `1ed55c31-5b92-4ffa-b786-d9b687425ca1` |
+| Website `/api/backend/v1/auth/session`, without cookies | 401 expected | request ID `663d503f-0659-45cb-99a3-1e5b699ba0ea` |
+
+Both request IDs match the final API container logs at16:26:30 Moscow, confirming
+that external readiness and the website proxy reach the final running API. The API
+also logged successful POST `/internal/metrics/events`200 after the public website
+was opened. Email remains unconfigured, as before. No signup, paid analysis or LLM
+request was performed. This rollout covers development only. The browser was left
+on the final healthy API logs, with a separate tab showing the deployed website.
