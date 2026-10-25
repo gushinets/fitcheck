@@ -325,3 +325,36 @@ def test_recovery_without_known_remaining_execution_stays_unknown(attempts):
     data=snapshot([event('job_execution_recovered',uuid4(),source='backend_server',operation=uuid4(),
         jobType='analysis',attempts=attempts)])
     assert operations(data)[0].state=='unknown'
+
+
+@pytest.mark.parametrize('purpose,affected', [('analysis.audit', {'analysis'}), ('unknown_legacy', {'analysis', 'skill_suggestions', 'import'})])
+def test_backend_unverifiable_attempt_membership_is_scoped_by_known_purpose(purpose, affected):
+    call = Attempt(call_id=uuid4(), operation_id=None, subject_id=uuid4(), source='backend_server',
+        purpose=purpose, provider='synthetic', model='synthetic', started_at=START,
+        state='succeeded', cost=Decimal('1.25'), currency='USD', cost_basis='estimated')
+    data = snapshot(attempts=[call], backend_scope_reason=None)
+    rows = calculate(options(population='account'), data)
+    for kind in ('analysis', 'skill_suggestions', 'import'):
+        value = row(rows, 'attempts_per_operation', source='backend_server', operation=kind)
+        assert value.available == (kind not in affected)
+        assert value.coverage['unverifiable_cohort_calls'] == int(kind in affected)
+        if kind in affected:
+            cost = row(rows, 'cost_per_success', source='backend_server', operation=kind, currency='USD')
+            assert not cost.available and cost.value is None
+    spend = row(rows, 'known_spend', source='backend_server', currency='USD')
+    assert spend.available and spend.value == Decimal('1.25')
+
+
+def test_backend_known_operation_outside_creation_cohort_does_not_poison_ratios():
+    from fitcheck_backend.metrics.report_types import Operation
+    person, older, current = uuid4(), uuid4(), uuid4()
+    data = snapshot(backend_scope_reason=None)
+    data.operations = [Operation(operation_id=op, subject_id=person, source='backend_server', kind='analysis',
+        created_at=created, finished_at=START+timedelta(days=1), state='succeeded')
+        for op, created in [(older, START-timedelta(days=1)), (current, START)]]
+    data.attempts = [Attempt(call_id=uuid4(), operation_id=op, subject_id=person, source='backend_server',
+        purpose='analysis.generate', provider='synthetic', model='synthetic', started_at=START,
+        state='succeeded', cost=Decimal('1.25'), currency='USD', cost_basis='estimated') for op in (older, current)]
+    value = row(calculate(options(population='account'), data), 'cost_per_success', source='backend_server', operation='analysis', currency='USD')
+    assert value.available and (value.value, value.numerator, value.denominator) == (Decimal('1.25'), Decimal('1.25'), 1)
+    assert value.coverage['unverifiable_cohort_calls'] == 0

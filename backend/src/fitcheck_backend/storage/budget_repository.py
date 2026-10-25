@@ -66,7 +66,7 @@ class BudgetRepository:
         for window in windows:
             if (window.calls+1>window.limit_calls or window.exposure_tokens+bounds.input_tokens+bounds.output_tokens>window.limit_tokens or window.exposure_usd+bounds.usd>window.limit_usd):
                 raise QuotaError('budget_exceeded')
-        row=ProviderCall(owner_id=owner.id,job_id=attempt.job_id,request_key=f'{attempt.operation_id}:{attempt.physical_attempt}',provider=attempt.provider,model=attempt.model,operation=attempt.operation,attempt=attempt.physical_attempt,semantic_attempt=attempt.semantic_attempt,transport_attempt=attempt.transport_attempt,prompt_version=attempt.prompt_version,schema_version=attempt.schema_version,policy_version=attempt.policy_version,execution_token=attempt.execution_token,state='started')
+        row=ProviderCall(owner_id=owner.id,job_id=attempt.job_id,operation_id=job.id if job else attempt.operation_id,request_key=f'{attempt.operation_id}:{attempt.physical_attempt}',provider=attempt.provider,model=attempt.model,operation=attempt.operation,attempt=attempt.physical_attempt,semantic_attempt=attempt.semantic_attempt,transport_attempt=attempt.transport_attempt,prompt_version=attempt.prompt_version,schema_version=attempt.schema_version,policy_version=attempt.policy_version,execution_token=attempt.execution_token,state='started')
         self.s.add(row);self.s.flush()
         for window in windows:
             window.calls+=1;window.exposure_tokens+=bounds.input_tokens+bounds.output_tokens;window.exposure_usd+=bounds.usd

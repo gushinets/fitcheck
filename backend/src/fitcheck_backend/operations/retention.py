@@ -45,7 +45,10 @@ def cleanup(engine, *, now, execute=False, limit=100):
             from ..metrics.analysis_operation import archive_analysis_operations
             archive_analysis_operations(session,jobs,now)
             session.execute(update(AnalysisRecord).where(AnalysisRecord.job_id.in_(jobs)).values(job_id=None,job_type=None))
-            session.execute(update(ProviderCall).where(ProviderCall.job_id.in_(jobs)).values(job_id=None))
+            # Also cover old workers that wrote a nullable operation_id after
+            # the additive migration. Capture the intact FK before pruning it.
+            session.execute(update(ProviderCall).where(ProviderCall.job_id.in_(jobs)).values(
+                operation_id=func.coalesce(ProviderCall.operation_id,ProviderCall.job_id),job_id=None))
             session.execute(delete(Job).where(Job.id.in_(jobs)))
         calls = session.scalars(select(ProviderCall.id).where(ProviderCall.owner_id.is_(None),
             ProviderCall.created_at<now-timedelta(days=90),ProviderCall.state!='started',

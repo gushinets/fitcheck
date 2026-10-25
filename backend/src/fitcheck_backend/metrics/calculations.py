@@ -395,10 +395,17 @@ def attempt_metrics(out, ops):
         all_calls = [a for a in data.attempts if a.source == source]
         calls = [a for a in all_calls if opt.start <= a.started_at < opt.end]
         source_operations = [op for op in ops if op.source == source]
-        source_operation_ids = {op.operation_id for op in source_operations}
+        source_operation_by_id = {op.operation_id: op for op in source_operations}
+        source_operation_ids = set(source_operation_by_id)
         unlinked_period_calls = sum(a.operation_id is None or a.operation_id not in source_operation_ids for a in calls)
         unresolved_observed_operations = len({a.operation_id for a in calls
             if a.operation_id is not None and a.operation_id not in source_operation_ids})
+        # A durable identity alone cannot establish creation-cohort membership
+        # after its domain/journal proof has been erased or expired.
+        unverifiable_calls = [a for a in calls if a.operation_id not in source_operation_by_id
+            or source_operation_by_id[a.operation_id].created_at is None] if source == 'backend_server' else []
+        purpose_kinds = {'analysis': 'analysis', 'analysis.generate': 'analysis', 'analysis.audit': 'analysis',
+                         'skill_suggestions': 'skill_suggestions', 'extraction': 'extraction'}
         dims = {'source': source, 'population': 'visitor' if source == 'website_server' else 'account',
                 'provenance': 'website_server' if source == 'website_server' else 'deployment_database_scope'}
         reason = data.backend_scope_reason if source == 'backend_server' else None
@@ -453,22 +460,29 @@ def attempt_metrics(out, ops):
             successes = sum(op.state == 'succeeded' and op.finished_at is not None and op.finished_at < opt.end for op in cohort)
             pending = sum(op.state not in {'succeeded', 'failed'} for op in cohort)
             linked = {a.operation_id for a in cohort_calls}
+            unresolved_kind_calls = [a for a in unverifiable_calls if purpose_kinds.get(a.purpose) in {None, kind}]
+            linkage_reason = ('Provider call operation linkage or creation-cohort membership is unverifiable'
+                              if unresolved_kind_calls else None)
             extra = coverage | {'pending_operations': None if source == 'website_server' else pending, 'cohort_operations': len(cohort),
                 'operations_with_observed_calls': len(linked), 'unpriced_calls': sum(not priced(a) for a in cohort_calls),
                 'unlinked_period_calls': unlinked_period_calls,
                 'basis': 'known_spend_for_created_operations_all_observed_attempts_through_end'}
+            if source == 'backend_server':
+                extra.update(unverifiable_cohort_calls=len(unresolved_kind_calls),
+                    operation_linkage='durable_operation_id_with_live_job_fallback',
+                    linkage_completeness='unavailable' if linkage_reason else 'observed_calls_linked')
             if source == 'website_server':
                 extra.update(cohort_completeness='unavailable', cohort_completeness_reason=WEBSITE_PENDING_REASON,
                     cohort_scope='observed_operations_with_reconstructable_creation_only',
                     unresolved_observed_operations=unresolved_observed_operations,
                     unresolved_operation_scope='all_operation_types_in_source_period_attempts')
-            out.add('attempts_per_operation', dims=dims | {'operation': kind}, sources=sources, reason=reason,
+            out.add('attempts_per_operation', dims=dims | {'operation': kind}, sources=sources, reason=reason or linkage_reason,
                     value=len(cohort_calls)/len(cohort) if cohort else None, numerator=len(cohort_calls), denominator=len(cohort), coverage=extra)
-            currencies = sorted({a.currency for a in cohort_calls if priced(a)}) or ['unknown']
+            currencies = sorted({a.currency for a in [*cohort_calls, *unresolved_kind_calls] if priced(a)}) or ['unknown']
             for currency in currencies:
                 amounts = [a.cost for a in cohort_calls if priced(a) and a.currency == currency]
                 spend = sum(amounts, Decimal(0)) if amounts else None
-                out.add('cost_per_success', dims=dims | {'operation': kind, 'currency': currency}, sources=sources, reason=reason,
+                out.add('cost_per_success', dims=dims | {'operation': kind, 'currency': currency}, sources=sources, reason=reason or linkage_reason,
                         value=spend/successes if spend is not None and successes else None, numerator=spend, denominator=successes, coverage=extra)
 
 

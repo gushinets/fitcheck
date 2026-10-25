@@ -81,14 +81,15 @@ def load_snapshot(conn, options, backend_database_environment=None):
     if scope_reason is not None or options.population == 'visitor':
         return data
     # SDK costs are estimates, even for historical calls with a successful state.
-    keys = ('id', 'job_id', 'owner_id', 'operation', 'provider', 'model', 'created_at',
+    keys = ('id', 'owner_id', 'operation', 'provider', 'model', 'created_at',
             'finished_at', 'state', 'input_tokens', 'output_tokens', 'cost', 'currency', 'error_code', 'execution_token',
             'cached_input_tokens', 'cache_write_tokens', 'reasoning_tokens', 'cost_basis', 'rate_version',
             'cost_reason', 'service_tier', 'processing_region', 'response_model')
-    for row in bounded(conn, select(*(getattr(ProviderCall, key) for key in keys)).where(
+    for row in bounded(conn, select(*(getattr(ProviderCall, key) for key in keys),
+            func.coalesce(ProviderCall.operation_id, ProviderCall.job_id).label('operation_id')).where(
             ProviderCall.created_at >= floor, ProviderCall.created_at < options.end)):
         values = dict(row)
-        for old, new in [('id','call_id'), ('job_id','operation_id'), ('owner_id','subject_id'),
+        for old, new in [('id','call_id'), ('owner_id','subject_id'),
                          ('operation','purpose'), ('created_at','started_at')]:
             values[new] = values.pop(old)
         if values['finished_at'] is not None and values['finished_at'] >= options.end:

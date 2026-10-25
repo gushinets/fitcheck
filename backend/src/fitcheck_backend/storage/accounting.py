@@ -39,6 +39,8 @@ class ProviderCall(IdentityMixin, CreatedMixin, Base):
     __tablename__ = "provider_calls"
     owner_id: Mapped[UUID | None] = mapped_column(ForeignKey("owners.id", ondelete="SET NULL"))
     job_id: Mapped[UUID | None]
+    # Logical operation identity survives technical job retention; no job FK.
+    operation_id: Mapped[UUID | None]
     request_key: Mapped[str | None] = mapped_column(String(200), unique=True)
     provider: Mapped[str] = mapped_column(String(120))
     operation: Mapped[str] = mapped_column(String(120))
@@ -73,6 +75,8 @@ class ProviderCall(IdentityMixin, CreatedMixin, Base):
         ForeignKeyConstraint(["job_id", "owner_id"], ["jobs.id", "jobs.owner_id"], deferrable=True, initially="IMMEDIATE"),
         CheckConstraint("job_id IS NULL OR owner_id IS NOT NULL", name="job_owner"),
         CheckConstraint("owner_id IS NOT NULL OR (job_id IS NULL AND request_key IS NULL)", name="anonymous"),
+        CheckConstraint("owner_id IS NOT NULL OR operation_id IS NULL", name="operation_owner"),
+        CheckConstraint("job_id IS NULL OR operation_id IS NULL OR operation_id=job_id", name="job_operation"),
         CheckConstraint("attempt >= 1 AND state IN ('started','succeeded','failed','unknown')", name="state"),
         CheckConstraint("semantic_attempt >= 1 AND transport_attempt >= 1 AND latency_ms >= 0", name="attempt_metadata"),
         CheckConstraint("input_tokens >= 0 AND output_tokens >= 0 AND cost >= 0", name="usage"),
