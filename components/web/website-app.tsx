@@ -411,12 +411,19 @@ export function WebsiteApp({
     return uuidSchema.safeParse(entry.providerOperationId).success ? { operationId: entry.providerOperationId } : {}
   }
   useEffect(() => {
-    if (view !== "analyze" || analysisStep !== "result" || !activeEntry) return
-    const id = resultId(activeEntry)
-    if (viewedResults.current.has(id)) return
-    viewedResults.current.add(id)
-    observe("analysis_result_viewed", { flow: "account", resultId: id, predictedScore: activeEntry.analysis.score }, resultContext(activeEntry))
-  }, [view, analysisStep, activeEntry, observe])
+    if (!snapshot.user || (server && !snapshot.user.emailVerified) || view !== "analyze" || analysisStep !== "result" || !activeEntry) return
+    const entry = activeEntry
+    const id = resultId(entry)
+    const generation = observationGeneration.current
+    function observeVisibleResult() {
+      if (document.visibilityState !== "visible" || generation !== observationGeneration.current || viewedResults.current.has(id)) return
+      viewedResults.current.add(id)
+      observe("analysis_result_viewed", { flow: "account", resultId: id, predictedScore: entry.analysis.score }, resultContext(entry), generation)
+    }
+    observeVisibleResult()
+    document.addEventListener("visibilitychange", observeVisibleResult)
+    return () => document.removeEventListener("visibilitychange", observeVisibleResult)
+  }, [view, analysisStep, activeEntry, observe, snapshot.user, server])
 
   function openHistory(entry: WebHistoryEntry) {
     const restoredDraft: VacancyDraft = {

@@ -1,5 +1,5 @@
 import { StrictMode } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { defaultProfile, detectedJob, goAnalysis } from '@/lib/mock-data'
 import type { ServerWebsite } from '@/lib/web/server'
@@ -74,4 +74,33 @@ describe('demo observations', () => {
     await act(async () => { resolve(completed) })
     expect(observe.mock.calls.map(c => c[0])).not.toContain('analysis_result_viewed')
   })
+})
+
+function visibility(value: DocumentVisibilityState) {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, value })
+  act(() => document.dispatchEvent(new Event('visibilitychange')))
+}
+afterEach(() => { visibility('visible') })
+it.each([false, true])('defers a background demo result until visible (leave=%s)', async leave => {
+  const server = setup(); const observe = vi.fn(); let complete!: (value: typeof completed) => void
+  server.analyzeGuest.mockImplementation(async () => new Promise(resolve => { complete = resolve }))
+  const view = render(<DemoAnalysis server={server as unknown as ServerWebsite} locale='en' onAccount={() => {}} observe={observe} />)
+  await analyze('text')
+  visibility('hidden')
+  await act(async () => complete(completed))
+  await screen.findByText('displayed result')
+  expect(observe.mock.calls.filter(c => c[0] === 'analysis_result_viewed')).toHaveLength(0)
+  if (leave) view.unmount()
+  visibility('visible')
+  visibility('hidden'); visibility('visible')
+  expect(observe.mock.calls.filter(c => c[0] === 'analysis_result_viewed')).toHaveLength(leave ? 0 : 1)
+})
+it('defers a resumed demo result until visible', async () => {
+  const server = { ...setup(), hasPendingAnalysis: () => true }; const observe = vi.fn()
+  visibility('hidden')
+  render(<DemoAnalysis server={server as unknown as ServerWebsite} locale='en' onAccount={() => {}} observe={observe} />)
+  await screen.findByText('displayed result')
+  expect(observe).not.toHaveBeenCalled()
+  visibility('visible')
+  expect(observe).toHaveBeenCalledWith('analysis_result_viewed', expect.objectContaining({ resultId }), { operationId: jobId })
 })

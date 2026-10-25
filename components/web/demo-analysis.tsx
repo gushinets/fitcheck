@@ -27,9 +27,16 @@ export function DemoAnalysis({ server, locale, onAccount, observe }: { server: S
   function track(...args: Parameters<MetricsObserver>) { try { observe?.(...args) } catch { /* Best effort observations. */ } }
   const [busy, setBusy] = useState(false)
   useEffect(() => {
-    if (!result || busy || viewed.current.has(result.id)) return
-    viewed.current.add(result.id)
-    try { observe?.("analysis_result_viewed", { flow: "demo", locale, inputMode: inputMode.current, resultId: result.id, predictedScore: result.analysis.score }, { operationId: jobId }) } catch { /* Best effort observations. */ }
+    if (!result || busy) return
+    const entry = result
+    function observeVisibleResult() {
+      if (document.visibilityState !== "visible" || viewed.current.has(entry.id)) return
+      viewed.current.add(entry.id)
+      try { observe?.("analysis_result_viewed", { flow: "demo", locale, inputMode: inputMode.current, resultId: entry.id, predictedScore: entry.analysis.score }, { operationId: jobId }) } catch { /* Best effort observations. */ }
+    }
+    observeVisibleResult()
+    document.addEventListener("visibilitychange", observeVisibleResult)
+    return () => document.removeEventListener("visibilitychange", observeVisibleResult)
   }, [result, busy, locale, jobId, observe])
   const [error, setError] = useState("")
   async function initialize() {

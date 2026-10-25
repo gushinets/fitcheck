@@ -1,6 +1,6 @@
 # ANY-749 — provider operation linkage after job cleanup
 
-Prepared 2026-10-25 on top of `b494c7a` (ANY-750). Changes are local; no deployment or live database mutation has been performed.
+Prepared 2026-10-25 on top of `b494c7a` (ANY-750). Implementation was committed as `f2177c9` (ANY-749). Local verification is recorded below; subsequent authorized development rollout is recorded at the end.
 
 ## Behavior
 
@@ -24,7 +24,17 @@ The exact ANY-749 control remains stable before/after actual cleanup: two succes
 
 No new environment variables or website deployment are required. Prepare matching API/worker backend images containing revision **0014**. Pause old workers and maintenance jobs during migration/rollout; an old cleanup implementation cannot preserve links on calls written after the one-time migration backfill.
 
-In the updated Dokploy development API container terminal, run separately against its configured development database:
+Run migration as a separate, one-shot job using the updated backend image, the same database configuration and the same private database network. Start the API/worker after that job succeeds, as described in `ops/RUNBOOK.md`. With the repository's Compose deployment, the dedicated migration service already runs upgrade and check:
+
+```sh
+docker compose run --rm --no-deps migrate
+```
+
+Use the same Compose files, environment file and release tag as the deployment; the command above is only for that deployment mode, not a command to paste blindly into a separately managed Dokploy application.
+
+Do not rely on opening the newly deployed API container to apply a pending schema migration: its image healthcheck uses `/health/ready`, which checks the schema head. A schema mismatch can leave it unhealthy and cause the orchestrator to replace it before an interactive terminal can be used. A terminal selection marked `exited` cannot run commands.
+
+If an updated container is already running and remains available, these are the underlying commands the migration job must execute against its configured database:
 
 ```sh
 /app/.venv/bin/python -m fitcheck_backend.storage.migrate upgrade
@@ -35,6 +45,18 @@ In the updated Dokploy development API container terminal, run separately agains
 ```
 
 Expected check: `No new upgrade operations detected.` Application startup does not migrate automatically. Restart API and worker on the matching updated backend version after migration; `/health/ready` must return 200. The migration is transactional and uses the existing migration runner lock. It updates intact provider-call links; it does not run retention, alter financial usage values or repair already-pruned associations.
+
+### Reported Dokploy startup issue, 2026-10-25
+
+The selected API container `efe92e58f209` was visibly `exited`; Docker Terminal reported `container … is not running`. Supplied application logs from 11:17:34–11:18:50 UTC show the API serving repeated `/health/ready` 503 responses before shutdown. This is consistent with pending schema migration, but does not distinguish revision mismatch from database connectivity failure or prove why the orchestrator stopped the task. No successful migration or schema check on the deployed environment has been verified.
+
+Read-only task diagnosis belongs in the **server terminal**, not the stopped container:
+
+```sh
+docker service ps --no-trunc app-program-open-source-hard-drive-w7n8it
+```
+
+The earlier instruction to depend on a newly deployed API's interactive terminal was incomplete; use the separate migration job before starting API/worker.
 
 Optional aggregate SQL verification, without exporting user identifiers:
 
@@ -79,3 +101,27 @@ Focused control:
 ```
 
 The first controls reproduced the exact 1→0.5 attempts ratio regression and missing legacy unavailability before production changes. Initial sandbox runs could not connect to PostgreSQL or fetch wheel build dependencies; the corresponding checks passed with the required local DB/network permissions.
+
+
+## Authorized development rollout — 2026-10-25
+
+The user explicitly approved temporarily setting the dev API Run Command to migration → schema check → API start, deploying it, verifying readiness and restoring the normal startup command. No credentials, ingress, ports or healthcheck settings were changed.
+
+Initial live inspection found the terminal defaulting to exited container `efe92e58f209`; another container, `87fe0fb138dc`, was running. A read-only query inside that running container showed expected/package revision0013 and database revision0013. The completed ANY-749 build in Dokploy was commit `f2177c93a64aaa1bb4aba410e0e617f8886b6316`, image `sha256:85d205f373273926fc7cc79e4e298f710b75804daf4400275dd161ef10d54aa9`; the old running container did not contain migration0014. Build success alone did not establish runtime rollout success.
+
+The approved temporary command was `/bin/sh` with two arguments: `-ec` and:
+
+```sh
+/app/.venv/bin/python -m fitcheck_backend.storage.migrate upgrade && /app/.venv/bin/python -m fitcheck_backend.storage.migrate check && exec /app/.venv/bin/python -m fitcheck_backend
+```
+
+After the manual deployment, container `4c3bf03220c7` started. Logs at approximately15:18 Moscow time (12:18UTC) showed `No new upgrade operations detected.` A read-only terminal query then confirmed:
+
+- Packaged expected revision: **0014**.
+- Database revision: **0014**.
+- Internal `/health/ready`: **200**, database ready, email unconfigured.
+
+The temporary command and both arguments were removed and saved, returning to Dockerfile CMD. A second approved deployment created container `bf89bd7dec03`, displayed by Dokploy as **running / healthy**. This is the normal startup configuration, without automatic startup migration. No synthetic cleanup, paid LLM call or product test chain was run on the deployed environment.
+
+
+Final verification after restoring standard CMD: container `bf89bd7dec03` remained **running / healthy** with repeated `/health/ready` **200** responses at15:19:31,15:20:01 and15:20:32 Moscow time. A public HTTPS request to `https://dev-fitcheck-api.dokploy.gcexp.ru/health/ready` returned `status=ok`, `stage=auth_storage`, `database=ready`; its request ID `492823f5-60a2-4e99-b6b3-5502c96d2370` matches the deployed API log entry at15:20:07 with HTTP200. Email remains unconfigured, as before. Worker image/version was not independently reverified during this API migration recovery. The browser was left on the current API container's healthy logs. Old exited containers remain historical task instances, not the active API.

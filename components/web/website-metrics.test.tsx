@@ -1,5 +1,5 @@
 import { StrictMode } from 'react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryWebsiteRepository } from '@/lib/web/memory-repository';
 import { defaultProfile, goAnalysis } from '@/lib/mock-data';
@@ -263,3 +263,26 @@ it('guest demo reuses the existing metrics client and visitor session', async ()
     expect(metrics.track).toHaveBeenCalledWith('analysis_result_viewed', expect.objectContaining({ flow: 'demo', resultId }), { operationId });
     expect(JSON.stringify(metrics.track.mock.calls)).not.toMatch(/private|secret|password|description/);
 });
+
+function visibility(value: DocumentVisibilityState) {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, value })
+  act(() => document.dispatchEvent(new Event('visibilitychange')))
+}
+afterEach(() => { visibility('visible') })
+it.each(['stay', 'navigate', 'unmount'] as const)('defers a background account result until visible (%s)', async action => {
+  const { repository } = await seeded()
+  let complete!: (value: { analysis: typeof goAnalysis; operationId: string }) => void
+  const pendingApi = { ...api, analyzeVacancyWithContext: () => new Promise<{ analysis: typeof goAnalysis; operationId: string }>(resolve => { complete = resolve }) }
+  const view = render(<WebsiteApp repository={repository} api={pendingApi} metricsEnabled />)
+  fireEvent.click(await screen.findByText('review'))
+  fireEvent.click(await screen.findByText('analyze'))
+  await waitFor(() => expect(complete).toBeTypeOf('function'))
+  visibility('hidden')
+  await act(async () => complete({ analysis: goAnalysis, operationId }))
+  await screen.findByText('result 82')
+  expect(names()).not.toContain('analysis_result_viewed')
+  if (action === 'navigate') fireEvent.click(screen.getAllByRole('button', { name: 'Profile' })[0])
+  if (action === 'unmount') view.unmount()
+  visibility('visible'); visibility('hidden'); visibility('visible')
+  expect(names().filter(n => n === 'analysis_result_viewed')).toHaveLength(action === 'stay' ? 1 : 0)
+})
