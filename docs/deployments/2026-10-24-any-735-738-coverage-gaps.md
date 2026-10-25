@@ -118,3 +118,22 @@ Swarm's precise update/rollback state was not read; configured Update Config fie
 were unset in the UI. No deployment settings, schema or service state were changed
 during diagnosis. The prior deploy-then-terminal rollout wording above was corrected
 to require a release migration before API/worker replacement.
+
+## Successful rollout recheck — 2026-10-24, from 17:52 UTC
+
+After the user applied the temporary migration-before-API Run Command and deployed
+both services, read-only verification confirmed:
+
+- API container `314480d1fca9`: running, packaged schema head0013;
+  direct `alembic_version` SELECT returned0013.
+- Packaged API `storage.migrate check`: `No new upgrade operations detected.`
+- Public API `/health/ready`: HTTP200, database ready, email unconfigured.
+- Worker container `dc0a4c09e82a`: running, packaged schema head0013;
+  `healthy(WorkerSettings().health_path)` returned True.
+
+The API Advanced tab still contains `/bin/sh`, `-c` and the migration/check/exec
+wrapper. The user should clear the temporary command and remove both arguments,
+save, and deploy API once to return to its Dockerfile CMD. Worker requires its
+normal worker command. No settings or schema were changed by the agent in this
+recheck. Live positive registration/claim and full report reconciliation are not
+established by these deployment checks.

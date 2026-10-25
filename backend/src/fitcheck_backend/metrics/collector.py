@@ -13,7 +13,9 @@ from .errors import MetricsError
 class MetricsCollector:
     def __init__(self, engine, settings, clock):
         self.engine, self.settings, self.clock = engine, settings, clock
-        self.limiter = MetricsRateLimiter(engine, settings.metrics_environment, clock)
+        self.limiter = MetricsRateLimiter(engine, settings.metrics_environment, clock,
+            aggregate_limit=settings.metrics_rate_limit_per_minute,
+            visitor_limit=settings.metrics_visitor_rate_limit_per_minute)
 
     def _lock_visitor(self, session, subject_id):
         # Serialize first-touch assignment and deletion without a new identity table.

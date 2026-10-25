@@ -7,6 +7,10 @@ function getHandlers() {
   handlers ??= createMetricsHandlers({
     secret: process.env.METRICS_COOKIE_SECRET,
     allowedOrigins: (process.env.ALLOWED_ORIGINS ?? 'http://localhost:3000').split(',').map(origin => origin.trim()).filter(Boolean),
+    rateLimits: {
+      aggregate: Number(process.env.METRICS_RATE_LIMIT_PER_MINUTE ?? 600),
+      perVisitor: Number(process.env.METRICS_VISITOR_RATE_LIMIT_PER_MINUTE ?? 30),
+    },
     bridge: {
       backendUrl: process.env.METRICS_BACKEND_URL,
       bridgeKey: process.env.METRICS_BRIDGE_KEY,

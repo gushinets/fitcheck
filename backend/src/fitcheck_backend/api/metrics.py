@@ -17,7 +17,6 @@ def collector(request: Request):
     keys = request.headers.getlist('x-fitcheck-metrics-key')
     if len(keys) != 1 or not compare_digest(keys[0].encode(), settings.metrics_ingest_key.get_secret_value().encode()):
         raise ApiError(401, 'unauthenticated', 'Unauthenticated')
-    value.limiter.enforce()
     return value
 
 
@@ -28,6 +27,7 @@ metadata = {'x-fitcheck-owner-task':'fitcheck-metrics', 'x-fitcheck-implementati
 
 @router.post('/internal/metrics/events', response_model=IngestResult, operation_id='ingestWebsiteMetrics', openapi_extra=metadata)
 def events(body: WebsiteBatch, request: Request, value=Depends(collector)):
+    value.limiter.enforce(subjects={event.subject_id for event in body.events})
     from ..auth.errors import AuthError
     from ..guests.sessions import guest_cookie_name
     runtime = request.app.state.auth_runtime
@@ -47,9 +47,11 @@ def events(body: WebsiteBatch, request: Request, value=Depends(collector)):
 
 @router.post('/internal/metrics/attempts', response_model=IngestResult, operation_id='ingestWebsiteAttempts', openapi_extra=metadata)
 def attempts(body: AttemptBatch, value=Depends(collector)):
+    value.limiter.enforce(subjects={attempt.subject_id for attempt in body.attempts})
     return value.ingest_attempts(body)
 
 
 @router.delete('/internal/metrics/visitors/{visitorId}', response_model=DeleteResult, operation_id='deleteWebsiteVisitorMetrics', openapi_extra=metadata)
 def visitor(visitor_id: Annotated[UUID,Path(alias='visitorId')], value=Depends(collector)):
+    value.limiter.enforce(subjects=[visitor_id])
     return DeleteResult(deleted=value.delete_visitor(visitor_id))

@@ -127,13 +127,13 @@ def test_account_delete_erases_only_own_metrics_preserves_provider_accounting(en
 
 
 def test_erased_visitor_suppresses_late_server_fact_and_anonymizes_new_calls(engine):
-    from types import SimpleNamespace
     from fitcheck_backend.metrics.collector import MetricsCollector
     from fitcheck_backend.metrics.contracts import AttemptBatch, WebsiteAttempt, WebsiteBatch, MetricEvent, ERASED_VISITOR_ID
     from fitcheck_backend.storage.base import utcnow
     from fitcheck_backend.storage.metrics import WebsiteProviderAttempt, MetricErasedVisitor
     now=utcnow()
-    settings=SimpleNamespace(metrics_environment='test', metrics_campaign_codes=[])
+    from fitcheck_backend.config import Settings
+    settings=Settings(metrics_environment='test', metrics_campaign_codes=[])
     collector=MetricsCollector(engine, settings, lambda:now)
     visitor=uuid4()
     assert collector.delete_visitor(visitor)==0

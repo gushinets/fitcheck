@@ -119,11 +119,50 @@ def test_attempt_endpoint_settlement_conflict_and_source(metrics,engine):
 
 def test_http_rate_limit_is_shared_across_subjects(metrics,engine):
     client,_,_ = metrics
+    client.app.state.metrics_collector.limiter.aggregate_limit = 60
     for _ in range(60):
         assert send(client,[event()]).status_code == 200
     response = send(client,[event()])
     assert response.status_code == 429 and response.headers['Retry-After'] == '60'
     assert count(engine) == 60
+
+
+def test_http_noisy_visitor_is_limited_then_retry_deduplicates(metrics, engine):
+    client, collector, clock = metrics
+    subject = str(uuid4())
+    original = event(subjectId=subject)
+    assert send(client, [original]).status_code == 200
+    for _ in range(59):
+        assert send(client, [event(subjectId=subject)]).status_code == 200
+    rejected = event(subjectId=subject)
+    limited = send(client, [rejected])
+    assert limited.status_code == 429
+    assert limited.headers['Retry-After'] == '60'
+    assert send(client, [event()]).status_code == 200
+    assert count(engine) == 61
+    clock[0] += timedelta(seconds=60)
+    assert send(client, [rejected]).json() == {'accepted': 1, 'duplicates': 0}
+    assert send(client, [rejected]).json() == {'accepted': 0, 'duplicates': 1}
+    assert send(client, [original]).json() == {'accepted': 0, 'duplicates': 1}
+    assert count(engine) == 62
+
+
+def test_http_normal_31_visitor_load_has_no_journal_loss(metrics, engine):
+    client, _, clock = metrics
+    visitors = [str(uuid4()) for _ in range(31)]
+    submitted = []
+    for second, name, properties in [
+        (0, 'page_viewed', {}), (29, 'visible_activity', {'activeMs': 29000}),
+        (58, 'visible_activity', {'activeMs': 29000}), (59, 'history_viewed', {}),
+    ]:
+        clock[0] = NOW + timedelta(seconds=second)
+        for visitor in visitors:
+            payload = event(subjectId=visitor, name=name, properties=properties, occurredAt=clock[0].isoformat())
+            submitted.append(payload)
+            assert send(client, [payload]).json() == {'accepted': 1, 'duplicates': 0}
+    assert count(engine) == 124
+    assert send(client, [submitted[0]]).json() == {'accepted': 0, 'duplicates': 1}
+    assert count(engine) == 124
 
 
 def test_safe_logs_and_no_cors_bridge_header(metrics,caplog):

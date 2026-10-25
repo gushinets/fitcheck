@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     metrics_database_environment: Literal["development", "production", "test"] | None = None
     metrics_ingest_key: SecretStr | None = None
     metrics_campaign_codes: list[str] = Field(default_factory=list)
+    metrics_rate_limit_per_minute: Annotated[int, BeforeValidator(not_bool)] = Field(default=1200, ge=1, le=100000)
+    metrics_visitor_rate_limit_per_minute: Annotated[int, BeforeValidator(not_bool)] = Field(default=60, ge=1, le=100000)
     jobs_enabled: bool = False
     guest_enabled: bool = False
     guest_ttl_seconds: Annotated[int, BeforeValidator(not_bool)] = Field(default=86400, ge=1, le=604800)

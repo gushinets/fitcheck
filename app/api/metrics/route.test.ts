@@ -71,8 +71,6 @@ describe('browser metrics boundary', () => {
     expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ source: 'website_client', events: [{ subjectKind: 'visitor' }] })
     expect((await POST(request({ events: Array.from({ length: 21 }, event) }))).status).toBe(400)
     expect((await POST(request('x'.repeat(32769)))).status).toBe(413)
-    for (let i = 0; i < 57; i++) await POST(request({ events: [event()] }))
-    expect((await POST(request({ events: [event()] }))).status).toBe(429)
   })
   it('does not renew an existing visitor and sets expiry from issuance on rotation', async () => {
     const time = Date.now()
@@ -111,6 +109,60 @@ describe('browser metrics boundary', () => {
     expect(response.headers.get('set-cookie')).not.toContain(visitor.cookieValue)
     expect((await DELETE(request({ visitorId: crypto.randomUUID() }, {}, 'DELETE'))).status).toBe(400)
   })
+})
+
+it('preserves backend rate-limit delay and visitor cookie on an uncommitted batch', async () => {
+  const { POST, fetcher } = setup()
+  fetcher.mockImplementation(async () => new Response(null, { status: 429, headers: { 'Retry-After': '37' } }))
+  const response = await POST(request({ events: [event()] }))
+  expect(response.status).toBe(429)
+  expect(response.headers.get('Retry-After')).toBe('37')
+  expect(response.headers.get('set-cookie')).toContain(VISITOR_COOKIE)
+  expect(await response.json()).toEqual({ delivered: false })
+})
+
+it('isolates a noisy signed visitor without spending the aggregate budget on rejected requests', async () => {
+  const { POST, fetcher } = setup()
+  const visitor = resolveVisitor(undefined, 'test-secret', Date.now())!
+  const headers = { cookie: `${VISITOR_COOKIE}=${visitor.cookieValue}` }
+  for (let i = 0; i < 30; i++) expect((await POST(request({ events: [event()] }, headers))).status).toBe(202)
+  for (let i = 0; i < 650; i++) {
+    const rejected = await POST(request({ events: [event()] }, headers))
+    expect(rejected.status).toBe(429)
+    expect(Number(rejected.headers.get('Retry-After'))).toBeGreaterThan(0)
+  }
+  expect((await POST(request({ events: [event()] }))).status).toBe(202)
+  expect(fetcher).toHaveBeenCalledTimes(31)
+})
+
+it('admits 31 visitors with two pulses and two additional page/action batches each minute', async () => {
+  const { POST, fetcher } = setup()
+  const visitors = Array.from({ length: 31 }, () => resolveVisitor(undefined, 'test-secret', Date.now())!)
+  for (const visitor of visitors) {
+    const headers = { cookie: `${VISITOR_COOKIE}=${visitor.cookieValue}` }
+    for (let i = 0; i < 4; i++) expect((await POST(request({ events: [event()] }, headers))).status).toBe(202)
+  }
+  expect(fetcher).toHaveBeenCalledTimes(124)
+})
+
+it('bounds aggregate admission, shares POST/DELETE visitor budget, and resets the window', async () => {
+  let time = Date.parse('2026-10-25T00:00:30Z')
+  const handlers = createMetricsHandlers({ secret: 'test-secret', allowedOrigins: [origin], now: () => time,
+    rateLimits: { aggregate: 2, perVisitor: 1 }, bridge: {} })
+  const visitor = resolveVisitor(undefined, 'test-secret', time)!
+  const headers = { cookie: `${VISITOR_COOKIE}=${visitor.cookieValue}` }
+  expect((await handlers.POST(request({ events: [event()] }, headers))).status).toBe(202)
+  const limited = await handlers.DELETE(request({}, headers, 'DELETE'))
+  expect(limited.status).toBe(429)
+  expect(limited.headers.get('Retry-After')).toBe('30')
+  expect((await handlers.POST(request({ events: [event()] }))).status).toBe(202)
+  expect((await handlers.POST(request({ events: [event()] }))).status).toBe(429)
+  time += 30000
+  expect((await handlers.POST(request({ events: [event()] }, headers))).status).toBe(202)
+})
+
+it.each([0, -1, 1.5, NaN, 100001])('rejects invalid configured limit %s', value => {
+  expect(() => createMetricsHandlers({ allowedOrigins: [origin], bridge: {}, rateLimits: { aggregate: value, perVisitor: 30 } })).toThrow()
 })
 
 it('diagnoses missing cookie configuration without forwarding', async () => {

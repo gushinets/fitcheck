@@ -73,7 +73,7 @@ it('test_ordered_local_registration_profile_analysis_view_events', async () => {
     fireEvent.click(await screen.findByText('review'));
     fireEvent.click(await screen.findByText('analyze'));
     await screen.findByText('result 82');
-    expect(names().filter(n => ['page_viewed', 'local_registration_completed', 'profile_saved', 'analysis_requested', 'analysis_result_viewed'].includes(String(n)))).toEqual(['page_viewed', 'local_registration_completed', 'profile_saved', 'analysis_requested', 'analysis_result_viewed']);
+    await waitFor(() => expect(names().filter(n => ['page_viewed', 'local_registration_completed', 'profile_saved', 'analysis_requested', 'analysis_result_viewed'].includes(String(n)))).toEqual(['page_viewed', 'local_registration_completed', 'profile_saved', 'analysis_requested', 'analysis_result_viewed']));
     expect(metrics.track).toHaveBeenCalledWith('analysis_result_viewed', { flow: 'account', resultId: operationId, predictedScore: 82 }, { operationId });
     expect(JSON.stringify(metrics.track.mock.calls)).not.toMatch(/secret|private|password|example.com/);
 });
