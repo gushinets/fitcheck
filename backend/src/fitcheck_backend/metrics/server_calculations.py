@@ -9,8 +9,9 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 from .calculations import WEEK, ratio, nearest_rank, person
 from .identity_queries import account_at
+from .observation_time import observation_window, account_during, TIME_COVERAGE
 
-VERSION='server_v2'
+VERSION='server_v3'
 FEATURES={'profile_saved':'profile','profile_revision_saved':'profile',
           'analysis_result_viewed':'analysis','skills_accepted':'skills',
           'history_viewed':'history','feedback_saved':'feedback'}
@@ -49,7 +50,7 @@ def first_registration(data):
     return result
 
 
-def confirmed_activity(data):
+def confirmed_activity(data, end=None):
     """Domain result, temporal account and observed flow must all agree."""
     facts={f.analysis_id:f for f in data.analyses}
     activity=[];views=[];unknown=defaultdict(int)
@@ -59,21 +60,32 @@ def confirmed_activity(data):
         if event.source!='website_client' or event.name not in FEATURES or not person(event.subject_id):continue
         if event.properties.get('flow')=='demo':continue
         snapshot=data.identities.get(event.subject_id)
-        owner=account_at(snapshot,event.occurred_at) if snapshot else None
+        is_result=event.name in {'analysis_result_viewed','feedback_saved'}
+        at=event.occurred_at
+        if is_result:
+            if end is not None and event.received_at is not None and event.received_at>=end:continue
+            fact=facts.get(uuid(event.properties.get('resultId')))
+            if (fact is None or not fact.account_owned or fact.job_id is None or fact.state!='succeeded'
+                    or fact.finished_at is None or event.operation_id is not None and event.operation_id!=fact.job_id):
+                if event.name=='analysis_result_viewed':unknown['unverified_result_job']+=1
+                continue
+            lower,at,reason=observation_window(event,max(fact.created_at,fact.finished_at))
+            if reason:
+                if event.name=='analysis_result_viewed':unknown[reason]+=1
+                continue
+            owner=account_during(snapshot,lower,at) if snapshot else None
+        else:
+            owner=account_at(snapshot,at) if snapshot else None
         if owner is None or owner.account_owner_id is None:
             if event.name=='analysis_result_viewed':unknown[owner.reason if owner else 'missing_identity']+=1
             continue
-        if event.name in {'analysis_result_viewed','feedback_saved'}:
-            fact=facts.get(uuid(event.properties.get('resultId')))
-            if (fact is None or not fact.account_owned or fact.owner_id!=owner.account_owner_id or fact.job_id is None
-                    or fact.state!='succeeded' or fact.finished_at is None or fact.finished_at>event.occurred_at
-                    or fact.created_at>event.occurred_at
-                    or event.operation_id is not None and event.operation_id!=fact.job_id):
+        if is_result:
+            if fact.owner_id!=owner.account_owner_id:
                 if event.name=='analysis_result_viewed':unknown['unverified_result_job']+=1
                 continue
             if event.name=='analysis_result_viewed' and event.properties.get('flow')!='account':
                 unknown['unknown_result_flow']+=1;continue
-        linked=replace(event,subject_id=owner.account_owner_id,subject_kind='account')
+        linked=replace(event,subject_id=owner.account_owner_id,subject_kind='account',occurred_at=at)
         activity.append(linked)
         if event.name=='analysis_result_viewed':views.append(linked)
     return sorted(activity,key=lambda e:e.occurred_at),sorted(views,key=lambda e:e.occurred_at),dict(unknown)
@@ -97,7 +109,7 @@ def product_activity(out,events,population,provenance,source,registrations=None,
     by_owner=defaultdict(list)
     for e in selected:by_owner[e.subject_id].append(e)
     active={e.subject_id for e in selected if opt.start<=e.occurred_at<opt.end}
-    coverage={'activity_basis':'observed_user_actions_only_no_job_completion',
+    coverage={**(TIME_COVERAGE if population=='account' else {}),'activity_basis':'observed_user_actions_only_no_job_completion',
               'cohort_scope':'confirmed_identity' if population=='account' else 'server_proven_demo'}
     rolling={}
     for days in (1,7,30):
@@ -163,7 +175,9 @@ def account_metrics(out,registered,activity,views,unknown):
                 (data.backfill_complete_through is None or data.backfill_complete_through<opt.end) else data.backend_scope_reason)
         if unknown and not activated:reason=reason or 'Observed result views lack complete identity or domain proof'
         if not cohort:reason=reason or ('No confirmed identity coverage for mature registrations' if mature else 'No mature registration cohort')
-        coverage={'activation_basis':'first_verified_result_view_after_registration','window_days':7,
+        coverage={**TIME_COVERAGE,'clock_corrected_views':sum(
+            e.occurred_at!=(e.submitted_occurred_at or e.occurred_at) for e in views),
+            'activation_basis':'first_verified_result_view_after_registration','window_days':7,
             'cohort_scope':'registrations_with_confirmed_identity_coverage','mature_registrations':len(mature),
             'excluded_unlinked_registrations':len(mature)-len(cohort),
             'immature_registrations':sum(opt.start<=t<opt.end<t+WEEK for t in registrations.values()),
@@ -303,7 +317,8 @@ def account_acquisition(out,links,registered,views):
                 count=len(owners) if stage=='registrations' else sum(any(v.subject_id==p and registered[(provenance,p)]<=v.occurred_at<registered[(provenance,p)]+WEEK for v in views_by_owner[p]) for p in owners)
                 add(out,'acquisition',dims={'population':'account','provenance':provenance,'campaign':code,'stage':stage},
                     sources=(provenance,'website_client'),value=count,
-                    coverage={'attribution':'first_observed_touch_in_confirmed_anonymous_segment','missing_touch':'unknown'})
+                    coverage={**(TIME_COVERAGE if stage=='activations' else {}),
+                              'attribution':'first_observed_touch_in_confirmed_anonymous_segment','missing_touch':'unknown'})
 
 
 def feedback_metrics(out):
@@ -372,7 +387,7 @@ def session_metrics(out):
 def calculate_server(out):
     registrations=first_registration(out.data)
     links=registration_links(out.data,registrations)
-    activity,views,unknown=confirmed_activity(out.data)
+    activity,views,unknown=confirmed_activity(out.data,out.options.end)
     active={}
     if out.options.population in {'visitor','all'}:
         active['visitor']=visitor_metrics(out,registrations,links)

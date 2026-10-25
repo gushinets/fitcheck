@@ -20,6 +20,7 @@ class MetricJournal(Base):
     environment: Mapped[str] = mapped_column(String(20))
     occurred_at: Mapped[datetime] = mapped_column(UTCDateTime)
     received_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    submitted_occurred_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     subject_kind: Mapped[str] = mapped_column(String(10))
     subject_id: Mapped[UUID | None]
     owner_id: Mapped[UUID | None] = mapped_column(ForeignKey('owners.id', ondelete='CASCADE'))

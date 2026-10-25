@@ -48,7 +48,8 @@ class MetricsCollector:
                             'direct' if campaign is None else campaign if campaign in {'direct', 'other'} or campaign in self.settings.metrics_campaign_codes else 'other')
                     inserted = repository.append(event, source=batch.source,
                         environment=self.settings.metrics_environment, received_at=received,
-                        clock_adjusted=adjusted, submitted_hash=fingerprint(payload))
+                        clock_adjusted=adjusted, submitted_hash=fingerprint(payload),
+                        submitted_occurred_at=submitted.occurred_at)
                     if inserted and batch.source == 'website_client':
                         from .demo import demo_link
                         link = demo_link(session, event, guest_identity, self.settings.metrics_environment, received)

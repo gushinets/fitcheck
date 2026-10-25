@@ -80,6 +80,8 @@ class Event:
     properties: dict = field(default_factory=dict)
     event_id: UUID | None = None
     received_at: datetime | None = None
+    submitted_occurred_at: datetime | None = None
+    clock_adjusted: bool = False
 
 
 @dataclass(frozen=True, kw_only=True)

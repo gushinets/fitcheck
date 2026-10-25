@@ -37,7 +37,7 @@ class MetricRepository:
             set_={'available_from':func.greatest(MetricCollection.retention_floor,
                 func.least(MetricCollection.available_from, stmt.excluded.available_from))}))
 
-    def append(self, event, *, source, environment, received_at, clock_adjusted=False, submitted_hash=None):
+    def append(self, event, *, source, environment, received_at, clock_adjusted=False, submitted_hash=None, submitted_occurred_at=None):
         event = MetricEvent.model_validate(event.model_dump())
         validate_event(event, source=source)
         valid_environment(environment)
@@ -49,6 +49,8 @@ class MetricRepository:
         digest = submitted_hash if submitted_hash is not None else fingerprint(payload)
         values = dict(event_id=event.event_id, name=event.name, schema_version=event.schema_version,
             source=source, environment=environment, occurred_at=event.occurred_at,
+            submitted_occurred_at=(submitted_occurred_at if submitted_occurred_at is not None else
+                event.occurred_at if source=='website_client' and not clock_adjusted else None),
             received_at=received_at, subject_kind=event.subject_kind, subject_id=event.subject_id,
             owner_id=event.subject_id if event.subject_kind=='account' else None,
             session_id=event.session_id, operation_id=event.operation_id, domain_key=event.domain_key,

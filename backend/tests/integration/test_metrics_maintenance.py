@@ -123,7 +123,8 @@ def test_fresh_0004_to_0005_preserves_facts_and_supports_anonymous_erasure(engin
         with unit_of_work(engine) as s:
             # Persist a valid existing 0004 account fact without querying 0005's
             # newly introduced guard table through the updated repository.
-            s.add(MetricJournal(event_id=event_id,name='account_registered',schema_version=1,
+            # Use explicit columns; current ORM inserts include newer columns.
+            s.execute(MetricJournal.__table__.insert().values(event_id=event_id,name='account_registered',schema_version=1,
                 source='backend_server',environment='test',occurred_at=now,received_at=now,
                 subject_kind='account',subject_id=owner.id,owner_id=owner.id,properties={},
                 payload_hash='a'*64,clock_adjusted=False))
@@ -237,7 +238,7 @@ def test_fresh_0005_to_0006_preserves_facts_and_conservatively_migrates_coverage
         with engine.begin() as c:
             c.execute(text("INSERT INTO metric_collections(source,environment,started_at,available_from) VALUES ('reconstructed_backend','test',:when,:when)"),{'when':old})
         with unit_of_work(engine) as s:
-            s.add(MetricJournal(event_id=event_id,name='session_started',schema_version=1,source='website_client',
+            s.execute(MetricJournal.__table__.insert().values(event_id=event_id,name='session_started',schema_version=1,source='website_client',
                 environment='test',occurred_at=old,received_at=old,subject_kind='visitor',subject_id=uuid4(),
                 properties={},payload_hash='a'*64,clock_adjusted=False))
         run_migrations(settings)

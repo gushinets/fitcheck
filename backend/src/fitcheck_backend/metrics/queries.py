@@ -50,11 +50,14 @@ def load_snapshot(conn, options, backend_database_environment=None):
             Gap.environment == options.environment, Gap.started_at < options.end,
             or_(Gap.ended_at.is_(None), Gap.ended_at > floor)).order_by(Gap.started_at, Gap.id)):
         data.collection_interruptions.append(dict(row))
-    columns = [getattr(MetricJournal, key) for key in ('event_id', 'received_at', 'name', 'occurred_at', 'source', 'subject_kind',
+    columns = [getattr(MetricJournal, key) for key in ('event_id', 'received_at', 'submitted_occurred_at', 'clock_adjusted', 'name', 'occurred_at', 'source', 'subject_kind',
                'subject_id', 'session_id', 'operation_id', 'domain_key')]
     columns += [MetricJournal.properties[key].label(key) for key in PROPERTY_KEYS]
     statement = select(*columns).where(MetricJournal.environment == options.environment,
-        MetricJournal.occurred_at >= floor, MetricJournal.occurred_at < options.end)
+        or_((MetricJournal.occurred_at >= floor) & (MetricJournal.occurred_at < options.end),
+            (MetricJournal.source == 'website_client') &
+            MetricJournal.name.in_(['analysis_result_viewed', 'feedback_saved']) &
+            (MetricJournal.received_at >= floor) & (MetricJournal.received_at < options.end)))
     for row in bounded(conn, statement):
         values = dict(row)
         props = {key: values.pop(key) for key in PROPERTY_KEYS}
