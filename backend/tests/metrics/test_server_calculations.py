@@ -94,6 +94,29 @@ def test_missing_source_stays_unknown():
     assert not value.available and value.value is None and value.reason
 
 
+@pytest.mark.parametrize('remove_activated', [False, True])
+def test_missing_registration_fact_invalidates_dependent_cohort(remove_activated):
+    data=snapshot();one=account(data);two=account(data)
+    event(data,'analysis_result_viewed',one[1],1,flow='account',resultId=str(one[2]))
+    dims={'population':'account','provenance':'backend_server'}
+    control=row(calculate(options('account'),data),'activation',**dims)
+    assert (control.value,control.numerator,control.denominator)==(50,1,2)
+    lost=one if remove_activated else two
+    data.events=[e for e in data.events if not (e.name=='account_registered' and e.subject_id==lost[0])]
+    data.missing_domain_registration_facts=1
+    rows=calculate(options('account'),data)
+    for name in ('registrations','activation','time_to_value_seconds','onboarding','email_verification'):
+        selected=[r for r in rows if r.metric==name and all(r.dimensions.get(k)==v for k,v in dims.items())]
+        assert selected
+        for value in selected:
+            assert not value.available and value.value is None, value
+            assert 'registration' in value.reason.lower()
+            assert value.coverage['missing_domain_registration_facts']==1
+    activation=row(rows,'activation',**dims)
+    assert activation.coverage['rate_interpretation']!='observed_confirmed_lower_bound'
+    assert row(rows,'activation',population='account',provenance='reconstructed_backend').coverage['missing_domain_registration_facts']==0
+
+
 def test_unknown_view_proof_does_not_publish_false_zero():
     data=snapshot();owner,visitor,result,job=account(data)
     event(data,'analysis_result_viewed',visitor,1,flow='account',resultId=str(uuid4()))

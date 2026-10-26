@@ -161,6 +161,30 @@ it('bounds aggregate admission, shares POST/DELETE visitor budget, and resets th
   expect((await handlers.POST(request({ events: [event()] }, headers))).status).toBe(202)
 })
 
+it.each(['visitor', 'aggregate'] as const)('rotates identity when DELETE exhausts the %s budget', async budget => {
+  let time = Date.parse('2026-10-25T00:00:30Z')
+  const { fetcher } = setup()
+  const handlers = createMetricsHandlers({ secret: 'test-secret', allowedOrigins: [origin], now: () => time,
+    ...(budget === 'aggregate' ? { rateLimits: { aggregate: 30, perVisitor: 60 } } : {}),
+    bridge: { backendUrl: 'https://collector.example', bridgeKey: 'secret', environment: 'development', runtime: 'production' }, fetchImpl: fetcher })
+  const visitor = resolveVisitor(undefined, 'test-secret', time)!
+  const headers = { cookie: `${VISITOR_COOKIE}=${visitor.cookieValue}` }
+  for (let i = 0; i < 30; i++) expect((await handlers.POST(request({ events: [event()] }, headers))).status).toBe(202)
+  const deleted = await handlers.DELETE(request({}, headers, 'DELETE'))
+  expect(deleted.status).toBe(429)
+  expect(deleted.headers.get('Retry-After')).toBe('30')
+  const rotatedCookie = deleted.cookies.get(VISITOR_COOKIE)?.value
+  expect(rotatedCookie).toBeTruthy()
+  const rotated = resolveVisitor(rotatedCookie, 'test-secret', time)!
+  expect(rotated.isNew).toBe(false)
+  expect(rotated.visitorId).not.toBe(visitor.visitorId)
+  expect(deleted.headers.get('set-cookie')).toMatch(/HttpOnly.*Secure|Secure.*HttpOnly/)
+  expect(fetcher).toHaveBeenCalledTimes(30)
+  time += 30000
+  expect((await handlers.POST(request({ events: [event()] }, { cookie: `${VISITOR_COOKIE}=${rotatedCookie}` }))).status).toBe(202)
+  expect(JSON.parse(String(fetcher.mock.calls[30][1]?.body)).events[0].subjectId).toBe(rotated.visitorId)
+})
+
 it.each([0, -1, 1.5, NaN, 100001])('rejects invalid configured limit %s', value => {
   expect(() => createMetricsHandlers({ allowedOrigins: [origin], bridge: {}, rateLimits: { aggregate: value, perVisitor: 30 } })).toThrow()
 })

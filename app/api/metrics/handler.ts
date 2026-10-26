@@ -113,8 +113,15 @@ export function createMetricsHandlers(config: HandlerConfig) {
       const parsed = await body(request); if (parsed.error) return parsed.error
       if (!empty.safeParse(parsed.value).success) return response({ error: 'invalid_request' }, 400)
       const previous = resolveVisitor(incomingCookie(request), config.secret, now())
-      if (previous) { const limited = rateLimit(previous); if (limited) return limited }
       const next = resolveVisitor(undefined, config.secret, now())
+      if (previous) {
+        const limited = rateLimit(previous)
+        if (limited) {
+          // Local erasure ends the identity even when remote erasure is throttled.
+          if (next) cookie(limited, next)
+          return limited
+        }
+      }
       // Remote deletion delivery cannot prevent issuing the rotated cookie.
       const delivered = !next ? false : previous && !previous.isNew ? await deleteVisitorMetrics(previous.visitorId, config.bridge, config.fetchImpl) : true
       const result = response({ delivered }, 202)

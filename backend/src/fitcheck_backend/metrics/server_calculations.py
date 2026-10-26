@@ -163,8 +163,9 @@ def account_metrics(out,registered,activity,views,unknown):
         registrations={p:t for (source,p),t in registered.items() if source==provenance}
         dims={'population':'account','provenance':provenance}
         missing = data.missing_domain_registration_facts if provenance=='backend_server' else 0
+        registration_reason='Current domain registrations lack committed observation facts' if missing else None
         add(out,'registrations',dims=dims,sources=(provenance,),
-            reason='Current domain registrations lack committed observation facts' if missing else None,
+            reason=registration_reason,
             value=sum(opt.start<=t<opt.end for t in registrations.values()),
             coverage={'missing_domain_registration_facts':missing,'basis':'distinct_account_registered_owner_facts'})
         mature={p:t for p,t in registrations.items() if opt.start<=t<opt.end and t+WEEK<=opt.end}
@@ -173,6 +174,7 @@ def account_metrics(out,registered,activity,views,unknown):
                    if (times:=[at for at in views_by_owner[p] if t<=at<t+WEEK])}
         reason=('Incomplete backfill coverage through the requested report end' if provenance=='reconstructed_backend' and
                 (data.backfill_complete_through is None or data.backfill_complete_through<opt.end) else data.backend_scope_reason)
+        reason=registration_reason or reason
         if unknown and not activated:reason=reason or 'Observed result views lack complete identity or domain proof'
         if not cohort:reason=reason or ('No confirmed identity coverage for mature registrations' if mature else 'No mature registration cohort')
         coverage={**TIME_COVERAGE,'clock_corrected_views':sum(
@@ -182,7 +184,9 @@ def account_metrics(out,registered,activity,views,unknown):
             'excluded_unlinked_registrations':len(mature)-len(cohort),
             'immature_registrations':sum(opt.start<=t<opt.end<t+WEEK for t in registrations.values()),
             'unknown_account_views':unknown,'registration_source':provenance,
-            'coverage_quality':'limited_verified_subset','rate_interpretation':'observed_confirmed_lower_bound',
+            'missing_domain_registration_facts':missing,
+            'coverage_quality':'incomplete_registration_cohort' if missing else 'limited_verified_subset',
+            'rate_interpretation':'conditional_on_confirmed_registration_cohort',
             'outcome_sources':['website_client','confirmed_identity','current_domain_result_job'],
             'observation_limit':'Observed verified subset; missing links and delivery are not inferred'}
         sources=(provenance,'website_client')
@@ -206,10 +210,11 @@ def account_metrics(out,registered,activity,views,unknown):
             success=sum(any(t<=e.occurred_at<t+WEEK for e in outcomes[p]) for p,t in mature.items())
             add(out,metric,dims=dims,sources=(provenance,),retention_floor=outcome_floor,
                 backfill_required='reconstructed_backend' in required_sources,
-                reason='No mature registration cohort' if not mature else None,
+                reason=registration_reason or ('No mature registration cohort' if not mature else None),
                 value=ratio(success,len(mature)),numerator=success,denominator=len(mature),
                 coverage={'basis':'exact_committed_backend_action_not_return_activity','window_days':7,
-                          'registration_source':provenance,'outcome_sources':sorted(outcome_sources)})
+                          'registration_source':provenance,'outcome_sources':sorted(outcome_sources),
+                          'missing_domain_registration_facts':missing})
         selected=product_activity(out,[e for e in activity if provenance=='backend_server' or e.subject_id in registrations], 'account',provenance,sources,registrations,views)
         if provenance=='backend_server':active=selected
     deletion_count=sum(e.name=='account_deleted' and e.source=='backend_server' and opt.start<=e.occurred_at<opt.end for e in data.events)

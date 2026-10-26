@@ -118,6 +118,59 @@ def test_missing_identity_does_not_claim_zero_activation(engine,storage_factory)
     assert row.coverage['excluded_unlinked_registrations']==1
 
 
+@pytest.mark.parametrize('remove_activated', [False, True])
+def test_missing_registration_cohort_is_unavailable_in_cli_json_and_csv(engine,storage_factory,monkeypatch,tmp_path,remove_activated):
+    import csv
+    import json
+    from sqlalchemy import delete, select
+    from fitcheck_backend.metrics.__main__ import main
+    from fitcheck_backend.storage.metrics import MetricJournal
+
+    with unit_of_work(engine) as s:
+        first=seed_account(s,storage_factory,view=True)
+        second=seed_account(s,storage_factory,view=False,correction=None)
+    control=report(engine)
+    dims={'population':'account','provenance':'backend_server'}
+    activation=metric(control,'activation',**dims)
+    assert (activation.value,activation.numerator,activation.denominator)==(50,1,2)
+    lost=first if remove_activated else second
+    with unit_of_work(engine) as s:
+        fact=s.scalar(select(MetricJournal).where(MetricJournal.name=='account_registered',MetricJournal.subject_id==lost[0].id))
+        saved=MetricEvent(eventId=fact.event_id,name=fact.name,subjectKind='account',subjectId=fact.subject_id,
+            occurredAt=fact.occurred_at,properties=fact.properties)
+        s.execute(delete(MetricJournal).where(MetricJournal.event_id==fact.event_id))
+
+    monkeypatch.setenv('FITCHECK_DATABASE_URL',engine.url.render_as_string(hide_password=False))
+    monkeypatch.setenv('FITCHECK_METRICS_DATABASE_ENVIRONMENT','test')
+    args=['report','--start',START.isoformat(),'--end',END.isoformat(),'--environment','test','--population','account']
+    for fmt in ('json','csv'):
+        assert main(args+['--format',fmt,'--output',str(tmp_path/f'report.{fmt}')])==0
+    exported=json.loads((tmp_path/'report.json').read_text())['rows']
+    with (tmp_path/'report.csv').open() as stream:
+        csv_rows=list(csv.DictReader(stream))
+    names={'registrations','activation','time_to_value_seconds','onboarding','email_verification'}
+    selected=[r for r in exported if r['metric'] in names and all(r['dimensions'].get(k)==v for k,v in dims.items())]
+    assert len(selected)==6
+    for value in selected:
+        assert value['available'] is False and value['value'] is None
+        assert 'registration' in value['reason'].lower()
+        assert value['coverage']['missing_domain_registration_facts']==1
+        csv_value=next(r for r in csv_rows if r['metric']==value['metric'] and json.loads(r['dimensions'])==value['dimensions'])
+        assert csv_value['available']=='False' and csv_value['value']==''
+        assert csv_value['reason']==value['reason']
+        assert json.loads(csv_value['coverage'])==value['coverage']
+    # Removing an observation cannot alter successful domain jobs or saved feedback.
+    after=report(engine)
+    assert metric(after,'feedback_coverage',population='account')==metric(control,'feedback_coverage',population='account')
+    assert metric(after,'successful_operations',population='account',operation='analysis',provenance='deployment_database_scope').value==2
+    # Restoring the fact recovers the original cohort and first-view TTV.
+    with unit_of_work(engine) as s:
+        MetricRepository(s).append(saved,source='backend_server',environment='test',received_at=saved.occurred_at)
+    restored=report(engine)
+    assert metric(restored,'activation',**dims)==activation
+    assert metric(restored,'time_to_value_seconds',**dims,percentile='p50').value==86400
+
+
 def test_unknown_domain_scope_never_confirms_account_result(engine,storage_factory):
     with unit_of_work(engine) as s:seed_account(s,storage_factory)
     result=MetricReportService(engine,clock=lambda:END).build(options())

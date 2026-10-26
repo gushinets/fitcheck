@@ -516,7 +516,7 @@ as a zero. Context before period start is bounded to 180 days.
 
 | Metric | Implemented basis |
 | --- | --- |
-| Activation | 100 × subjects activated within seven days of registration / registrations whose full seven-day window ends by report end. Website activation is a viewed analysis result; backend activation is successful analysis completion. |
+| Activation | Current server-backed account report: 100 × accounts with a verified result view within seven days of registration / mature registrations with confirmed identity coverage. Job completion is a separate technical metric. The percentage is conditional on that confirmed cohort, not a lower bound for all registrations. |
 | Onboarding / email verification | Same mature registration denominator, with profile save / verified email within seven days. Email verification is backend only. |
 | Time to value | Seconds registration → first qualifying activation, p50/p95 among the activated mature cohort. |
 | Funnel | Ordered first page view → local registration → profile save → analysis request → result view within seven days; each stage / mature first-entry cohort × 100. |
@@ -534,7 +534,13 @@ as a zero. Context before period start is bounded to 180 days.
 Ratios with empty denominators and empty percentile samples are null. Percentiles
 use nearest rank (`ceil(n × percentile/100)`). Read coverage alongside every value:
 collection start, retention floor and incomplete delivery can make a metric
-unavailable. Observed and reconstructed backend provenance stays separate;
+unavailable. If current domain registrations lack committed registration facts,
+live account activation, time to value, onboarding and email verification are
+unavailable with a registration-specific reason and
+`coverage.missing_domain_registration_facts`; they cannot publish a percentage
+from the remaining observed registrations. Restoring the missing facts restores
+the cohort. Reconstructed registration provenance is checked separately.
+Observed and reconstructed backend provenance stays separate;
 reconstructed history cannot establish viewed-result retention. Website operation
 starts and missing terminal facts are not authoritative: pending state and creation
 cohort completeness are unavailable even if all observed calls have terminal facts.
