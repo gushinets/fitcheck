@@ -8,6 +8,163 @@ permissions:
   contents: read
 
 jobs:
+  operations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build isolated stack, check monitoring and verify backup restoration
+        run: python3 ops/smoke.py
+
+  website-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: fitcheck_test
+          POSTGRES_PASSWORD: fitcheck_test
+        ports:
+          - 55464:5432
+        options: >-
+          --health-cmd "pg_isready -U fitcheck_test -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+        with:
+          version: "0.12.7"
+          python-version: "3.12"
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --locked --project backend
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec next build --webpack
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: website-e2e-failure
+          path: test-results/
+
+  worker-windows:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    env:
+      FITCHECK_TEST_DATABASE_URL: postgresql+psycopg://postgres:root@127.0.0.1:5432/fitcheck_worker_test
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.14"]
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.7"
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install backend dependencies
+        run: uv sync --locked
+
+      - name: Check native Windows health and graceful shutdown
+        run: uv run pytest tests/worker tests/jobs -q --junitxml=reports/worker-windows-unit.xml
+
+      - name: Start disposable runner PostgreSQL
+        shell: pwsh
+        run: |
+          $service = Get-Service 'postgresql*' | Select-Object -First 1
+          if (-not $service) { throw 'Runner PostgreSQL service is missing' }
+          Set-Service $service.Name -StartupType Manual
+          Start-Service $service.Name
+          $service.WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
+          $env:PGPASSWORD = 'root'
+          & "$env:PGBIN\psql.exe" -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE fitcheck_worker_test'
+          if ($LASTEXITCODE -ne 0) { throw 'Test database creation failed' }
+
+      - name: Check Windows CLI probes, shutdown and recovery with PostgreSQL
+        run: uv run pytest tests/integration/test_worker_cli.py tests/integration/test_worker_recovery.py tests/integration/test_job_queue.py tests/integration/test_job_publication.py -m integration -q --junitxml=reports/worker-windows-integration.xml
+
+      - name: Upload Windows test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-windows-python-${{ matrix.python-version }}
+          path: |
+            backend/reports/*.xml
+            backend/reports/worker-cli/**/*.log
+
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: fitcheck_test
+          POSTGRES_USER: fitcheck_test
+          POSTGRES_PASSWORD: fitcheck_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fitcheck_test -d fitcheck_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      FITCHECK_TEST_DATABASE_URL: postgresql+psycopg://fitcheck_test:fitcheck_test@127.0.0.1:5432/fitcheck_test
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.7"
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install backend dependencies
+        run: uv sync --locked
+
+      - name: Run backend unit and wheel packaging tests
+        run: uv run pytest -m 'not integration' -q
+
+      - name: Run PostgreSQL integration tests
+        run: uv run pytest -m integration -q
+
+      - name: Check database schema drift
+        env:
+          FITCHECK_DATABASE_URL: postgresql+psycopg://fitcheck_test:fitcheck_test@127.0.0.1:5432/fitcheck_test
+        run: uv run python -m fitcheck_backend.storage.migrate check
+
+      - name: Check OpenAPI drift
+        run: uv run python scripts/export_openapi.py --check
+
+      - name: Build separate worker image
+        run: docker build -f Dockerfile.worker -t fitcheck-worker-ci .
+
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -30,6 +187,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check backend TypeScript drift
+        run: pnpm backend:types:check
+
       - name: Run tests
         run: pnpm test
 
@@ -41,6 +201,3 @@ jobs:
 
       - name: Build web application
         run: pnpm exec next build --webpack
-
-      - name: Build Chrome Extension
-        run: pnpm build:extension

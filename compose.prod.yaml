@@ -1,0 +1,28 @@
+# Production uses immutable pre-built images and localhost ingress only.
+# Supply a release tag through FITCHECK_RELEASE; see ops/RUNBOOK.md.
+services:
+  postgres:
+    logging: &bounded-logs
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+  api:
+    init: true
+    logging: *bounded-logs
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+  worker:
+    init: true
+    logging: *bounded-logs
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+  website:
+    init: true
+    logging: *bounded-logs
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+  backup:
+    logging: *bounded-logs
+  prometheus:
+    logging: *bounded-logs

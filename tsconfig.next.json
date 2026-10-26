@@ -13,8 +13,6 @@
   ],
   "exclude": [
     "node_modules",
-    "entrypoints",
-    "wxt.config.ts",
     "**/*.test.ts",
     "**/*.test.tsx"
   ]

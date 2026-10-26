@@ -1,0 +1,332 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createMetricsClient, sendBrowserMetrics } from './client'
+afterEach(() => vi.useRealTimers())
+const uuid = () => crypto.randomUUID()
+describe('browser telemetry', () => {
+  it.each(['default', 'injected'] as const)('preserves the receiver for all %s browser timers', async mode => {
+    // jsdom and fake timers accept arbitrary receivers; Chrome's native timers do not.
+    const injectedTimers = { setTimeout, clearTimeout, setInterval, clearInterval }
+    const receiver = mode === 'default' ? globalThis : injectedTimers
+    const timerNames = ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] as const
+    const spies = timerNames.map(name => {
+      const nativeTimer = receiver[name]
+      return vi.spyOn(receiver, name).mockImplementation(function (this: unknown, ...args: unknown[]) {
+        if (this !== receiver) throw new TypeError(`Illegal invocation: ${name}`)
+        return Reflect.apply(nativeTimer, globalThis, args)
+      })
+    })
+    let client: ReturnType<typeof createMetricsClient> | undefined
+    try {
+      const send = vi.fn().mockResolvedValue(true)
+      client = createMetricsClient({ send, eventId: uuid, timers: mode === 'injected' ? injectedTimers : undefined })
+      expect(client.track('page_viewed', {})).toBe(true)
+      await client.flush()
+      expect(client.stats().delivered).toBe(2)
+      expect(send).toHaveBeenCalledOnce()
+      client.dispose()
+      for (const spy of spies) expect(spy).toHaveBeenCalled()
+    } finally {
+      for (const spy of spies) spy.mockRestore()
+      client?.dispose()
+    }
+  })
+  it('test_queue_bound_100_batch_20_retry_2_same_event_ids', async () => {
+    vi.useFakeTimers()
+    const send = vi.fn().mockResolvedValue(false)
+    const client = createMetricsClient({ send, eventId: uuid })
+    for (let i = 0; i < 120; i++) client.track('page_viewed', {})
+    expect(client.stats().queued).toBe(100)
+    await client.flush()
+    expect(send).toHaveBeenCalledTimes(15)
+    expect(send.mock.calls.every(([events]) => events.length === 20 && new TextEncoder().encode(JSON.stringify({ events })).length <= 32768)).toBe(true)
+    expect(send.mock.calls[0][0]).toEqual(send.mock.calls[1][0])
+    expect(send.mock.calls[1][0]).toEqual(send.mock.calls[2][0])
+    expect(client.stats().failed).toBe(100)
+    client.dispose()
+  })
+  it('test_session_rotates_after_30_minutes', async () => {
+    vi.useFakeTimers()
+    let time = 1000
+    const send = vi.fn().mockResolvedValue(true)
+    const client = createMetricsClient({ send, now: () => time, eventId: uuid })
+    client.track('page_viewed', {})
+    await client.flush()
+    const first = send.mock.calls[0][0][0].sessionId
+    time += 30 * 60 * 1000
+    client.track('history_viewed', {})
+    await client.flush()
+    expect(send.mock.calls[1][0][0].sessionId).not.toBe(first)
+    expect(send.mock.calls[1][0][0].name).toBe('session_started')
+    client.dispose()
+  })
+  it('test_active_pulse_caps_30_seconds_and_stops_idle', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1000)
+    const send = vi.fn().mockResolvedValue(true)
+    const client = createMetricsClient({ send, eventId: uuid, document })
+    client.track('page_viewed', {})
+    await client.flush()
+    await vi.advanceTimersByTimeAsync(30000)
+    await client.flush()
+    const pulses = () => send.mock.calls.flatMap(([events]) => events).filter(e => e.name === 'visible_activity')
+    expect(pulses()).toHaveLength(1)
+    expect(pulses()[0].properties.activeMs).toBe(30000)
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(pulses()).toHaveLength(1)
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
+    document.dispatchEvent(new Event('visibilitychange'))
+    document.dispatchEvent(new Event('pointerdown'))
+    await vi.advanceTimersByTimeAsync(30000)
+    expect(pulses()).toHaveLength(1)
+    client.dispose()
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    document.dispatchEvent(new Event('pointerdown'))
+    await vi.advanceTimersByTimeAsync(30000)
+    expect(pulses()).toHaveLength(1)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+  it('settles in-flight POST before cookie deletion and suppresses its retries', async () => {
+    vi.useFakeTimers()
+    let settle!: (value: boolean) => void
+    const send = vi.fn(() => new Promise<boolean>(resolve => { settle = resolve }))
+    const remove = vi.fn().mockResolvedValue(false)
+    const client = createMetricsClient({ send, deleteVisitor: remove, eventId: uuid })
+    client.track('page_viewed', {})
+    const flush = client.flush()
+    const deletion = client.deleteVisitor()
+    await Promise.resolve()
+    expect(remove).not.toHaveBeenCalled()
+    settle(false)
+    await flush
+    expect(await deletion).toBe(false)
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(remove).toHaveBeenCalledTimes(1)
+    expect(client.stats().queued).toBe(0)
+    expect(client.track('page_viewed', {}, { subjectId: uuid() } as never)).toBe(false)
+    client.dispose()
+  })
+  it('bounds deletion waiting when the in-flight transport hangs', async () => {
+    vi.useFakeTimers()
+    const send = vi.fn<(events: unknown, signal?: AbortSignal) => Promise<boolean>>(() => new Promise<boolean>(() => {}))
+    const remove = vi.fn().mockResolvedValue(false)
+    const client = createMetricsClient({ send, deleteVisitor: remove, eventId: uuid })
+    client.track('page_viewed', {})
+    void client.flush()
+    const result = client.deleteVisitor()
+    await vi.advanceTimersByTimeAsync(2500)
+    expect(await result).toBe(false)
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0][1]!.aborted).toBe(true)
+    expect(remove).toHaveBeenCalledTimes(1)
+    client.dispose()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+  it('does not resume deletion work or timers after disposal during an in-flight POST', async () => {
+    vi.useFakeTimers()
+    const send = vi.fn(() => new Promise<boolean>(() => {}))
+    const remove = vi.fn().mockResolvedValue(true)
+    const client = createMetricsClient({ send, deleteVisitor: remove, eventId: uuid })
+    client.track('page_viewed', {})
+    const flush = client.flush()
+    await Promise.resolve()
+    expect(send).toHaveBeenCalledTimes(1)
+    const deletion = client.deleteVisitor()
+    client.dispose()
+    await flush
+    expect(await deletion).toBe(false)
+    expect(remove).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+    expect(await client.deleteVisitor()).toBe(false)
+    expect(remove).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+  it('drops invalid properties and clears pending identity on deletion despite outage', async () => {
+    vi.useFakeTimers()
+    const send = vi.fn().mockResolvedValue(true)
+    const client = createMetricsClient({ send, eventId: uuid, deleteVisitor: vi.fn().mockRejectedValue(new Error('outage')) })
+    expect(client.track('page_viewed', { email: 'private@example.com' } as never)).toBe(false)
+    client.track('page_viewed', {})
+    expect(await client.deleteVisitor()).toBe(false)
+    await client.flush()
+    expect(send).not.toHaveBeenCalled()
+    client.dispose()
+  })
+})
+
+it('reports queue loss and exhausted retries without event data', async () => {
+  vi.useFakeTimers()
+  const log = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const client = createMetricsClient({ send: vi.fn().mockResolvedValue(false), eventId: uuid })
+  try {
+    for (let i = 0; i < 120; i++) client.track('page_viewed', {})
+    await client.flush()
+    expect(log).toHaveBeenCalledWith('fitcheck_metrics_client_loss', { failed: 100, dropped: 21 })
+    expect(JSON.stringify(log.mock.calls)).not.toContain('eventId')
+  } finally { client.dispose(); log.mockRestore() }
+})
+it('does not let diagnostic logging break delivery', async () => {
+  const log = vi.spyOn(console, 'warn').mockImplementation(() => { throw new Error('diagnostic unavailable') })
+  const client = createMetricsClient({ send: vi.fn().mockResolvedValue(false), eventId: uuid })
+  try {
+    client.track('page_viewed', {})
+    await expect(client.flush()).resolves.toBeUndefined()
+    expect(client.stats().failed).toBe(2)
+  } finally { client.dispose(); log.mockRestore() }
+})
+
+describe('rate-limited delivery', () => {
+  it('waits for the permitted time and delivers the original batch even when flush is called again', async () => {
+    vi.useFakeTimers()
+    const batches: unknown[] = []
+    const client = createMetricsClient({ send: async events => {
+      batches.push(structuredClone(events))
+      return batches.length === 1 ? { delivered: false, retryAfterMs: 60000 } : true
+    } })
+    try {
+      client.track('page_viewed', {})
+      const flushed = client.flush()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(batches).toHaveLength(1)
+      expect(client.stats().delivered).toBe(0)
+      void client.flush()
+      await vi.advanceTimersByTimeAsync(59999)
+      expect(batches).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(1)
+      await flushed
+      expect(batches[1]).toEqual(batches[0])
+      expect(client.stats().failed).toBe(0)
+    } finally { client.dispose() }
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it.each(['dispose', 'deleteVisitor', 'resetIdentity'] as const)('cancels the pending retry on %s', async action => {
+    vi.useFakeTimers()
+    let attempts = 0
+    const client = createMetricsClient({ send: async () => {
+      attempts++
+      return { delivered: false, retryAfterMs: 60000 }
+    }, deleteVisitor: async () => true })
+    client.track('page_viewed', {})
+    const flushed = client.flush()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(client.stats().delivered).toBe(0)
+    expect(client.stats().queued).toBeGreaterThan(0)
+    await client[action]()
+    await flushed
+    await vi.advanceTimersByTimeAsync(61000)
+    expect(attempts).toBe(1)
+    expect(client.stats().queued).toBe(0)
+    client.dispose()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('bounds waiting and keeps the queue bounded including the waiting batch', async () => {
+    vi.useFakeTimers()
+    let attempts = 0
+    const client = createMetricsClient({ send: async () => {
+      attempts++
+      return { delivered: false, retryAfterMs: 60000 }
+    } })
+    try {
+      for (let i = 0; i < 120; i++) client.track('page_viewed', {})
+      const flushed = client.flush()
+      await vi.advanceTimersByTimeAsync(0)
+      for (let i = 0; i < 120; i++) client.track('page_viewed', {})
+      expect(client.stats().queued).toBeLessThanOrEqual(100)
+      expect(client.stats().dropped).toBeGreaterThan(21)
+      // Dispose cancels the whole drain, including the waiting batch.
+      client.dispose()
+      await flushed
+      expect(attempts).toBe(1)
+    } finally { client.dispose() }
+  })
+
+  it('fails observably without retrying earlier than an oversized Retry-After', async () => {
+    let attempts = 0
+    const client = createMetricsClient({ send: async () => {
+      attempts++
+      return { delivered: false, retryAfterMs: 180000 }
+    } })
+    try {
+      client.track('page_viewed', {})
+      await client.flush()
+      expect(attempts).toBe(1)
+      expect(client.stats().delivered).toBe(0)
+      expect(client.stats().failed).toBe(2)
+    } finally { client.dispose() }
+  })
+
+  it('stops after three rate-limited attempts within the two-minute lifetime', async () => {
+    vi.useFakeTimers()
+    const observations = document.implementation.createHTMLDocument()
+    const attempts: number[] = []
+    const client = createMetricsClient({ document: observations, send: async () => {
+      attempts.push(Date.now())
+      return { delivered: false, retryAfterMs: 60000 }
+    } })
+    try {
+      client.track('page_viewed', {})
+      const flushed = client.flush()
+      await vi.advanceTimersByTimeAsync(120000)
+      await flushed
+      expect(attempts).toHaveLength(3)
+      expect(attempts[1] - attempts[0]).toBe(60000)
+      expect(attempts[2] - attempts[0]).toBe(120000)
+      expect(client.stats()).toMatchObject({ failed: 1, delivered: 0, queued: 0 })
+    } finally { client.dispose() }
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('keeps the cooldown for the next batch after the previous batch exhausts retries', async () => {
+    vi.useFakeTimers()
+    const attempts: number[] = []
+    const client = createMetricsClient({ send: async () => {
+      attempts.push(Date.now())
+      return { delivered: false, retryAfterMs: 5000 }
+    } })
+    try {
+      for (let i = 0; i < 21; i++) client.track('page_viewed', {})
+      const flushed = client.flush()
+      await vi.advanceTimersByTimeAsync(10000)
+      expect(attempts).toHaveLength(3)
+      await vi.advanceTimersByTimeAsync(4999)
+      expect(attempts).toHaveLength(3)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(attempts).toHaveLength(4)
+      client.dispose()
+      await flushed
+    } finally { client.dispose() }
+  })
+
+  it('expires a batch if the browser resumes its retry timer after the lifetime', async () => {
+    vi.useFakeTimers()
+    const start = Date.now()
+    let attempts = 0
+    const client = createMetricsClient({ document: document.implementation.createHTMLDocument(), send: async () => {
+      attempts++
+      return attempts === 1 ? { delivered: false, retryAfterMs: 60000 } : true
+    } })
+    try {
+      client.track('page_viewed', {})
+      const flushed = client.flush()
+      await vi.advanceTimersByTimeAsync(0)
+      // Timers are paused while the wall clock advances during browser suspension.
+      vi.setSystemTime(start + 600000)
+      await vi.advanceTimersByTimeAsync(60000)
+      await flushed
+      expect(attempts).toBe(1)
+      expect(client.stats()).toMatchObject({ delivered: 0, failed: 1, queued: 0 })
+    } finally { client.dispose() }
+  })
+
+  it.each([
+    ['45', 45000], [null, 60000], ['bad', 60000], ['-1', 60000],
+    ['Thu, 01 Jan 2026 00:00:45 GMT', 45000],
+  ])('preserves the safe delay for Retry-After %s', async (header, expected) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+    vi.stubGlobal('fetch', async () => new Response(null, { status: 429, headers: header ? { 'Retry-After': header } : {} }))
+    try { expect(await sendBrowserMetrics([])).toEqual({ delivered: false, retryAfterMs: expected }) }
+    finally { vi.unstubAllGlobals() }
+  })
+})

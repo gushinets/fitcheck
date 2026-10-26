@@ -1,0 +1,15 @@
+# Copy to a secret-managed file; replace URL with an actual notification gateway.
+# This file is a template and is not started by compose.yaml.
+global:
+  resolve_timeout: 5m
+route:
+  receiver: operations
+  group_by: [alertname, job]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+receivers:
+  - name: operations
+    webhook_configs:
+      - url: https://REPLACE_WITH_NOTIFICATION_GATEWAY.example.com/alerts
+        send_resolved: true

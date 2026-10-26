@@ -1,74 +1,135 @@
 # FitCheck
 
-FitCheck is a Manifest V3 Chrome Extension that reads the active Upwork job, compares it with a locally stored freelancer profile, and returns an OpenRouter-powered Fit Score with strengths, risks, and a GO or NO-GO verdict.
+FitCheck is a bilingual service for checking whether a freelance task fits a freelancer profile. A user can load any public task URL or paste its text, review the extracted details, and send the task to an LLM for a Fit Score, strengths, risks, and a GO / NO-GO recommendation. The flow is designed for repeated use throughout the day while browsing new tasks.
 
-The extension supports Upwork only. The UI and generated analysis use Russian when Chrome's system UI locale starts with `ru`; every other locale uses English.
+The website supports English and Russian with a manual RU / EN switch. Accounts, profiles, drafts, analysis history and corrections are stored in the separate FastAPI/PostgreSQL backend and synchronize between devices. The website relays cookie-authenticated requests through `/api/backend/v1/*`. Analysis runs in a durable worker job. Existing IndexedDB accounts can be explicitly imported from the profile page after registering and verifying a server account.
 
 ## Requirements
 
 - Node.js 22 or newer
 - pnpm 10
-- Google Chrome
-- An OpenRouter API key
+- The FitCheck API, PostgreSQL and worker; see [backend setup](backend/README.md)
+- SMTP for account verification; the worker owns provider credentials
 
-## Install
+Docker Compose, backups, monitoring, retention and release/rollback procedures:
+[operations runbook](ops/RUNBOOK.md). Local checks: [verification record](ops/VERIFICATION.md).
+
+## Install and configure
 
 ```bash
 pnpm install
+cp .env.example .env.local
 ```
 
-Copy `.env.example` to `.env.local` and set:
+Set the backend connection in `.env.local`:
 
 ```dotenv
-OPENROUTER_API_KEY=your_server_side_key
-OPENROUTER_MODEL=openrouter/free
-ALLOWED_ORIGINS=chrome-extension://YOUR_EXTENSION_ID,http://localhost:3000
-WXT_PUBLIC_API_BASE_URL=http://localhost:3000
+FITCHECK_BACKEND_URL=http://127.0.0.1:8000
+FITCHECK_WEBSITE_ORIGIN=http://localhost:3000
 ```
 
-`OPENROUTER_API_KEY` is used only by the Next.js server. Never put it in a `WXT_PUBLIC_*` variable or extension source. The default `openrouter/free` router selects a currently available free model that supports the request.
+Allow that exact website origin in backend `FITCHECK_ALLOWED_ORIGINS`, enable auth/jobs/guests, and configure SMTP with `FITCHECK_AUTH_WEB_BASE_URL`. The website needs no provider key. See [ANY-653 rollout and E2E instructions](docs/deployments/2026-10-19-any-653-website-integration.md).
 
-## Run locally
-
-Start the Next.js backend and browser preview:
+## Run the website
 
 ```bash
 pnpm dev
 ```
 
-In another terminal, start the extension development build:
+Open [http://localhost:3000](http://localhost:3000), try a guest demo or create an account, verify your email, complete your profile and add a task.
 
-```bash
-pnpm dev:extension
-```
+URL import is best-effort. FitCheck accepts arbitrary public HTTP(S) pages, blocks private/internal network addresses, limits redirects and response size, and extracts readable task content. Pages that require authentication, execute content only in the browser, or block automated requests may not load; paste the task text manually in that case.
 
-WXT can launch a development browser automatically. To load a production-style unpacked build manually:
-
-1. Run `pnpm build:extension`.
-2. Open `chrome://extensions`.
-3. Enable Developer mode.
-4. Click **Load unpacked** and select `.output/chrome-mv3`.
-5. Copy the generated extension ID.
-6. Replace `YOUR_EXTENSION_ID` in `ALLOWED_ORIGINS` and restart the Next.js server.
-7. Open an Upwork job page and click FitCheck.
-
-The extension stores the freelancer profile, up to 50 analyses, and score corrections in `chrome.storage.local`. The backend receives only the current analysis request and does not persist it. The latest 10 local analyses may be included as calibration memory.
-
-## Verify and package
+## Verify
 
 ```bash
 pnpm test
 pnpm typecheck
 pnpm lint
 pnpm build:web
-pnpm build:extension
-pnpm zip:extension
 ```
 
-The unpacked extension is written to `.output/chrome-mv3`. WXT writes the zip archive under `.output`.
+Skill proficiency is saved per profile skill as Primary, Confident, or Basic.
+Older profiles keep an unspecified level until the user chooses one. Analysis
+uses these levels when assessing skills, overall fit, strengths, and risks.
 
-## Backend deployment
+The optional live proficiency evaluation compares three otherwise identical n8n
+profiles against the real model. It requires a configured server key and consumes
+API credits; it is skipped during ordinary test runs:
 
-Deploy the Next.js application to a server that supports route handlers, set `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, and the production `ALLOWED_ORIGINS`, then build the extension with `WXT_PUBLIC_API_BASE_URL` pointing at that HTTPS deployment.
+```bash
+FITCHECK_RUN_LIVE_EVAL=1 node --env-file=.env.local node_modules/vitest/vitest.mjs run lib/analysis/skill-levels.live.test.ts
+```
 
-Origin checking limits accidental browser access but is not user authentication. The MVP does not include accounts, subscriptions, per-user quotas, or protection against determined abuse of a public endpoint.
+## Deployment
+
+Deploy the Next.js application to a runtime that supports route handlers. Configure
+`FITCHECK_BACKEND_URL` and the exact `FITCHECK_WEBSITE_ORIGIN` server-side. Use HTTPS
+in production so the backend's Secure HttpOnly cookies can be set on the website.
+Deploy compatible API/worker contracts before the website. The old public LLM and
+extraction routes are retired (410); all product calls require backend policy checks.
+Follow the [integration rollout record](docs/deployments/2026-10-19-any-653-website-integration.md).
+
+
+Optional website telemetry uses `METRICS_BACKEND_URL` (a fixed HTTPS backend origin), `METRICS_BRIDGE_KEY` (matching backend ingestion credentials), `METRICS_COOKIE_SECRET` (a separate high-entropy signing secret), and explicit `METRICS_ENVIRONMENT=development|production|test`. Configure these server-side only, alongside the exact website origin in `ALLOWED_ORIGINS`; never prefix these secrets with `NEXT_PUBLIC_`. The deployed development services still use production builds: keep their telemetry partition `development`. Backend collection must be enabled separately with the matching environment and key. Missing cookie signing configuration disables website collection safely.
+
+The bridge uses a 1500 ms deadline, refuses redirects, and returns safe delivery results on outages. Local HTTP requires `METRICS_ALLOW_LOCAL_HTTP=true`, a non-production runtime, and a loopback backend origin. The visitor cookie is HttpOnly, SameSite=Lax, Secure in production builds, and expires 180 days after its original issuance without sliding renewal. Browser observations stay in memory (100 events, batches of 20 and 32 KiB, two retries); the deletion boundary rotates visitor/session identity and requests deletion of that visitor’s telemetry even when remote delivery fails. These boundaries remain separate from authenticated account identity.
+
+Telemetry setup, formulas, operator reports, retention, and limitations are documented
+in [backend metrics operations](backend/README.md#telemetry-and-operator-reports).
+The [metrics development rollout record](docs/deployments/2026-10-14-fitcheck-metrics.md)
+preserves the previous deployment evidence. The separate
+[OpenAI rollout record](docs/deployments/2026-10-14-fitcheck-openai.md) tracks the
+matched website/API/worker transition and its pending external checks. Local
+implementation and mock tests do not establish live account/model access; paid
+tests require a concrete approved spend cap.
+
+`METRICS_CAMPAIGN_CODES` is a comma-separated allowlist of public dimension codes;
+mirror it in backend `FITCHECK_METRICS_CAMPAIGN_CODES` as a JSON array. Arbitrary UTM
+values are discarded into `other`; absent campaigns use `direct`. All `METRICS_*`
+configuration stays server-side, with only enabled state and validated public codes
+passed to the browser. The `/` page is prerendered: supply configuration at build
+time and rebuild/redeploy after changing enabled state or campaign codes. A runtime
+reload alone does not refresh these public props.
+
+Telemetry counts browser visitors, not authenticated website accounts: a shared
+browser can be used by several accounts; another device, cookie expiry, clearing
+site data, or deletion creates a different visitor. No email/password, profile/task
+text, full URL, raw UTM, or IP identity enters the event registry. Backend account
+metrics form a separate population until explicit authenticated linking exists.
+To disable collection, remove the website bridge configuration and rebuild/deploy,
+and set backend `FITCHECK_METRICS_ENABLED=false` on API and worker. Preserve domain
+and accounting data and additive migrations; see the rollout record for rollback.
+
+Guest sessions, successful-operation quotas and durable worker spending ceilings
+(ANY-651) are documented in [backend/README.md](backend/README.md#guest-sessions-and-quotas-any-651).
+Migration 0008 requires coordinated API/worker rollout; guest admission defaults off.
+
+Local account import (ANY-652) uses `WebsiteRepository.exportLocalData(selectedUserId)`
+plus `batchLocalExport(export, maxBytes)`. Export reads all selected-user history,
+not the50-row display window, and never deletes local data. It contains no local
+credentials or sessions. ANY-653 owns the user-facing server migration screens.
+
+POST `/v1/import-jobs` requires a verified server session, allowed Origin,
+`X-CSRF-Token` and `Idempotency-Key`; GET `/v1/import-jobs/{importId}` polls progress.
+Use the version1 format in [the shared fixture](contracts/fixtures/local-import-v1.json).
+A request accepts at most1000 history rows and the smaller of5MiB and
+`FITCHECK_API_BODY_MAX_BYTES` (default1MiB). Batch using that effective limit;
+never truncate rows. Imports share the account active-job cap without consuming
+analysis credits or LLM budgets.
+
+Existing server profile/preferences win conflicts. A source user's row ID and
+canonical content deduplicate within the target account; changed content reports
+a conflict. Reports distinguish imported/skipped/conflict/invalid row outcomes and
+separate profile/preferences outcomes. Same-key retries poll the original job;
+after terminal failure, resubmit with a new key to retain completed rows and
+resume via receipts. History deletion removes receipts, so a deliberate later
+import can restore those rows.
+
+Imported snapshots use `schemaVersion=fitcheck.legacy-analysis.v1` and
+`origin=legacy_import`; server revision/prompt/policy are null. Historical profile
+and locale may also be null, and evidence is marked `unverified_legacy`.
+Consumers must render these unknowns explicitly. Recalculation requires a current
+account profile and uses the historical locale when known, otherwise the current
+account preference (default `en`). Migration0009 requires coordinated API/worker
+rollout; see [the validation record](docs/deployments/2026-10-17-any-652-local-import.md).

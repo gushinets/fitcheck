@@ -1,0 +1,155 @@
+// @vitest-environment node
+
+import { afterEach, describe, expect, it, vi } from "vitest"
+import OpenAI from "openai"
+import { goAnalysis } from "@/lib/mock-data"
+import { defaultProfile, detectedJob } from "@/lib/mock-data"
+import { createOpenAITransport } from "./openai"
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
+})
+
+describe("OpenAI analysis transport", () => {
+  it.each([true, false])("verifies report grounding using the original profile and task (%s)", async (supported) => {
+    let auditInput = ""
+    vi.stubGlobal("fetch", vi.fn(async (_input: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body))
+      expect(body).toMatchObject({model:"gpt-6-luna",max_completion_tokens:1000,reasoning_effort:"none",response_format:{type:"json_object"}})
+      expect(body).not.toHaveProperty("temperature")
+      expect(body).not.toHaveProperty("thinking")
+      expect(body).not.toHaveProperty("max_tokens")
+      auditInput = body.messages[0].content + body.messages[1].content
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ supported, unsupportedClaims: supported ? [] : ["Czech proficiency is not required for AI-generated CZ content"] }) } }] }), { status: 200, headers: { "content-type": "application/json" } })
+    }))
+    const transport = createOpenAITransport({ apiKey: "test-key" })
+    expect(transport.verifyGrounding).toBeTypeOf("function")
+    const result = await transport.verifyGrounding!({ profile: defaultProfile, job: { ...detectedJob, description: "AI generation of product titles (EN/CZ – CZ required)" }, locale: "en", memory: [] }, goAnalysis)
+    expect(result).toEqual({ supported, unsupportedClaims: supported ? [] : ["Czech proficiency is not required for AI-generated CZ content"] })
+    expect(auditInput).toContain("AI-generated")
+    expect(auditInput).toContain("EN/CZ")
+    expect(auditInput).toContain("Backend Developer")
+    expect(auditInput).toContain("unsupportedClaims")
+  })
+  it("sends a JSON chat completion through the direct OpenAI API", async () => {
+    let requestedUrl = ""
+    let requestedBody: Record<string, unknown> = {}
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        requestedUrl = String(input)
+        requestedBody = JSON.parse(String(init?.body))
+
+        return new Response(
+          JSON.stringify({
+            id: "generation-test",
+            object: "chat.completion",
+            created: 0,
+            model: "test/free-model",
+            choices: [
+              {
+                index: 0,
+                finish_reason: "stop",
+                message: {
+                  role: "assistant",
+                  content: JSON.stringify(goAnalysis),
+                },
+              },
+            ],
+            output: [
+              {
+                type: "message",
+                role: "assistant",
+                content: [
+                  {
+                    type: "output_text",
+                    text: JSON.stringify(goAnalysis),
+                  },
+                ],
+              },
+            ],
+            usage: {
+              prompt_tokens: 1,
+              completion_tokens: 1,
+              total_tokens: 2,
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        )
+      }),
+    )
+
+    const transport = createOpenAITransport({
+      apiKey: "test-openai-key",
+    })
+    const result = await transport({} as never, {
+      instructions: "System instructions",
+      input: "User input",
+    })
+
+    expect(requestedUrl).toBe(
+      "https://api.openai.com/v1/chat/completions",
+    )
+    expect(requestedBody).toMatchObject({
+      model: "gpt-6-luna",
+      max_completion_tokens: 1200,
+      messages: [
+        {
+          role: "system",
+          content: expect.stringMatching(
+            /System instructions[\s\S]*Return only valid JSON[\s\S]*"score"[\s\S]*"breakdown"/,
+          ),
+        },
+        { role: "user", content: "User input" },
+      ],
+      response_format: {
+        type: "json_object",
+      },
+      reasoning_effort: "none",
+    })
+    expect(requestedBody).not.toHaveProperty("temperature")
+    expect(requestedBody).not.toHaveProperty("thinking")
+    expect(requestedBody).not.toHaveProperty("max_tokens")
+    expect(result).toEqual(goAnalysis)
+  })
+
+  it("maps an SDK connection timeout to the stable timeout error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new OpenAI.APIConnectionTimeoutError()),
+    )
+    const transport = createOpenAITransport({
+      apiKey: "test-openai-key",
+    })
+
+    await expect(
+      transport({} as never, {
+        instructions: "System instructions",
+        input: "User input",
+      }),
+    ).rejects.toMatchObject({ code: "timeout" })
+  })
+})
+
+it('test_analysis_audit_and_retry_are_three_calls_one_operation', async () => {
+  const { createWebsiteOperation } = await import('@/lib/metrics/operations')
+  const { analyzeJob } = await import('./service')
+  const sink = { start: vi.fn<(call: import('@/lib/metrics/provider').ProviderAttempt)=>Promise<void>>().mockResolvedValue(undefined), finish: vi.fn<(call: import('@/lib/metrics/provider').ProviderAttempt)=>Promise<void>>().mockResolvedValue(undefined) }
+  const context = createWebsiteOperation({visitorId:'11111111-1111-4111-8111-111111111111',environment:'test',name:'analysis',now:Date.now})
+  const responses = [ {...goAnalysis,strengths:['invalid-fact']}, {...goAnalysis,strengths:[]}, {supported:true,unsupportedClaims:[]} ]
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(responses.shift())}}],usage:{prompt_tokens:12,completion_tokens:4}}), {headers:{'content-type':'application/json'}})))
+  const transport = createOpenAITransport({apiKey:'test-key',operation:context,attemptSink:sink})
+  const result = await analyzeJob({profile:defaultProfile,job:detectedJob,locale:'en',memory:[]},transport)
+  expect(result.strengths).toEqual([])
+  expect(sink.start).toHaveBeenCalledTimes(3)
+  expect(sink.finish).toHaveBeenCalledTimes(3)
+  for (const [call] of [...sink.start.mock.calls, ...sink.finish.mock.calls]) {
+    expect(call).toMatchObject({provider:"openai",model:"gpt-6-luna",policyVersion:"fitcheck.llm.policy.v2"})
+  }
+  expect(sink.start.mock.calls.map(([call]) => [call.operationId,call.purpose,call.ordinal])).toEqual([
+    [context.operationId,'analysis.generate',1],[context.operationId,'analysis.generate',2],[context.operationId,'analysis.audit',3],
+  ])
+})

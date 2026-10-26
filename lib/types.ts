@@ -7,27 +7,42 @@ export type EnglishLevel =
   | "Advanced"
   | "Fluent"
 
+export type WorkFormat = "remote" | "office" | "hybrid"
+export type SkillLevel = "primary" | "confident" | "basic"
+export type Currency = "USD" | "EUR" | "RUB"
+
 export interface FreelancerProfile {
   specialization: string
   skills: string[]
+  /** Proficiency keyed by the trimmed, lower-case skill name. Omitted for legacy profiles. */
+  skillLevels?: Record<string, SkillLevel>
   experienceYears: number
   preferredRate: number
+  rateCurrency?: Currency
+  workFormats: WorkFormat[]
   englishLevel: EnglishLevel
 }
 
 export interface Job {
   id: string
-  url: string
+  url?: string
   title: string
   description: string
   skills: string[]
   hourlyRateMin?: number
   hourlyRateMax?: number
   fixedBudget?: number
+  /** Upper bound; fixedBudget is the lower bound when this is present. */
+  fixedBudgetMax?: number
+  budgetCurrency?: Currency
   experienceLevel?: string
   postedAgo?: string
   clientRating?: number
   clientSpend?: number
+  proposalCount?: number | null
+  averageBid?: number | null
+  averageBidCurrency?: Currency | null
+  provenance?: Record<string, "json_ld" | "html" | "text">
 }
 
 export interface FitBreakdown {
@@ -40,10 +55,16 @@ export interface FitBreakdown {
 
 export interface FitAnalysis {
   score: number
+  /** Decision threshold saved with the result; absent in legacy analyses. */
+  verdictThreshold?: number
+  /** Localized, audited prerequisite; omitted for unconditional/legacy results. */
+  fitCondition?: string | null
   status: FitStatus
   label: string
   summary: string
   strengths: string[]
+  /** Server-verified profile and task sources, aligned with strengths. Absent in legacy reports. */
+  strengthEvidence?: { id: string; profileFields: string[]; taskFields: string[] }[]
   risks: string[]
   breakdown: FitBreakdown
 }
@@ -69,31 +90,3 @@ export interface AnalysisRequest {
   locale: Locale
   memory: CalibrationEntry[]
 }
-
-export interface HistoryEntry {
-  id: string
-  jobTitle: string
-  score: number
-  status: FitStatus
-  timestamp: string
-  createdAt: string
-  analysis: FitAnalysis
-  job: Job
-  feedback?: AnalysisFeedback
-}
-
-/** Which section of the extension the user is viewing. */
-export type Tab = "analyze" | "history" | "profile"
-
-/**
- * The state of the "analyze" flow. Kept separate from navigation so the
- * primary decision is always the first thing rendered.
- */
-export type AnalyzeState =
-  | "ready"
-  | "loading"
-  | "result"
-  | "details"
-  | "feedback"
-  | "unsupported"
-  | "error"

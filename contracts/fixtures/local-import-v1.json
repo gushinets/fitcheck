@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "source": "website_indexeddb_v1",
+  "sourceUserId": "local-fixture",
+  "profile": {
+    "specialization": "Frontend developer",
+    "skills": [
+      "React",
+      "TypeScript"
+    ],
+    "skillLevels": {
+      "react": "primary"
+    },
+    "experienceYears": 4,
+    "preferredRate": 50,
+    "rateCurrency": "RUB",
+    "workFormats": [
+      "remote"
+    ],
+    "englishLevel": "Advanced"
+  },
+  "locale": "ru",
+  "history": [
+    {
+      "id": "fixture-row",
+      "createdAt": "2025-01-01T00:00:00Z",
+      "profile": {
+        "specialization": "Frontend developer",
+        "skills": [
+          "React",
+          "TypeScript"
+        ],
+        "skillLevels": {
+          "react": "primary"
+        },
+        "experienceYears": 4,
+        "preferredRate": 50,
+        "rateCurrency": "RUB",
+        "workFormats": [
+          "remote"
+        ],
+        "englishLevel": "Advanced"
+      },
+      "job": {
+        "id": "task-1",
+        "title": "Build dashboard",
+        "description": "Build a React dashboard",
+        "skills": [
+          "React"
+        ],
+        "fixedBudget": 1000,
+        "fixedBudgetMax": 2000,
+        "budgetCurrency": "USD",
+        "url": "https://www.freelancer.com/projects/example"
+      },
+      "analysis": {
+        "score": 85,
+        "status": "GO",
+        "label": "Good fit",
+        "summary": "Skills match",
+        "strengths": [
+          "React experience"
+        ],
+        "risks": [],
+        "breakdown": {
+          "skills": 90,
+          "experience": 80,
+          "rate": 80,
+          "english": 90,
+          "requirements": 85
+        },
+        "strengthEvidence": [
+          {
+            "id": "legacy-source",
+            "profileFields": [
+              "skills"
+            ],
+            "taskFields": [
+              "skills"
+            ]
+          }
+        ]
+      },
+      "feedback": {
+        "correctedScore": 64,
+        "note": "Старый отзыв",
+        "createdAt": "2025-01-02T00:00:00Z"
+      }
+    }
+  ]
+}

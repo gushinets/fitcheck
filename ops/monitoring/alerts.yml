@@ -1,0 +1,58 @@
+groups:
+  - name: fitcheck
+    rules:
+      - alert: FitCheckApiUnavailable
+        expr: up{job="fitcheck-api"} == 0 or fitcheck_database_up{job="fitcheck-api"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations: { summary: "API metrics or database unavailable; check readiness and DB before restarting." }
+      - alert: FitCheckWorkerUnavailable
+        expr: up{job="fitcheck-worker"} == 0 or fitcheck_worker_healthy == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations: { summary: "Worker heartbeat is stale. Accepted jobs remain in PostgreSQL; inspect worker logs." }
+      - alert: FitCheckQueueStalled
+        expr: fitcheck_queue_lag_seconds > 180
+        for: 3m
+        labels: { severity: warning }
+        annotations: { summary: "Queued work is waiting over three minutes; check worker, leases and provider health." }
+      - alert: FitCheckExpiredLease
+        expr: fitcheck_expired_job_leases > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "Worker is not recovering expired leases. Do not delete jobs or reservations." }
+      - alert: FitCheckJobFailures
+        expr: fitcheck_failed_jobs_last_hour >= 5
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "At least five jobs failed in the last hour; inspect safe job logs and provider accounting." }
+      - alert: FitCheckProviderSlow
+        expr: fitcheck_provider_latency_p95_seconds_today > 60
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "Provider daily p95 latency exceeds 60 seconds." }
+      - alert: FitCheckQuotaDenials
+        expr: sum(increase(fitcheck_admission_denials_total[10m])) > 10
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "Admission limits denied over ten requests in ten minutes. Inspect legitimate usage before changing limits." }
+      - alert: FitCheckProviderSpend
+        expr: fitcheck_provider_cost_usd_today > 10
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "Recorded provider spend exceeded USD 10 today (UTC); reconcile with provider billing before changing admission budgets." }
+      - alert: FitCheckProviderCostUnknown
+        expr: fitcheck_provider_unknown_cost_calls_today > 0
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "Provider calls have unknown cost; recorded spend is incomplete." }
+      - alert: FitCheckBackupStale
+        expr: time() - fitcheck_last_backup_success_timestamp_seconds > 93600
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "No successful database backup in 26 hours." }
+      - alert: FitCheckRestoreCheckStale
+        expr: time() - fitcheck_last_restore_success_timestamp_seconds > 691200
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "No successful disposable restore check in eight days." }

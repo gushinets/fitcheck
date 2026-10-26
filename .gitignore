@@ -1,20 +1,23 @@
 # Dependencies
-/node_modules/
+/node_modules
+/.pnpm-store/
 
 # Next.js
 /.next/
 /out/
 
-# WXT extension output
-/.wxt/
-/.output/
-
 # Local environment and secrets
 .env*
 !.env.example
+!.env.compose.example
+/ops/env/*.env
+/ops/secrets/
+/ops/backup/pg_service.conf
 
 # Test and TypeScript output
 /coverage/
+/playwright-report/
+/test-results/
 *.tsbuildinfo
 next-env.d.ts
 
@@ -29,6 +32,8 @@ pnpm-debug.log*
 /.vercel/
 /.idea/
 /.vscode/
+/.worktrees/
+/.superpowers/
 *.swp
 *.swo
 
@@ -36,6 +41,10 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Packaged extensions and local certificates
-*.zip
+# Local certificates
 *.pem
+
+# Python backend
+.venv/
+__pycache__/
+.pytest_cache/

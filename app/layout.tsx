@@ -1,4 +1,3 @@
-import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
@@ -7,9 +6,9 @@ const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
 
 export const metadata: Metadata = {
-  title: 'FitCheck — Upwork Job Fit',
+  title: 'FitCheck — AI Task Fit Analysis',
   description:
-    'Decide whether a job is worth your connects. FitCheck scores each Upwork job against your freelancer profile with a GO / NO-GO verdict.',
+    'Compare any public freelance task with your profile and get an AI-powered Fit Score with strengths, risks, and a GO / NO-GO verdict.',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -47,7 +46,6 @@ export default function RootLayout({
     <html lang="en" className={`bg-background ${geistSans.variable} ${geistMono.variable}`}>
       <body className="font-sans antialiased">
         {children}
-        {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
   )

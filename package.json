@@ -5,21 +5,21 @@
   "packageManager": "pnpm@10.17.1",
   "scripts": {
     "dev": "next dev",
-    "dev:extension": "wxt",
-    "build": "npm run build:web && npm run build:extension",
-    "build:web": "next build",
-    "build:extension": "wxt build",
-    "zip:extension": "wxt zip",
+    "build": "next build --webpack",
+    "build:web": "next build --webpack",
     "start": "next start",
-    "postinstall": "wxt prepare",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "backend:types": "node scripts/generate-backend-types.mjs",
+    "backend:types:check": "node scripts/generate-backend-types.mjs --check"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
     "@vercel/analytics": "1.6.1",
+    "cheerio": "^1.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",
@@ -33,6 +33,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -40,16 +41,16 @@
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@wxt-dev/module-react": "^1.2.1",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.0",
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "^27.4.0",
+    "openapi-typescript": "7.13.0",
     "postcss": "^8.5",
     "tailwindcss": "^4.3.3",
     "typescript": "5.7.3",
     "vite": "^8.2.2",
-    "vitest": "^4.0.18",
-    "wxt": "^0.21.4"
+    "vitest": "^4.0.18"
   },
   "pnpm": {
     "overrides": {

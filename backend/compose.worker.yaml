@@ -1,0 +1,8 @@
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    env_file: .env
+    stop_grace_period: 140s
+    restart: unless-stopped

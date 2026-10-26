@@ -1,0 +1,88 @@
+import { describe, expect, it, vi } from "vitest"
+import { render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
+import { webMessages } from "@/lib/i18n/web-messages"
+import { WebApiError } from "@/lib/web/api"
+import { VacancySource } from "./vacancy-source"
+
+describe("VacancySource", () => {
+  it("extracts fields from pasted task text before review", async () => {
+    const onReview = vi.fn()
+    render(<VacancySource copy={webMessages.en} onLoadUrl={vi.fn()} onReview={onReview} />)
+    const user = userEvent.setup()
+    await user.click(screen.getByRole("button", { name: "Paste text" }))
+    await user.type(screen.getByLabelText("Task title"), "Lead Generation")
+    await user.type(screen.getByLabelText("Task description"), "Budget: €250–750\nSkills: Lead generation, Cold outreach")
+    await user.click(screen.getByRole("button", { name: "Review task" }))
+    expect(onReview).toHaveBeenCalledWith(expect.objectContaining({ skills: ["Lead generation", "Cold outreach"], fixedBudget: 250, fixedBudgetMax: 750, budgetCurrency: "EUR" }))
+  })
+  it("retains the reviewed manual budget and currency when returning to review", async () => {
+    const onReview = vi.fn()
+    render(<VacancySource copy={webMessages.en} onLoadUrl={vi.fn()} onReview={onReview} initialDraft={{
+      id: "manual", sourceMode: "text", title: "Backend role", description: "Build production APIs.", skills: [],
+      hourlyRateMin: 25, hourlyRateMax: 50, budgetCurrency: "EUR", updatedAt: new Date().toISOString(),
+    }} />)
+    await userEvent.setup().click(screen.getByRole("button", { name: "Review task" }))
+    expect(onReview).toHaveBeenCalledWith(expect.objectContaining({ hourlyRateMin: 25, hourlyRateMax: 50, budgetCurrency: "EUR" }))
+  })
+  it("preserves URL and text buffers while switching input modes", async () => {
+    const user = userEvent.setup()
+    const onReview = vi.fn()
+    render(<VacancySource copy={webMessages.en} onLoadUrl={vi.fn()} onReview={onReview} />)
+
+    await user.click(screen.getByRole("button", { name: "Paste text" }))
+    await user.type(screen.getByLabelText("Task title"), "Backend role")
+    await user.type(
+      screen.getByLabelText("Task description"),
+      "Build production APIs for a fast-growing SaaS platform.",
+    )
+    await user.click(screen.getByRole("button", { name: "From URL" }))
+    await user.type(
+      screen.getByLabelText("Task URL"),
+      "https://jobs.example/backend",
+    )
+    await user.click(screen.getByRole("button", { name: "Paste text" }))
+
+    expect(screen.getByLabelText("Task title")).toHaveValue("Backend role")
+    await user.click(screen.getByRole("button", { name: "Review task" }))
+    expect(onReview).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceMode: "text", title: "Backend role" }),
+    )
+  })
+
+  it.each(["extraction_insufficient", "fetch_failed"] as const)("offers manual paste after %s", async (code) => {
+    const user = userEvent.setup()
+    render(
+      <VacancySource
+        copy={webMessages.en}
+        onLoadUrl={async () => {
+          throw new WebApiError(code)
+        }}
+        onReview={vi.fn()}
+      />,
+    )
+
+    await user.type(
+      screen.getByLabelText("Task URL"),
+      "https://www.freelancer.com/projects/n8n/deleted",
+    )
+    await user.click(screen.getByRole("button", { name: "Load task" }))
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      code === "extraction_insufficient" ? /could not find enough task text/i : /could not be loaded/i,
+    )
+    await user.click(screen.getByRole("button", { name: "Paste text instead" }))
+    expect(screen.getByLabelText("Task description")).toBeVisible()
+  })
+})
+
+it("observes first edited input once with its mode and without content", async () => {
+  const onInputStarted = vi.fn()
+  render(<VacancySource copy={webMessages.en} onLoadUrl={vi.fn()} onReview={vi.fn()} onInputStarted={onInputStarted} />)
+  const user = userEvent.setup()
+  await user.click(screen.getByRole("button", { name: "Paste text" }))
+  expect(onInputStarted).not.toHaveBeenCalled()
+  await user.type(screen.getByLabelText("Task title"), "private content")
+  await user.type(screen.getByLabelText("Task description"), "private description")
+  expect(onInputStarted.mock.calls).toEqual([["text"]])
+})
