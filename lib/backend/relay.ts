@@ -1,5 +1,6 @@
 /** Same-origin cookie relay; identity attestations are server-generated only. */
 import { visitorProof } from "@/lib/metrics/identity-proof"
+import { isIP } from "node:net"
 export async function relayBackend(request: Request, backendUrl = process.env.FITCHECK_BACKEND_URL, transport = fetch) {
   const url = new URL(request.url)
   const prefix = "/api/backend/"
@@ -12,6 +13,12 @@ export async function relayBackend(request: Request, backendUrl = process.env.FI
   if ((origin && origin !== publicOrigin) || request.headers.get("sec-fetch-site") === "cross-site") return fail(403, "forbidden")
   if (!["GET", "HEAD"].includes(request.method) && origin !== publicOrigin) return fail(403, "forbidden")
   const headers = new Headers({ Accept: "application/json", Origin: publicOrigin })
+  if (process.env.FITCHECK_TRUST_PROXY_HEADERS === "true") {
+    // shortcut: one ingress hop; verify the full chain before adding another proxy.
+    const ip = request.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim()
+    if (!ip || !isIP(ip)) return fail(503, "service_unavailable")
+    headers.set("X-Forwarded-For", ip)
+  }
   for (const name of ["content-type", "x-csrf-token", "x-guest-csrf-token", "idempotency-key"]) {
     const value = request.headers.get(name)
     if (value) headers.set(name, value)

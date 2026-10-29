@@ -49,7 +49,8 @@ class LiteLlmAdapter:
         self._sends = ContextVar('fitcheck_provider_sends', default=None)
         self._retry_after = ContextVar('fitcheck_provider_retry_after', default=None)
         self._usage_basis = ContextVar('fitcheck_provider_usage_basis', default=None)
-        self.client = httpx.AsyncClient(transport=transport or httpx.AsyncHTTPTransport(retries=0),
+        # Default transports honor environment proxies and keep HTTPX retries at zero.
+        self.client = httpx.AsyncClient(transport=transport,
             follow_redirects=False, event_hooks={'request':[self._guard_send], 'response':[self._capture_response]})
         self._sdk = AsyncOpenAI(api_key=api_key or 'unconfigured', base_url='https://api.openai.com/v1',
             http_client=self.client, max_retries=0)

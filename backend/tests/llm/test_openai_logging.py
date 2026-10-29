@@ -1,5 +1,6 @@
-"""Exercise import-time SDK logging in a fresh interpreter, without network access."""
+"""Exercise import-time SDK logging in a fresh interpreter, without external network access."""
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -26,10 +27,15 @@ def test_installed_sdk_debug_logs_never_expose_provider_payloads(status):
         child.setLevel(logging.DEBUG)
         child.addHandler(logging.StreamHandler(stream))
 
-        def no_network(*args, **kwargs):
-            raise AssertionError('Only MockTransport may send')
-        socket.socket.connect = no_network
-        socket.socket.connect_ex = no_network
+        # Windows event loops need loopback wakeup sockets, including at SDK exit.
+        def block_external(connect):
+            def guarded(sock, address):
+                if isinstance(address, tuple) and address[0] in ('127.0.0.1', '::1'):
+                    return connect(sock, address)
+                raise AssertionError('Only MockTransport may send externally')
+            return guarded
+        socket.socket.connect = block_external(socket.socket.connect)
+        socket.socket.connect_ex = block_external(socket.socket.connect_ex)
 
         import httpx
         from fitcheck_backend.llm.errors import ProviderFailure
@@ -91,7 +97,8 @@ def test_installed_sdk_debug_logs_never_expose_provider_payloads(status):
     ''')
     backend = Path(__file__).resolve().parents[2]
     result = subprocess.run([sys.executable, '-c', script, str(status)],
-        cwd=backend, env={'OPENAI_LOG': 'debug', 'LITELLM_LOCAL_MODEL_COST_MAP': 'True',
+        cwd=backend, env={'SYSTEMROOT': os.environ.get('SYSTEMROOT', ''),
+            'OPENAI_LOG': 'debug', 'LITELLM_LOCAL_MODEL_COST_MAP': 'True',
             'PYTHONPATH': str(backend / 'src')},
         capture_output=True, text=True, timeout=30)
     # Keep even fake private payloads out of pytest failure diagnostics.

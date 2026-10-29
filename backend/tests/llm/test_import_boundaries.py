@@ -9,11 +9,11 @@ BOUNDARIES={'litellm':'llm/litellm_adapter.py','openai':'llm/litellm_adapter.py'
 def violations(root):
     result=[]
     for path in root.rglob('*.py'):
-        for node in ast.walk(ast.parse(path.read_text())):
+        for node in ast.walk(ast.parse(path.read_text(encoding='utf-8'))):
             names = [entry.name for entry in node.names] if isinstance(node,ast.Import) else [node.module or ''] if isinstance(node,ast.ImportFrom) else []
             for name in names:
                 boundary=BOUNDARIES.get(name.split('.')[0])
-                if boundary and str(path.relative_to(root)) != boundary:
+                if boundary and path.relative_to(root).as_posix() != boundary:
                     result.append((str(path.relative_to(root)),node.lineno,name))
     return result
 

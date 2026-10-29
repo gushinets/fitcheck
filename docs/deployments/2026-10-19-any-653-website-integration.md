@@ -22,10 +22,14 @@ snapshots display without inventing a profile.
    handled by the backend; the relay forwards only FitCheck auth/guest cookies,
    CSRF proofs, idempotency keys and JSON content type. It does not forward bearer
    tokens or service credentials. All relay responses use `no-store`.
-4. Configure a trusted ingress chain separately before relying on per-IP quotas
-   across many users. The relay does not trust client-supplied forwarding headers;
-   without a trusted ingress integration the backend sees the relay's IP. Account
-   and guest quotas still use their server owners.
+4. Configure the trusted ingress chain before relying on per-IP quotas across
+   users. Set website `FITCHECK_TRUST_PROXY_HEADERS=true` only when its sole public
+   ingress appends the TCP peer IP to `X-Forwarded-For` and direct website access
+   is blocked. The relay validates and forwards only the last IP; missing/invalid
+   IPs fail closed with 503. Configure backend `FITCHECK_TRUSTED_PROXY_IPS` for the
+   relay and any intervening API proxy. Without this opt-in, forwarding headers
+   are discarded and API IP limits aggregate at the relay. See
+   [the proxy setup](../../ops/RUNBOOK.md#ip-посетителей-и-ограничения-запросов).
 5. Deploy the website. `/api/analyze`, `/api/extract` and `/api/skill-suggestions`
    return 410 for all callers. They cannot invoke a provider or bypass quotas.
    Provider keys belong on the worker; remove obsolete website provider settings.

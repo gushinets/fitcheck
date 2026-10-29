@@ -1,5 +1,6 @@
 import asyncio
 import json
+from urllib.request import getproxies_environment
 
 import httpx
 import pytest
@@ -10,6 +11,45 @@ def test_key_configuration_is_optional_and_redacted():
     assert Settings().open_ai_key is None
     settings = Settings(open_ai_key='private-test-key')
     assert 'private-test-key' not in repr(settings)
+
+
+@pytest.mark.parametrize('environment,proxied', [
+    ({}, False),
+    ({'HTTPS_PROXY': 'http://proxy.test:3128'}, True),
+    ({'ALL_PROXY': 'http://proxy.test:3128'}, True),
+    ({'HTTPS_PROXY': 'http://proxy.test:3128', 'NO_PROXY': 'api.openai.com'}, False),
+])
+def test_adapter_routes_through_environment_proxy_without_transport_retries(monkeypatch, environment, proxied):
+    from fitcheck_backend.llm.litellm_adapter import LiteLlmAdapter
+    # Ignore machine-wide Windows registry proxies; exercise environment routing only.
+    monkeypatch.setattr('httpx._utils.getproxies', getproxies_environment)
+    for name in ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY'):
+        monkeypatch.delenv(name, raising=False)
+        monkeypatch.delenv(name.lower(), raising=False)
+    for name, value in environment.items():
+        monkeypatch.setenv(name, value)
+    async def run():
+        adapter = LiteLlmAdapter('test-key')
+        try:
+            transport = adapter.client._transport_for_url(httpx.URL('https://api.openai.com/v1/chat/completions'))
+            assert (transport is not adapter.client._transport) == proxied
+            assert transport._pool._retries == 0
+        finally:
+            await adapter.aclose()
+    asyncio.run(run())
+
+
+def test_explicit_test_transport_bypasses_environment_proxy(monkeypatch):
+    from fitcheck_backend.llm.litellm_adapter import LiteLlmAdapter
+    monkeypatch.setenv('HTTPS_PROXY', 'http://proxy.test:3128')
+    transport = httpx.MockTransport(lambda _: pytest.fail('Unexpected HTTP request'))
+    async def run():
+        adapter = LiteLlmAdapter('test-key', transport=transport)
+        try:
+            assert adapter.client._transport_for_url(httpx.URL('https://api.openai.com/v1/chat/completions')) is transport
+        finally:
+            await adapter.aclose()
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize('status,code', [(401,'upstream'),(429,'rate_limit'),(503,'upstream'),(422,'upstream')])

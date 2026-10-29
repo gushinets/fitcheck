@@ -43,6 +43,52 @@ it("fails closed when the backend is absent or unreachable", async () => {
   expect((await relayBackend(request, "https://backend.test", async () => { throw new Error("offline") })).status).toBe(503)
 })
 
+it.each([undefined, "false", "TRUE"])("does not forward caller IP headers without explicit ingress trust (%s)", async trust => {
+  vi.stubEnv("FITCHECK_TRUST_PROXY_HEADERS", trust)
+  const upstream = vi.fn(async () => new Response(null, { status: 204 }))
+  await relayBackend(new Request(`${origin}/api/backend/v1/auth/csrf`, { headers: {
+    "x-forwarded-for": "198.51.100.9, 203.0.113.5", "x-real-ip": "198.51.100.9", forwarded: "for=198.51.100.9",
+  } }), "https://backend.test", upstream)
+  const headers = new Headers((upstream.mock.calls[0] as unknown as [string, RequestInit])[1].headers)
+  for (const name of ["x-forwarded-for", "x-real-ip", "forwarded"]) expect(headers.has(name)).toBe(false)
+})
+
+it.each(["203.0.113.5", "2001:db8::5"])("forwards only the ingress-appended visitor IP (%s)", async ip => {
+  vi.stubEnv("FITCHECK_TRUST_PROXY_HEADERS", "true")
+  const upstream = vi.fn(async () => new Response(null, { status: 204 }))
+  await relayBackend(new Request(`${origin}/api/backend/v1/auth/csrf`, { headers: {
+    "x-forwarded-for": `198.51.100.9, ${ip}`, "x-real-ip": "198.51.100.9", forwarded: "for=198.51.100.9",
+  } }), "https://backend.test", upstream)
+  const headers = new Headers((upstream.mock.calls[0] as unknown as [string, RequestInit])[1].headers)
+  expect(headers.get("x-forwarded-for")).toBe(ip)
+  expect(headers.has("x-real-ip")).toBe(false)
+  expect(headers.has("forwarded")).toBe(false)
+})
+
+it.each([undefined, "", "unknown", "203.0.113.5,", "203.0.113.5, forged", "203.0.113.5:443", "[2001:db8::5]"])(
+  "refuses an absent or invalid ingress IP when forwarding is enabled (%s)", async forwarded => {
+    vi.stubEnv("FITCHECK_TRUST_PROXY_HEADERS", "true")
+    const upstream = vi.fn()
+    const response = await relayBackend(new Request(`${origin}/api/backend/v1/auth/csrf`, {
+      headers: forwarded === undefined ? {} : { "x-forwarded-for": forwarded },
+    }), "https://backend.test", upstream)
+    expect(response.status).toBe(503)
+    expect(upstream).not.toHaveBeenCalled()
+  },
+)
+
+it("preserves separate visitor IPs through the same relay", async () => {
+  vi.stubEnv("FITCHECK_TRUST_PROXY_HEADERS", "true")
+  const upstream = vi.fn(async () => new Response(null, { status: 204 }))
+  for (const ip of ["203.0.113.5", "203.0.113.6"]) {
+    await relayBackend(new Request(`${origin}/api/backend/v1/auth/csrf`, {
+      headers: { "x-forwarded-for": ip },
+    }), "https://backend.test", upstream)
+  }
+  expect(upstream.mock.calls.map(call => new Headers((call as unknown as [string, RequestInit])[1].headers).get("x-forwarded-for")))
+    .toEqual(["203.0.113.5", "203.0.113.6"])
+})
+
 it('attests an existing visitor only on auth/claim routes and strips caller identity headers', async () => {
   const { resolveVisitor, VISITOR_COOKIE } = await import('@/lib/metrics/cookie')
   const { createHmac } = await import('node:crypto')
