@@ -12,7 +12,7 @@ def test_unicode_schema_and_framing_have_conservative_bound():
     assert b.usd==Decimal(b.input_tokens*125+1200*500).scaleb(-9)
 
 
-@pytest.mark.parametrize('model,text',[('unknown','ok'),('gpt-6-luna','x'*272001)])
+@pytest.mark.parametrize('model,text',[('unknown','ok'),('gpt-6-luna','x'*272001)],ids=['unknown-model','oversized-input'])
 def test_unsupported_pricing_fails_closed(model,text):
     with pytest.raises(LlmError):upper_call_bounds(messages=[{'role':'user','content':text}],response_schema=None,model=model,max_output_tokens=1200)
 

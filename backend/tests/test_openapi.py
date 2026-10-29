@@ -122,7 +122,7 @@ def test_guest_contract_security_and_quota_errors():
     assert any(p['name']=='mode' and p['in']=='query' for p in paths['/v1/quota']['get']['parameters'])
     assert paths['/v1/analysis-jobs']['post']['security']==[{'webSession':[]},{'guestSession':[]}]
     quota=document['components']['schemas']['OperationQuota']
-    assert quota['properties']['remaining']['minimum']==0
+    assert quota['properties']['remaining']['anyOf']==[{'minimum':0,'type':'integer'},{'type':'null'}]
     response=paths['/v1/analysis-jobs']['post']['responses']['429']
     assert 'quota_exceeded' in response['description'] and 'budget_exceeded' in response['description']
     assert response['content']['application/json']['schema']=={'$ref':'#/components/schemas/ErrorEnvelope'}

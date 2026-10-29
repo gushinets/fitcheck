@@ -35,6 +35,28 @@ def test_guest_demo_replay_has_one_reservation(profile_http):
     assert q['operations']['analysis']==dict(limit=1,remaining=0,reserved=1,consumed=0)
 
 
+def test_account_quota_reports_unlimited_and_can_be_restored_midday(profile_http):
+    from fitcheck_backend.config import Settings
+    from fitcheck_backend.quotas.policy import QuotaPolicy
+    from fitcheck_backend.storage.quota_repository import QuotaRepository
+    a,c,r,issued,_=profile_http
+    unlimited=QuotaPolicy.from_settings(Settings(account_analysis_daily_limit=0))
+    r.quotas.policy=unlimited
+    with unit_of_work(a.engine) as s:
+        repo=QuotaRepository(s)
+        bucket=repo.bucket(issued.principal.owner_id,'analysis',unlimited,a.clock())
+        bucket.consumed=25
+    response=c.get('/v1/quota')
+    assert response.status_code==200
+    value=response.json()
+    assert value['remaining'] is None and value['maxActiveJobs']==2
+    assert value['operations']['analysis']==dict(limit=None,remaining=None,reserved=0,consumed=25)
+    r.quotas.policy=QuotaPolicy.from_settings(Settings(account_analysis_daily_limit=20))
+    limited=c.get('/v1/quota').json()
+    assert limited['remaining']==0
+    assert limited['operations']['analysis']==dict(limit=20,remaining=0,reserved=0,consumed=25)
+
+
 def test_terminal_error_returns_demo_once(profile_http):
     a,c,r,h,body=prepare(profile_http)
     result=c.post('/v1/analysis-jobs',json=body,headers=h)

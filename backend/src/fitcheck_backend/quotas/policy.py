@@ -4,7 +4,7 @@ from decimal import Decimal
 
 @dataclass(frozen=True)
 class OperationLimits:
-    analysis: int
+    analysis: int | None
     suggestions: int
     extraction: int
     max_active_jobs: int
@@ -24,8 +24,8 @@ class QuotaPolicy:
     analysis_usd: Decimal
     suggestions_usd: Decimal
     guest_usd: Decimal
-    account_daily_usd: Decimal
-    deployment_daily_usd: Decimal
+    account_daily_usd: Decimal | None
+    deployment_daily_usd: Decimal | None
 
     @classmethod
     def from_settings(cls, s):

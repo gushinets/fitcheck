@@ -1997,14 +1997,30 @@
             "type": "integer"
           },
           "limit": {
-            "minimum": 0,
-            "title": "Limit",
-            "type": "integer"
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null means unlimited operations in this window.",
+            "title": "Limit"
           },
           "remaining": {
-            "minimum": 0,
-            "title": "Remaining",
-            "type": "integer"
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null means unlimited operations remain.",
+            "title": "Remaining"
           },
           "reserved": {
             "minimum": 0,
@@ -2246,9 +2262,17 @@
             "type": "boolean"
           },
           "remaining": {
-            "minimum": 0,
-            "title": "Remaining",
-            "type": "integer"
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null means unlimited analyses remain.",
+            "title": "Remaining"
           },
           "resetsAt": {
             "anyOf": [

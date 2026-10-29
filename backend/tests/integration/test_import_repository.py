@@ -85,7 +85,7 @@ def test_0009_upgrade_preserves_old_receipt_and_schema(engine,storage_factory):
     settings=Settings(database_url=engine.url.render_as_string(hide_password=False))
     run_migrations(settings);check_schema(settings);run_migrations(settings)
     with engine.connect() as c:
-        assert c.scalar(text('select version_num from alembic_version'))=='0015'
+        assert c.scalar(text('select version_num from alembic_version'))=='0016'
         assert c.scalar(text('select source_user_id from import_entries'))=='__pre_0009__'
     with unit_of_work(engine) as s:assert s.get(AnalysisRecord,identifier) is not None
 

@@ -29,7 +29,8 @@ class QuotaService:
             operations={}
             for operation in ('analysis','extraction','suggestions'):
                 bucket=repo.bucket(identity.owner_id,operation,self.policy,now)
-                operations[operation]=OperationQuota(limit=bucket.limit,remaining=bucket.limit-bucket.reserved-bucket.consumed,
+                limit=getattr(self.policy.account,operation) if identity.mode=='account' else bucket.limit
+                operations[operation]=OperationQuota(limit=limit,remaining=None if limit is None else max(0,limit-bucket.reserved-bucket.consumed),
                     reserved=bucket.reserved,consumed=bucket.consumed)
             active=s.scalar(select(func.count()).select_from(Job).where(Job.owner_id==identity.owner_id,Job.status.in_(['queued','running'])))
             return QuotaResource(remaining=operations['analysis'].remaining,resetsAt=bucket.resets_at,

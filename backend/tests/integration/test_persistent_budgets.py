@@ -64,3 +64,48 @@ def test_known_usage_releases_excess_once(engine,storage_factory):
     ledger.finish(call,**kwargs);ledger.finish(call,**kwargs)
     with unit_of_work(engine) as s:
         assert all(r.exposure_usd==Decimal('.000004') and r.exposure_tokens==15 and r.calls==1 for r in s.scalars(select(BudgetWindow)))
+
+
+def test_disabled_daily_caps_keep_job_budget_and_provider_accounting(engine,storage_factory):
+    from fitcheck_backend.storage.models import ProviderCall
+    owner,job=setup(engine,storage_factory)
+    policy=QuotaPolicy.from_settings(Settings(budget_account_daily_usd=0,budget_deployment_daily_usd=0,budget_analysis_usd='20'))
+    ledger=ProviderLedger(engine,policy=policy)
+    bounds=replace(BOUNDS,usd=Decimal('11'))
+    call_id=ledger.start(attempt(owner,job),bounds=bounds)
+    with pytest.raises(QuotaError,match='budget_exceeded'):
+        ledger.start(attempt(owner,job),bounds=bounds)
+    with unit_of_work(engine) as s:
+        windows=s.scalars(select(BudgetWindow)).all()
+        assert {w.scope for w in windows}=={'job','owner','deployment'}
+        assert all(w.calls==1 and w.exposure_usd==Decimal('11') for w in windows)
+        assert all(w.limit_usd is None for w in windows if w.scope!='job')
+        assert s.get(ProviderCall,call_id).state=='started'
+
+
+@pytest.mark.parametrize('field', ['budget_account_daily_usd','budget_deployment_daily_usd'])
+def test_daily_cap_can_be_reenabled_and_lowered_without_refunding_usage(engine,storage_factory,field):
+    owner,job=setup(engine,storage_factory)
+    disabled={'budget_account_daily_usd':0,'budget_deployment_daily_usd':0}
+    unlimited=QuotaPolicy.from_settings(Settings(**disabled))
+    ProviderLedger(engine,policy=unlimited).start(attempt(owner,job),bounds=BOUNDS)
+    ProviderLedger(engine,policy=unlimited).start(attempt(owner,job),bounds=BOUNDS)
+    lowered=QuotaPolicy.from_settings(Settings(**(disabled|{field:'0.0015'})))
+    with pytest.raises(QuotaError,match='budget_exceeded'):
+        ProviderLedger(engine,policy=lowered).start(attempt(owner,job),bounds=BOUNDS)
+    raised=QuotaPolicy.from_settings(Settings(**(disabled|{field:'0.003'})))
+    ProviderLedger(engine,policy=raised).start(attempt(owner,job),bounds=BOUNDS)
+    ProviderLedger(engine,policy=unlimited).start(attempt(owner,job),bounds=BOUNDS)
+    with pytest.raises(QuotaError,match='budget_exceeded'):
+        ProviderLedger(engine,policy=raised).start(attempt(owner,job),bounds=BOUNDS)
+    with unit_of_work(engine) as s:
+        windows=s.scalars(select(BudgetWindow)).all()
+        assert all(w.calls==4 and w.exposure_usd==Decimal('0.004') for w in windows)
+
+
+def test_guest_budget_survives_disabled_daily_caps(engine,storage_factory):
+    with unit_of_work(engine) as s:
+        owner,_,job,*_=storage_factory(s,kind='guest')
+    policy=QuotaPolicy.from_settings(Settings(budget_account_daily_usd=0,budget_deployment_daily_usd=0,budget_guest_usd='0.0005'))
+    with pytest.raises(QuotaError,match='budget_exceeded'):
+        ProviderLedger(engine,policy=policy).start(attempt(owner.id,job.id),bounds=BOUNDS)

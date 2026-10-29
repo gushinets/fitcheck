@@ -15,7 +15,7 @@ class BudgetWindow(IdentityMixin,Base):
     expires_at: Mapped[datetime] = mapped_column(UTCDateTime)
     limit_calls: Mapped[int] = mapped_column(Integer)
     limit_tokens: Mapped[int] = mapped_column(Integer)
-    limit_usd: Mapped[Decimal] = mapped_column(Numeric(24,12))
+    limit_usd: Mapped[Decimal | None] = mapped_column(Numeric(24,12))
     calls: Mapped[int] = mapped_column(Integer,default=0)
     exposure_tokens: Mapped[int] = mapped_column(Integer,default=0)
     exposure_usd: Mapped[Decimal] = mapped_column(Numeric(24,12),default=Decimal('0'))

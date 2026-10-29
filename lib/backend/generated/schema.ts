@@ -1327,10 +1327,16 @@ export interface components {
         OperationQuota: {
             /** Consumed */
             consumed: number;
-            /** Limit */
-            limit: number;
-            /** Remaining */
-            remaining: number;
+            /**
+             * Limit
+             * @description Null means unlimited operations in this window.
+             */
+            limit: number | null;
+            /**
+             * Remaining
+             * @description Null means unlimited operations remain.
+             */
+            remaining: number | null;
             /** Reserved */
             reserved: number;
         };
@@ -1421,8 +1427,11 @@ export interface components {
              * @default false
              */
             registrationRequired: boolean;
-            /** Remaining */
-            remaining: number;
+            /**
+             * Remaining
+             * @description Null means unlimited analyses remain.
+             */
+            remaining: number | null;
             /** Resetsat */
             resetsAt: string | null;
         };

@@ -13,7 +13,7 @@ class QuotaBucket(OwnedMixin, IdentityMixin, Base):
     policy_key: Mapped[str] = mapped_column(String(120))
     window_start: Mapped[datetime] = mapped_column(UTCDateTime)
     resets_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
-    limit: Mapped[int] = mapped_column(Integer)
+    limit: Mapped[int | None] = mapped_column(Integer)
     reserved: Mapped[int] = mapped_column(Integer, default=0)
     consumed: Mapped[int] = mapped_column(Integer, default=0)
     __table_args__ = (UniqueConstraint("id", "owner_id"), UniqueConstraint("owner_id", "policy_key", "window_start"),

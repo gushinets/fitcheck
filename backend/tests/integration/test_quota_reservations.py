@@ -80,3 +80,44 @@ def test_expired_extraction_is_reaped_once_and_cannot_settle(engine,storage_fact
         assert not repo.settle_extraction(identifier,success=True,now=now+timedelta(seconds=122))
         bucket=repo.bucket(owner,'extraction',policy,now)
         assert bucket.reserved==0 and bucket.consumed==0
+
+
+def test_unlimited_account_analyses_preserve_usage_and_can_be_limited_again(engine,storage_factory):
+    from fitcheck_backend.storage.quota_repository import QuotaRepository
+    from fitcheck_backend.quotas.errors import QuotaError
+    now=datetime.now(UTC)
+    unlimited=QuotaPolicy.from_settings(Settings(account_analysis_daily_limit=0))
+    limited=QuotaPolicy.from_settings(Settings(account_analysis_daily_limit=1))
+    with unit_of_work(engine) as s:
+        owner=storage_factory(s)[0].id
+        repo=QuotaRepository(s)
+        jobs=[]
+        for index in range(26):
+            job=Job(owner_id=owner,type='analysis',input={},request_hash='a'*64,idempotency_key=f'unlimited-{index}')
+            s.add(job);s.flush();jobs.append(job.id)
+        repo.reserve_job(owner,jobs[0],'analysis',limited,now)
+        repo.settle_job(jobs[0],success=True,now=now)
+        for job_id in jobs[1:25]:
+            repo.reserve_job(owner,job_id,'analysis',unlimited,now)
+            repo.settle_job(job_id,success=True,now=now)
+        bucket=repo.bucket(owner,'analysis',unlimited,now)
+        assert bucket.limit is None and bucket.consumed==25 and bucket.reserved==0
+        with pytest.raises(QuotaError,match='quota_exceeded'):
+            repo.reserve_job(owner,jobs[25],'analysis',limited,now)
+        assert bucket.consumed==25 and bucket.limit==25
+        repo.reserve_job(owner,jobs[25],'analysis',unlimited,now)
+        assert bucket.limit is None and bucket.reserved==1
+        assert repo.settle_job(jobs[25],success=False,now=now)
+        assert bucket.consumed==25 and bucket.reserved==0
+
+
+def test_unlimited_bucket_still_rejects_negative_usage(engine,storage_factory):
+    from sqlalchemy.exc import IntegrityError
+    from fitcheck_backend.storage.quota_repository import QuotaRepository
+    policy=QuotaPolicy.from_settings(Settings(account_analysis_daily_limit=0))
+    with unit_of_work(engine) as s:
+        owner=storage_factory(s)[0].id
+        bucket=QuotaRepository(s).bucket(owner,'analysis',policy,datetime.now(UTC))
+        with pytest.raises(IntegrityError),s.begin_nested():
+            bucket.reserved=-1
+            s.flush()

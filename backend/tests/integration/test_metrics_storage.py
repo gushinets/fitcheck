@@ -133,7 +133,7 @@ def test_migration_0003_to_0004_preserves_jobs_and_calls(engine, storage_factory
         with engine.connect() as c:
             assert c.scalar(text('SELECT count(*) FROM jobs')) == 1
             assert c.scalar(text('SELECT input_tokens FROM provider_calls')) == 12
-            assert c.scalar(text('SELECT version_num FROM alembic_version')) == '0015'
+            assert c.scalar(text('SELECT version_num FROM alembic_version')) == '0016'
     finally:
         run_migrations(Settings(database_url=os.environ['FITCHECK_TEST_DATABASE_URL']))
 

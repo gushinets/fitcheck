@@ -7,14 +7,14 @@ Count = Annotated[int,Field(strict=True,ge=0)]
 
 
 class OperationQuota(DTO):
-    limit: Count
-    remaining: Count
+    limit: Count | None = Field(description='Null means unlimited operations in this window.')
+    remaining: Count | None = Field(description='Null means unlimited operations remain.')
     reserved: Count
     consumed: Count
 
 
 class QuotaResource(DTO):
-    remaining: Count
+    remaining: Count | None = Field(description='Null means unlimited analyses remain.')
     resets_at: datetime | None
     mode: Literal['account','guest'] = 'account'
     expires_at: datetime | None = None

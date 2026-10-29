@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     guest_suggestions_limit: Annotated[int, BeforeValidator(not_bool)] = Field(default=5, ge=1, le=10000000)
     guest_extraction_limit: Annotated[int, BeforeValidator(not_bool)] = Field(default=10, ge=1, le=10000000)
     guest_max_active_jobs: Annotated[int, BeforeValidator(not_bool)] = Field(default=1, ge=1, le=10000000)
-    account_analysis_daily_limit: Annotated[int, BeforeValidator(not_bool)] = Field(default=20, ge=1, le=10000000)
+    account_analysis_daily_limit: Annotated[int | None, BeforeValidator(not_bool)] = Field(default=20, ge=1, le=10000000)
     account_suggestions_daily_limit: Annotated[int, BeforeValidator(not_bool)] = Field(default=50, ge=1, le=10000000)
     account_extraction_daily_limit: Annotated[int, BeforeValidator(not_bool)] = Field(default=100, ge=1, le=10000000)
     account_max_active_jobs: Annotated[int, BeforeValidator(not_bool)] = Field(default=2, ge=1, le=10000000)
@@ -61,8 +61,8 @@ class Settings(BaseSettings):
     budget_analysis_usd: Annotated[Decimal, BeforeValidator(not_bool)] = Field(default=Decimal("0.02"), gt=0, le=1000000, allow_inf_nan=False, decimal_places=12)
     budget_suggestions_usd: Annotated[Decimal, BeforeValidator(not_bool)] = Field(default=Decimal("0.005"), gt=0, le=1000000, allow_inf_nan=False, decimal_places=12)
     budget_guest_usd: Annotated[Decimal, BeforeValidator(not_bool)] = Field(default=Decimal("0.05"), gt=0, le=1000000, allow_inf_nan=False, decimal_places=12)
-    budget_account_daily_usd: Annotated[Decimal, BeforeValidator(not_bool)] = Field(default=Decimal("0.50"), gt=0, le=1000000, allow_inf_nan=False, decimal_places=12)
-    budget_deployment_daily_usd: Annotated[Decimal, BeforeValidator(not_bool)] = Field(default=Decimal("10.00"), gt=0, le=1000000, allow_inf_nan=False, decimal_places=12)
+    budget_account_daily_usd: Annotated[Decimal | None, BeforeValidator(not_bool)] = Field(default=Decimal("0.50"), gt=0, le=1000000, allow_inf_nan=False, decimal_places=12)
+    budget_deployment_daily_usd: Annotated[Decimal | None, BeforeValidator(not_bool)] = Field(default=Decimal("10.00"), gt=0, le=1000000, allow_inf_nan=False, decimal_places=12)
 
     auth_secret: SecretStr | None = None
     auth_web_base_url: str | None = None
@@ -73,6 +73,11 @@ class Settings(BaseSettings):
     smtp_password: SecretStr | None = None
     smtp_from: str | None = None
     smtp_security: Literal['smtps', 'starttls'] | None = None
+
+    @field_validator('account_analysis_daily_limit', 'budget_account_daily_usd', 'budget_deployment_daily_usd', mode='before')
+    @classmethod
+    def unlimited_daily_limits(cls, value):
+        return None if not isinstance(value, bool) and value in (0, '0') else value
 
     @field_validator('metrics_campaign_codes')
     @classmethod

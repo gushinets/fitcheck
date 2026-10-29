@@ -28,11 +28,17 @@ class QuotaRepository:
         key='v1:'+operation+':'+mode
         self.s.execute(insert(QuotaBucket).values(owner_id=owner_id,policy_key=key,window_start=start,
             resets_at=end,limit=limit,reserved=0,consumed=0).on_conflict_do_nothing(index_elements=['owner_id','policy_key','window_start']))
-        return self.s.scalar(select(QuotaBucket).where(QuotaBucket.owner_id==owner_id,
+        bucket=self.s.scalar(select(QuotaBucket).where(QuotaBucket.owner_id==owner_id,
             QuotaBucket.policy_key==key,QuotaBucket.window_start==start).with_for_update().execution_options(populate_existing=True))
+        # Lowering an account cap must retain already consumed/reserved units.
+        if mode=='account':
+            capacity=None if limit is None else max(limit,bucket.reserved+bucket.consumed)
+            bucket.limit=capacity
+            self.s.flush()
+        return bucket
 
-    def _reserve(self,bucket,now):
-        if bucket.reserved+bucket.consumed>=bucket.limit:
+    def _reserve(self,bucket,now,limit):
+        if limit is not None and bucket.reserved+bucket.consumed>=limit:
             raise QuotaError('quota_exceeded',retry_after=max(1,int((bucket.resets_at-now).total_seconds())) if bucket.resets_at else None)
         bucket.reserved+=1;self.s.flush()
 
@@ -42,7 +48,9 @@ class QuotaRepository:
         if job is None:raise AuthError('not_found')
         existing=self.s.scalar(select(QuotaReservation).where(QuotaReservation.job_id==job_id,QuotaReservation.bucket_id==bucket.id))
         if existing:return existing
-        self._reserve(bucket,now)
+        mode=bucket.policy_key.rsplit(':',1)[-1]
+        limit=getattr(policy.account,operation) if mode=='account' else bucket.limit
+        self._reserve(bucket,now,limit)
         row=QuotaReservation(owner_id=owner_id,job_id=job_id,bucket_id=bucket.id,units=1,status='reserved')
         self.s.add(row);self.s.flush();return row
 
@@ -66,7 +74,8 @@ class QuotaRepository:
 
     def reserve_extraction(self,owner_id,operation_id,policy,now):
         bucket=self.bucket(owner_id,'extraction',policy,now)
-        self._reserve(bucket,now)
+        limit=policy.account.extraction if bucket.policy_key.endswith(':account') else bucket.limit
+        self._reserve(bucket,now,limit)
         row=ExtractionReservation(id=operation_id,owner_id=owner_id,bucket_id=bucket.id,expires_at=now+timedelta(seconds=120))
         self.s.add(row);self.s.flush();return row
 

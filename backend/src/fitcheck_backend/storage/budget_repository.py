@@ -51,9 +51,13 @@ class BudgetRepository:
             ('job',str(job.id if job else attempt.operation_id),job.created_at if job else start,
              job.created_at+timedelta(days=36500) if job else end,owner.id,calls,tokens,usd)]
         windows=[]
+        daily_limits={}
         for scope,key,begin,expiry,oid,lc,lt,lu in sorted(descriptors,key=lambda x:(x[0],x[1],x[2])):
             self.s.execute(insert(BudgetWindow).values(scope=scope,scope_key=key,window_start=begin,expires_at=expiry,owner_id=oid,limit_calls=lc,limit_tokens=lt,limit_usd=lu,calls=0,exposure_tokens=0,exposure_usd=0).on_conflict_do_nothing(index_elements=['scope','scope_key','window_start']))
             window=self.s.scalar(select(BudgetWindow).where(BudgetWindow.scope==scope,BudgetWindow.scope_key==key,BudgetWindow.window_start==begin).with_for_update().execution_options(populate_existing=True))
+            if scope=='deployment' or scope=='owner' and guest is None:
+                daily_limits[window.id]=lu
+                window.limit_usd=None if lu is None else max(lu,window.exposure_usd)
             windows.append(window)
         # Recheck time after EVERY potentially blocking graph/window lock and
         # before any financial increment or provider row can commit.
@@ -64,7 +68,8 @@ class BudgetRepository:
             raise ValueError('Invalid execution lease')
         if fresh.astimezone(UTC).date()!=start.date():raise BudgetWindowChanged()
         for window in windows:
-            if (window.calls+1>window.limit_calls or window.exposure_tokens+bounds.input_tokens+bounds.output_tokens>window.limit_tokens or window.exposure_usd+bounds.usd>window.limit_usd):
+            usd_limit=daily_limits.get(window.id,window.limit_usd)
+            if (window.calls+1>window.limit_calls or window.exposure_tokens+bounds.input_tokens+bounds.output_tokens>window.limit_tokens or usd_limit is not None and window.exposure_usd+bounds.usd>usd_limit):
                 raise QuotaError('budget_exceeded')
         row=ProviderCall(owner_id=owner.id,job_id=attempt.job_id,operation_id=job.id if job else attempt.operation_id,request_key=f'{attempt.operation_id}:{attempt.physical_attempt}',provider=attempt.provider,model=attempt.model,operation=attempt.operation,attempt=attempt.physical_attempt,semantic_attempt=attempt.semantic_attempt,transport_attempt=attempt.transport_attempt,prompt_version=attempt.prompt_version,schema_version=attempt.schema_version,policy_version=attempt.policy_version,execution_token=attempt.execution_token,state='started')
         self.s.add(row);self.s.flush()
