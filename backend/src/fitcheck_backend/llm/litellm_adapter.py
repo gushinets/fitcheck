@@ -126,7 +126,7 @@ class LiteLlmAdapter:
         usage_token = self._usage_basis.set(None)
         try:
             response = await litellm.acompletion(model=policy.gateway_model, api_key=self._api_key,
-                api_base='https://api.openai.com/v1', messages=messages, reasoning_effort='none',
+                api_base='https://api.openai.com/v1', messages=messages, reasoning_effort='medium',
                 max_completion_tokens=max_tokens, response_format={'type':'json_object'},service_tier='default',
                 num_retries=0, max_retries=0,
                 timeout=timeout, client=self._sdk, drop_params=False, caching=False,

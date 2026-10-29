@@ -80,7 +80,7 @@ def test_real_sdk_success_usage_and_close():
         requests.append(body)
         assert request.url.host=='api.openai.com'
         assert body['model']=='gpt-6-luna' and body['response_format']=={'type':'json_object'}
-        assert body['reasoning_effort']=='none' and body['max_completion_tokens']==1200
+        assert body['reasoning_effort']=='medium' and body['max_completion_tokens']==1200
         return httpx.Response(200,json={'id':'test','object':'chat.completion','created':1,'model':'gpt-6-luna',
             'choices':[{'index':0,'message':{'role':'assistant','content':'{"ok":true}'},'finish_reason':'stop'}],
             'usage':{'prompt_tokens':12,'completion_tokens':4,'total_tokens':16}})

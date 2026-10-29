@@ -34,7 +34,7 @@ def response():
 
 
 @pytest.mark.parametrize('policy,cap', [(analysis_policy, 1200), (analysis_policy, 1000), (suggestion_policy, 500)])
-def test_adapter_outbound_exact_host_path_reasoning_none_and_max_completion_tokens(policy, cap):
+def test_adapter_outbound_exact_host_path_reasoning_medium_and_max_completion_tokens(policy, cap):
     from fitcheck_backend.llm.litellm_adapter import LiteLlmAdapter
     requests = []
     def handler(request):
@@ -42,7 +42,7 @@ def test_adapter_outbound_exact_host_path_reasoning_none_and_max_completion_toke
         assert str(request.url) == 'https://api.openai.com/v1/chat/completions'
         body = json.loads(request.content)
         assert body['model'] == 'gpt-6-luna'
-        assert body['reasoning_effort'] == 'none'
+        assert body['reasoning_effort'] == 'medium'
         assert body['max_completion_tokens'] == cap
         assert body['response_format'] == {'type': 'json_object'}
         # Validate the serialized request from the installed LiteLLM/OpenAI SDKs:
