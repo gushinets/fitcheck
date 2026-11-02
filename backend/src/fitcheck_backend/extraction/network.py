@@ -214,7 +214,9 @@ def _request_page(url: str, addresses: list[str], max_bytes: int, timeout_second
         sock.connect((address, port))
         if parts.scheme == "https":
             sock.settimeout(_remaining(deadline))
-            sock = ssl.create_default_context().wrap_socket(sock, server_hostname=parts.hostname)
+            context = ssl.create_default_context()
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            sock = context.wrap_socket(sock, server_hostname=parts.hostname)
         connection.sock = sock
 
         def cancel():

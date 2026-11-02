@@ -101,8 +101,10 @@ def test_byte_limits_are_specific_to_exact_project_paths(url, limit):
 
 def test_limit_resets_after_redirect():
     def request(url, addresses, max_bytes, timeout_seconds):
-        if "freelancer.com" in url:
+        if url == "https://www.freelancer.com/projects/n8n/role":
+            assert max_bytes == 3_000_000
             return page(status=302, location="https://jobs.example/role")
+        assert url == "https://jobs.example/role"
         assert max_bytes == 1_000_000
         return page(b"x" * 1_000_001)
     with pytest.raises(ExtractionError) as error:
@@ -182,7 +184,10 @@ def test_runtime_transport_pins_socket_and_preserves_tls_identity_and_host(monke
     sock = FakeSocket(b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 4\r\n\r\nRole")
     monkeypatch.setattr(network.socket, "socket", lambda *args: sock)
     class Context:
+        minimum_version = ssl.TLSVersion.MINIMUM_SUPPORTED
+
         def wrap_socket(self, raw, *, server_hostname):
+            assert self.minimum_version == ssl.TLSVersion.TLSv1_2
             assert server_hostname == "jobs.example"
             return raw
     original_context = network.ssl.create_default_context
