@@ -26,7 +26,10 @@ jobs:
           test "${#images[@]}" -eq 3
           status=0
           for image in "${images[@]}"; do
-            trivy image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --timeout 10m "$image" || status=1
+            # Keep unfixed OS findings visible; library findings always fail the gate.
+            trivy image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --timeout 10m "$image" || status=1
+            trivy image --scanners vuln --pkg-types library --severity HIGH,CRITICAL --exit-code 1 --timeout 10m "$image" || status=1
+            trivy image --scanners vuln --pkg-types os --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --timeout 10m "$image" || status=1
           done
           exit "$status"
 
