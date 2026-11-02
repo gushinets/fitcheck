@@ -51,7 +51,10 @@ docker compose --env-file .env.compose -f compose.yaml -f compose.prod.yaml --pr
 
 Workflow `Security` проверяет PR и изменения `main`, запускается вручную и каждый
 понедельник в 09:17 по Новосибирску. Trivy сканирует `pnpm-lock.yaml` и
-`backend/uv.lock`; HIGH/CRITICAL завершают проверку ошибкой. Job `operations`
+`backend/uv.lock`, а также проверяет настройки всех трёх Dockerfile через
+`trivy config`; HIGH/CRITICAL завершают обязательную проверку `Trivy dependencies`
+ошибкой. Dependabot еженедельно предлагает обновления npm, Python (`uv` в
+`/backend`), GitHub Actions и базовых Docker-образов. Job `operations`
 основного CI дополнительно сканирует три уже собранных smoke-тестом образа:
 website, API и worker. Повторной сборки для сканирования нет.
 В логе образов сохраняется полный отчёт HIGH/CRITICAL. Ошибкой завершается любая
@@ -63,6 +66,11 @@ Gitleaks проверяет полную историю Git с маскиров�
 файлы и правила целиком не исключены. Dependency review проверяет новые зависимости
 в PR и завершается ошибкой при HIGH/CRITICAL, включая зависимости разработки.
 Обязательность успешных проверок для слияния задаётся отдельно защитой `main`.
+Активное правило `main: CodeQL High/Critical` дополнительно требует результаты
+CodeQL без новых HIGH/CRITICAL в PR. Штатное правило GitHub не распространяется
+на Dependabot PR при CodeQL default setup; для них остаётся обязательным
+Dependency review. Запуск workflows из внешних форков требует разрешения
+сопровождающего для всех внешних участников (`all_external_contributors`).
 
 ## Dokploy, TLS и прокси
 
