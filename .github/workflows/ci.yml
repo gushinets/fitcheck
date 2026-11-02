@@ -15,6 +15,23 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build isolated stack, check monitoring and verify backup restoration
         run: python3 ops/smoke.py
+      - uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.76.1
+          cache: true
+      - name: Scan the three application images built by the smoke test
+        shell: bash
+        run: |
+          mapfile -t images < <(docker image ls --format '{{.Repository}}:{{.Tag}}' --filter 'reference=fitcheck-*:fitcheck-smoke-*')
+          test "${#images[@]}" -eq 3
+          status=0
+          for image in "${images[@]}"; do
+            # Keep unfixed OS findings visible; library findings always fail the gate.
+            trivy image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --timeout 10m "$image" || status=1
+            trivy image --scanners vuln --pkg-types library --severity HIGH,CRITICAL --exit-code 1 --timeout 10m "$image" || status=1
+            trivy image --scanners vuln --pkg-types os --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --timeout 10m "$image" || status=1
+          done
+          exit "$status"
 
   website-e2e:
     runs-on: ubuntu-latest
