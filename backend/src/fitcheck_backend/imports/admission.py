@@ -6,6 +6,7 @@ from ..contracts.jobs import ImportReference
 from ..storage.models import Job
 from ..storage.payloads import canonical_hash
 from ..jobs.errors import JobError
+from ..metrics.lifecycle import append_domain_event,job_key
 
 
 def sanitized_input(request):
@@ -42,4 +43,8 @@ class ImportAdmission:
             if active>=self.settings.account_max_active_jobs:raise JobError('rate_limited')
             job=Job(owner_id=principal.owner_id,type='import',status='queued',input=safe,idempotency_key=key,request_hash=digest)
             s.add(job);s.flush()
+            append_domain_event(s,name='job_admitted',owner_id=job.owner_id,
+                domain_key=job_key(job.id,'admitted'),occurred_at=job.created_at,
+                properties={'jobType':job.type},environment=(
+                    self.settings.metrics_environment if self.settings.metrics_enabled else None))
             return ImportReference(importId=str(job.id))
