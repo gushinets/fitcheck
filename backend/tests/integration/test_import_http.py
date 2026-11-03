@@ -1,19 +1,23 @@
 from uuid import uuid4
 import pytest
-from sqlalchemy import select,func
+from sqlalchemy import event,select,func
+from sqlalchemy.exc import SQLAlchemyError
 from test_profile_http import profile_http,WEB
 from test_import_repository import raw_row
 from fitcheck_backend.storage.database import unit_of_work
-from fitcheck_backend.storage.models import Job,ProviderCall,QuotaReservation,User
+from fitcheck_backend.storage.models import Job,MetricJournal,ProviderCall,QuotaReservation,User
 pytestmark=pytest.mark.integration
 
 
 def payload(**changes):return dict(version=1,source='website_indexeddb_v1',sourceUserId='alice',history=[raw_row()])|changes
 
 
-def test_import_auth_idempotency_and_capacity(profile_http):
+@pytest.mark.parametrize('metrics_enabled',[False,True])
+def test_import_auth_idempotency_and_capacity(profile_http,metrics_enabled):
     a,c,r,issued,h=profile_http
     c.app.state.settings.jobs_enabled=True
+    r.settings.metrics_enabled=metrics_enabled
+    r.settings.metrics_environment='test'
     headers=h|{'Idempotency-Key':'import'}
     first=c.post('/v1/import-jobs',headers=headers,json=payload())
     assert first.status_code==202,first.text
@@ -30,6 +34,15 @@ def test_import_auth_idempotency_and_capacity(profile_http):
         assert s.scalar(select(func.count()).select_from(Job))==2
         assert s.scalar(select(func.count()).select_from(ProviderCall))==0
         assert s.scalar(select(func.count()).select_from(QuotaReservation))==0
+        events=list(s.scalars(select(MetricJournal).where(MetricJournal.name=='job_admitted')))
+        assert len(events)==(2 if metrics_enabled else 0)
+        jobs={f'job:{job.id}:admitted':job for job in s.scalars(select(Job))}
+        for value in events:
+            job=jobs[value.domain_key]
+            assert value.source=='backend_server' and value.environment=='test'
+            assert value.owner_id==issued.principal.owner_id
+            assert value.subject_kind=='account' and value.subject_id==job.owner_id
+            assert value.properties=={'jobType':'import'} and value.occurred_at==job.created_at
     c.cookies.clear()
     assert c.get('/v1/import-jobs/'+identifier).status_code==401
     assert c.post('/v1/import-jobs',headers=headers,json=payload()).status_code==401
@@ -69,15 +82,44 @@ def test_concurrent_same_key_admission_and_foreign_owner(profile_http):
     from concurrent.futures import ThreadPoolExecutor
     a,c,r,issued,h=profile_http
     c.app.state.settings.jobs_enabled=True
+    r.settings.metrics_enabled=True
+    r.settings.metrics_environment='test'
     def send(_):return c.post('/v1/import-jobs',headers=h|{'Idempotency-Key':'race'},json=payload())
     with ThreadPoolExecutor(max_workers=2) as pool:results=list(pool.map(send,range(2)))
     assert [v.status_code for v in results]==[202,202]
     assert results[0].json()==results[1].json()
     identifier=results[0].json()['importId']
+    with unit_of_work(a.engine) as s:
+        assert s.scalar(select(func.count()).select_from(Job))==1
+        events=list(s.scalars(select(MetricJournal).where(MetricJournal.name=='job_admitted')))
+        assert len(events)==1 and events[0].domain_key==f'job:{identifier}:admitted'
     other=a.service.register('other-import@example.com','correct horse battery','127.0.0.2')
     with unit_of_work(a.engine) as s:s.get(User,other.principal.user_id).email_verified_at=a.clock()
     c.cookies.clear();c.cookies.set('__Host-fitcheck_session',other.token)
     assert c.get('/v1/import-jobs/'+identifier).status_code==404
+
+
+def test_import_and_admission_event_roll_back_together(profile_http):
+    a,c,r,issued,h=profile_http
+    c.app.state.settings.jobs_enabled=True
+    r.settings.metrics_enabled=True
+    r.settings.metrics_environment='test'
+    def fail(conn,cursor,statement,params,context,many):
+        if statement.startswith('INSERT INTO metric_journal'):
+            raise SQLAlchemyError('forced metrics failure')
+    event.listen(a.engine,'before_cursor_execute',fail)
+    try:
+        response=c.post('/v1/import-jobs',headers=h|{'Idempotency-Key':'rollback'},json=payload())
+        assert response.status_code==503,response.text
+    finally:
+        event.remove(a.engine,'before_cursor_execute',fail)
+    with unit_of_work(a.engine) as s:
+        assert s.scalar(select(func.count()).select_from(Job))==0
+        assert s.scalar(select(func.count()).select_from(MetricJournal))==0
+    assert c.post('/v1/import-jobs',headers=h|{'Idempotency-Key':'rollback'},json=payload()).status_code==202
+    with unit_of_work(a.engine) as s:
+        assert s.scalar(select(func.count()).select_from(Job))==1
+        assert s.scalar(select(func.count()).select_from(MetricJournal))==1
 
 
 def test_normalized_duplicate_ids_rejected_before_job_creation(profile_http):
