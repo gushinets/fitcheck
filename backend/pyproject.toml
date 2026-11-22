@@ -20,7 +20,7 @@ dev = [
     "pytest>=8,<10",
     "httpx>=0.28,<1",
     "openapi-spec-validator>=0.7,<1",
-    "httpx2>=2.13.1",
+    "httpx2>=2.16.0",
 ]
 [tool.uv]
 # Newer LiteLLM branches pin filelock <4; resolve a compatible SDK with the security fixes.
