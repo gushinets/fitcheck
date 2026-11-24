@@ -53,8 +53,8 @@ Workflow `Security` проверяет PR и изменения `main`, запу
 понедельник в 09:17 по Новосибирску. Trivy сканирует `pnpm-lock.yaml` и
 `backend/uv.lock`, а также проверяет настройки всех трёх Dockerfile через
 `trivy config`; HIGH/CRITICAL завершают обязательную проверку `Trivy dependencies`
-ошибкой. Dependabot еженедельно предлагает обновления npm, Python (`uv` в
-`/backend`), GitHub Actions и базовых Docker-образов. Job `operations`
+ошибкой. Dependabot открывает PR для исправления известных уязвимостей.
+Плановые обновления версий отключены. Job `operations`
 основного CI дополнительно сканирует три уже собранных smoke-тестом образа:
 website, API и worker. Повторной сборки для сканирования нет.
 В логе образов сохраняется полный отчёт HIGH/CRITICAL. Ошибкой завершается любая

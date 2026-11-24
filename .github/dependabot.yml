@@ -1,18 +1,22 @@
 version: 2
 updates:
   - package-ecosystem: npm
+    open-pull-requests-limit: 0
     directory: /
     schedule:
       interval: weekly
   - package-ecosystem: uv
+    open-pull-requests-limit: 0
     directory: /backend
     schedule:
       interval: weekly
   - package-ecosystem: github-actions
+    open-pull-requests-limit: 0
     directory: /
     schedule:
       interval: weekly
   - package-ecosystem: docker
+    open-pull-requests-limit: 0
     directories:
       - /
       - /backend
